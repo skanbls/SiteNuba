@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useSession } from '../lib/session';
 import type { Profile } from '../lib/types';
 import { Icon, type IconName } from './Icon';
@@ -29,17 +29,25 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
 /* ---------- Coque : en-tête, rail de modules, onglets ---------- */
 interface NavItem { to: string; label: string; icon: IconName; gerant?: boolean; tab?: boolean }
-const NAV: NavItem[] = [
+export const NAV: NavItem[] = [
   { to: '/', label: "Aujourd'hui", icon: 'home', tab: true },
   { to: '/pointeuse', label: 'Pointeuse', icon: 'qr', tab: true },
-  { to: '/equipe', label: 'Équipe', icon: 'team', gerant: true, tab: true },
+  { to: '/planning', label: 'Planning', icon: 'cal', tab: true },
+  { to: '/equipe', label: 'Équipe', icon: 'team', gerant: true },
   { to: '/reglages', label: 'Réglages', icon: 'cog', gerant: true },
-  { to: '/compte', label: 'Mon compte', icon: 'user', tab: true },
+  { to: '/compte', label: 'Mon compte', icon: 'user' },
 ];
+
+/** Écrans accessibles à ce rôle. */
+export const navFor = (role: string | undefined) => NAV.filter((n) => !n.gerant || role === 'gerant');
 
 export function Layout({ title, right, children }: { title: string; right?: ReactNode; children: ReactNode }) {
   const { profile } = useSession();
-  const items = NAV.filter((n) => !n.gerant || profile?.role === 'gerant');
+  const { pathname } = useLocation();
+  const items = navFor(profile?.role);
+  // Sur téléphone : les écrans principaux en onglets. Les autres vont sous « Plus », sauf s'il n'y en a qu'un.
+  const rest = items.filter((n) => !n.tab);
+  const tabs: NavItem[] = [...items.filter((n) => n.tab), rest.length === 1 ? rest[0] : { to: '/plus', label: 'Plus', icon: 'grid' }];
   useEffect(() => {
     document.title = `${title} · Nuba Gestion`;
   }, [title]);
@@ -68,8 +76,8 @@ export function Layout({ title, right, children }: { title: string; right?: Reac
         <main className="main">{children}</main>
       </div>
       <nav className="tabbar" aria-label="Navigation principale">
-        {items.filter((n) => n.tab).map((n) => (
-          <NavLink key={n.to} to={n.to} end={n.to === '/'}>
+        {tabs.map((n) => (
+          <NavLink key={n.to} to={n.to} end={n.to === '/'} className={({ isActive }) => (isActive || (n.to === '/plus' && rest.some((r) => r.to === pathname)) ? 'active' : '')}>
             <Icon name={n.icon} size={22} />
             <span>{n.label === 'Mon compte' ? 'Compte' : n.label}</span>
           </NavLink>

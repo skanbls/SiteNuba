@@ -251,6 +251,96 @@ async function main() {
   await theo.getByRole('heading', { name: 'Mon compte' }).waitFor({ timeout: 8000 });
   step('déconnexion, mauvais mot de passe refusé, reconnexion');
 
+  // 13 bis. Planning : le gérant planifie, Théo demande un congé et cède un service, le gérant décide.
+  await boss.goto(APP + '#/planning');
+  await boss.getByRole('heading', { name: 'Planning' }).waitFor({ timeout: 8000 });
+  const plan = await boss.evaluate(() => {
+    const pad = (n) => String(n).padStart(2, '0');
+    const key = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const monday = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7)).getTime();
+    const now = new Date();
+    const at = (n) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + n);
+    const tom = at(1);
+    return { tom: key(tom), num: tom.getDate(), label: tom.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }), nextWeek: monday(tom) !== monday(now), from: key(at(10)), to: key(at(12)) };
+  });
+  const toWeek = async (page) => { if (plan.nextWeek) await page.getByRole('button', { name: 'Semaine suivante' }).click(); };
+  const pickDay = (page) => page.getByRole('group', { name: 'Jour' }).getByRole('button', { name: new RegExp(` ${plan.num}(,|$)`) }).first().click();
+  await toWeek(boss);
+  await boss.getByRole('button', { name: 'Service', exact: true }).click();
+  await boss.selectOption('#shift-who', { label: 'Théo Martin' });
+  await boss.fill('#shift-day', plan.tom);
+  await boss.fill('#shift-start', '18:00');
+  await boss.fill('#shift-end', '01:00');
+  await boss.fill('#shift-area', 'Salle');
+  await boss.getByRole('button', { name: 'Enregistrer' }).click();
+  await see(boss, 'Service ajouté');
+  await pickDay(boss);
+  await see(boss, '18:00 – 01:00');
+  await see(boss, '7 h 00');
+  await boss.getByRole('button', { name: 'Service', exact: true }).click();
+  await boss.selectOption('#shift-who', { label: 'Théo Martin' });
+  await boss.fill('#shift-day', plan.tom);
+  await boss.fill('#shift-start', '23:00');
+  await boss.fill('#shift-end', '02:00');
+  await boss.getByRole('button', { name: 'Enregistrer' }).click();
+  await see(boss, 'déjà un service sur ce créneau');
+  await boss.getByRole('button', { name: 'Fermer' }).click();
+  await boss.getByRole('button', { name: `Ajouter un service pour Inès le ${plan.label}` }).click();
+  assert.equal(await boss.inputValue('#shift-day'), plan.tom, 'la case touchée doit préremplir le jour');
+  await boss.fill('#shift-start', '17:00');
+  await boss.fill('#shift-end', '23:00');
+  await boss.fill('#shift-area', 'Bar');
+  await boss.getByRole('button', { name: 'Enregistrer' }).click();
+  await see(boss, 'Service ajouté');
+  await shot(boss, '13b-planning-gerant');
+  step('le gérant planifie, les chevauchements sont refusés');
+
+  await theo.goto(APP + '#/planning');
+  await toWeek(theo);
+  await pickDay(theo);
+  await see(theo, 'Théo Martin (toi)');
+  assert.equal(await theo.getByRole('button', { name: 'Service', exact: true }).count(), 0, 'un équipier ne doit pas pouvoir ajouter de service');
+  await theo.getByRole('button', { name: 'Demander un congé' }).click();
+  await theo.fill('#leave-from', plan.from);
+  await theo.fill('#leave-to', plan.to);
+  await theo.fill('#leave-note', 'Mariage');
+  await theo.getByRole('button', { name: 'Envoyer la demande' }).click();
+  await see(theo, 'Demande envoyée au gérant');
+  await theo.getByRole('button', { name: 'Céder un service' }).click();
+  await theo.selectOption('#swap-shift', { index: 1 });
+  await theo.selectOption('#swap-to', { label: 'Inès Durand' });
+  await theo.getByRole('button', { name: 'Envoyer la demande' }).click();
+  await see(theo, 'Théo Martin cède à Inès Durand');
+  await noOverflow(theo, 'planning équipier');
+  await shot(theo, '13c-planning-equipier');
+  step('un équipier voit le planning, demande un congé et propose de céder un service');
+
+  await boss.reload();
+  await toWeek(boss);
+  await see(boss, 'Demandes à traiter');
+  const swapRow = boss.locator('.row', { hasText: 'Théo Martin cède à Inès Durand' }).first();
+  await swapRow.getByRole('button', { name: 'Accepter' }).click();
+  await see(boss, 'déjà un service sur ce créneau');   // Inès travaille déjà ce soir-là
+  await boss.getByRole('button', { name: /^Inès, / }).click();
+  await boss.getByRole('button', { name: 'Supprimer ce service' }).click();
+  await boss.getByRole('button', { name: 'Supprimer définitivement' }).click();
+  await see(boss, 'Service supprimé');
+  await swapRow.getByRole('button', { name: 'Accepter' }).click();
+  await see(boss, 'Échange accepté');
+  await boss.getByRole('button', { name: /^Inès, .*18:00 – 01:00/ }).waitFor({ timeout: 8000 });
+  await boss.locator('.row', { hasText: 'Théo Martin · Congé' }).first().getByRole('button', { name: 'Accepter' }).click();
+  await see(boss, 'Demande acceptée');
+  await theo.reload();
+  await theo.locator('.row', { hasText: 'Théo Martin · Congé' }).first().getByText('Acceptée').waitFor({ timeout: 8000 });
+  await boss.getByRole('button', { name: 'Semaine suivante' }).click();
+  await boss.getByRole('button', { name: 'Recopier la semaine précédente' }).click();
+  await see(boss, '1 service recopié');
+  await shot(boss, '13d-planning-semaine-suivante');
+  await boss.goto(APP + '#/');
+  await see(boss, 'Équipe du jour');
+  await see(boss, 'Mes prochains services');
+  step('le gérant décide : un échange impossible est refusé, puis accepté ; la semaine se recopie');
+
   // 14. Le gérant désactive Théo : il perd l'accès.
   await boss.goto(APP + '#/equipe');
   await boss.locator('button.row', { hasText: 'Théo Martin' }).click();
@@ -262,7 +352,7 @@ async function main() {
 
   // 15. Le gérant désactive la borne : l'iPad n'affiche plus de code.
   await boss.goto(APP + '#/reglages');
-  await boss.getByRole('button', { name: 'Désactiver' }).first().click();
+  await boss.locator('.row', { hasText: 'iPad du bar' }).getByRole('button', { name: 'Désactiver' }).click();
   await see(boss, 'Borne désactivée');
   await ipad.getByText('Borne désactivée').waitFor({ timeout: 45_000 });
   await shot(ipad, '15-borne-desactivee');

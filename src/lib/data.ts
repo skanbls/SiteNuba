@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
-import type { Kiosk, Profile, Site, TimeEntry } from './types';
+import type { Kiosk, LeaveRequest, Profile, Shift, ShiftSwap, Site, TimeEntry } from './types';
 
 const ENTRY = '*, time_breaks(*), profiles(first_name, last_name), sites(name)';
 
@@ -61,6 +61,35 @@ export function useEntries(from: Date, to: Date, profileId?: string) {
       if (profileId) q = q.eq('profile_id', profileId);
       return must<TimeEntry[]>(await q.order('clock_in', { ascending: false }));
     },
+  });
+}
+
+/** Services planifiés qui commencent dans [from, to[, dans l'ordre. */
+export function useShifts(from: Date, to: Date, profileId?: string) {
+  return useQuery({
+    queryKey: ['shifts', from.toISOString(), to.toISOString(), profileId ?? 'all'],
+    queryFn: async () => {
+      let q = supabase.from('shifts').select('*').gte('starts_at', from.toISOString()).lt('starts_at', to.toISOString());
+      if (profileId) q = q.eq('profile_id', profileId);
+      return must<Shift[]>(await q.order('starts_at'));
+    },
+  });
+}
+
+/** Congés et indisponibilités visibles par la personne, qui finissent après `since` (AAAA-MM-JJ). */
+export function useLeaves(since: string) {
+  return useQuery({
+    queryKey: ['leaves', since],
+    queryFn: async () => must<LeaveRequest[]>(await supabase.from('leave_requests').select('*').gte('end_date', since).order('start_date')),
+  });
+}
+
+/** Demandes d'échange visibles par la personne, les plus récentes d'abord. */
+export function useSwaps() {
+  return useQuery({
+    queryKey: ['swaps'],
+    queryFn: async () =>
+      must<ShiftSwap[]>(await supabase.from('shift_swaps').select('*, shifts(starts_at, ends_at, area)').order('created_at', { ascending: false }).limit(50)),
   });
 }
 

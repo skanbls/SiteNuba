@@ -4,6 +4,8 @@ import { configured } from './lib/supabase';
 import Account from './pages/Account';
 import { Login, NewPassword, NoAccess, Setup, Splash } from './pages/Gate';
 import Kiosk from './pages/Kiosk';
+import More from './pages/More';
+import Planning from './pages/Planning';
 import Pointeuse, { PunchFromLink } from './pages/Pointeuse';
 import Settings from './pages/Settings';
 import Team from './pages/Team';
@@ -30,6 +32,8 @@ export default function App({ linkError }: { linkError: string }) {
       <Route path="/" element={<Today />} />
       <Route path="/pointeuse" element={<Pointeuse />} />
       <Route path="/pointer" element={<PunchFromLink />} />
+      <Route path="/planning" element={<Planning />} />
+      <Route path="/plus" element={<More />} />
       <Route path="/compte" element={<Account />} />
       {gerant && <Route path="/equipe" element={<Team />} />}
       {gerant && <Route path="/reglages" element={<Settings />} />}

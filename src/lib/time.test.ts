@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { breakMs, fmtDur, periodRange, toCsv, toLocalInput, workedMs } from './time';
+import { addDays, breakMs, fmtDur, periodRange, shiftRange, toCsv, toLocalInput, weekStart, workedMs } from './time';
 
 const H = 3600_000;
 const at = (h: number, m = 0) => new Date(2026, 10, 14, h, m).toISOString();
@@ -48,5 +48,25 @@ describe('export', () => {
   it('formate une date pour un champ date-heure', () => {
     expect(toLocalInput(new Date(2026, 0, 5, 9, 7))).toBe('2026-01-05T09:07');
     expect(toLocalInput(null)).toBe('');
+  });
+});
+
+describe('planning', () => {
+  it('place un service du soir sur deux jours', () => {
+    const r = shiftRange('2026-11-20', '18:00', '01:00');
+    expect(new Date(r.starts_at)).toEqual(new Date(2026, 10, 20, 18, 0));
+    expect(new Date(r.ends_at)).toEqual(new Date(2026, 10, 21, 1, 0));
+  });
+  it('garde un service de journée sur le même jour', () => {
+    const r = shiftRange('2026-11-20', '09:30', '15:00');
+    expect(new Date(r.ends_at)).toEqual(new Date(2026, 10, 20, 15, 0));
+  });
+  it('trouve le lundi, y compris à cheval sur deux mois', () => {
+    expect(weekStart(new Date(2026, 11, 3, 14))).toEqual(new Date(2026, 10, 30));
+    expect(addDays(new Date(2026, 10, 30), 7)).toEqual(new Date(2026, 11, 7));
+  });
+  it('garde la même heure en recopiant une semaine au changement d\'heure', () => {
+    const before = new Date(2026, 9, 24, 18, 0); // samedi avant le passage à l'heure d'hiver
+    expect(addDays(before, 7).getHours()).toBe(18);
   });
 });

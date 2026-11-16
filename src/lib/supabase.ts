@@ -17,6 +17,7 @@ export const appUrl = () => window.location.origin + window.location.pathname;
 export function frError(e: unknown): string {
   const err = e as { message?: string; code?: string } | null;
   const m = [err?.code, err?.message || String(e)].filter(Boolean).join(' ');
+  if (/PGRST205|PGRST202|42P01|42883|Could not find the (table|function)/i.test(m)) return "Ce module attend une mise à jour de la base : le gérant doit exécuter le dernier script SQL dans Supabase.";
   if (/email_address_not_authorized|not authorized/i.test(m)) return "L'envoi d'e-mails n'est pas encore ouvert à cette adresse. Préviens le gérant.";
   if (/over_email_send_rate_limit|email rate limit/i.test(m)) return "Trop d'e-mails envoyés pour l'instant. Réessaie dans une heure.";
   if (/Invalid login credentials/i.test(m)) return 'E-mail ou mot de passe incorrect.';

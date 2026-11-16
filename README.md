@@ -2,12 +2,15 @@
 
 L'appli de gestion de la Nuba : une appli web installable sur iPhone, Android, iPad et ordinateur.
 
+En ligne : https://skanbls.github.io/SiteNuba/ (mise à jour automatique à chaque changement de la branche `main`).
+
 ## Où en est-on
 
 | Étape | Contenu | État |
 | --- | --- | --- |
-| 1. Socle et équipe | Comptes et rôles, pointeuse par QR code, export des heures | **Écrit et testé en local**, à relier à Supabase |
-| | Planning et congés, checklists | À faire |
+| 1. Socle et équipe | Comptes et rôles, pointeuse par QR code, export des heures | **En ligne** (migration 0001) |
+| | Planning, congés et échanges de service | **En ligne**, une fois la migration 0002 exécutée |
+| | Checklists | À faire |
 | 2. Marchandise et hygiène | Stocks, fournisseurs et commandes, relevés et traçabilité | À faire |
 | 3. Clients et événements | Réservations, privatisations, concerts, expositions, prestations extérieures | À faire |
 | 4. Pilotage | Fiches techniques, ventes Zelty, RH, maintenance, formation | À faire |
@@ -27,6 +30,10 @@ L'appli de gestion de la Nuba : une appli web installable sur iPhone, Android, i
 | Équipier | Pointer, voir ses propres heures |
 
 Le tout premier compte confirmé devient le gérant. Les autres personnes sont ajoutées par le gérant (écran Équipe), puis créent leur compte avec l'adresse e-mail enregistrée : le compte se rattache tout seul à leur fiche.
+
+### Planning
+
+Toute l'équipe voit le planning de la semaine ; seul le gérant l'écrit (un service = une personne, un jour, des heures, un poste). Chacun peut demander un congé ou proposer de céder un service à un collègue ; le gérant accepte ou refuse, et un échange accepté met le planning à jour. L'accueil du gérant compare le planning du jour aux pointages : prévu, en retard, en service, parti.
 
 ### Pointeuse
 

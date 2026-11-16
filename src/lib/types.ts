@@ -43,6 +43,40 @@ export interface TimeEntry {
   sites?: Pick<Site, 'name'> | null;
 }
 
+export interface Shift {
+  id: string;
+  profile_id: string;
+  site_id: string | null;
+  starts_at: string;
+  ends_at: string;
+  area: string;
+  note: string;
+}
+
+export type RequestStatus = 'pending' | 'approved' | 'refused';
+
+export interface LeaveRequest {
+  id: string;
+  profile_id: string;
+  kind: 'conge' | 'indisponibilite';
+  start_date: string;
+  end_date: string;
+  note: string;
+  status: RequestStatus;
+  created_at: string;
+}
+
+export interface ShiftSwap {
+  id: string;
+  shift_id: string;
+  from_profile: string;
+  to_profile: string;
+  note: string;
+  status: RequestStatus;
+  created_at: string;
+  shifts?: Pick<Shift, 'starts_at' | 'ends_at' | 'area'> | null;
+}
+
 export interface Kiosk {
   id: string;
   site_id: string;
@@ -69,6 +103,9 @@ export type PunchResult =
   | { ok: true; action: string }
   | { ok: false; error: PunchError };
 
+export const STATUS_LABEL: Record<RequestStatus, string> = { pending: 'En attente', approved: 'Acceptée', refused: 'Refusée' };
+export const STATUS_PILL: Record<RequestStatus, string> = { pending: 'warn', approved: 'ok', refused: 'bad' };
+export const LEAVE_LABEL: Record<LeaveRequest['kind'], string> = { conge: 'Congé', indisponibilite: 'Indisponibilité' };
 export const ROLE_LABEL: Record<Role, string> = { gerant: 'Gérant', responsable: 'Responsable', equipier: 'Équipier' };
 export const CONTRACT_LABEL: Record<Contract, string> = { cdi: 'CDI', cdd: 'CDD', extra: 'Extra', autre: 'Autre' };
 export const fullName = (p: Pick<Profile, 'first_name' | 'last_name'> | null | undefined) =>
