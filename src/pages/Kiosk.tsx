@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CodeView, useRollingCode } from '../components/RollingCode';
 import { Field, Spinner } from '../components/ui';
-import { useQrCamera } from '../components/useQrCamera';
-import { parseKioskLink } from '../lib/punch';
 import { frError, supabase } from '../lib/supabase';
+import { buildLabel } from '../lib/update';
 import type { CodeInfo } from '../lib/types';
 
 const KEY = 'nuba.borne';
@@ -128,70 +127,57 @@ function Live({ token, onDead, onLeave }: { token: string; onDead: () => void; o
       <p className="note center">Ouvre la pointeuse dans l'appli Nuba, puis scanne ce QR code ou saisis les 6 chiffres. Le code change toutes les 30 secondes.</p>
       {inIosBrowser() && (
         <p className="note center">
-          Pour retrouver la borne sur l'écran d'accueil de cet iPad, relie-la depuis l'appli installée : écran de connexion, puis « Cet appareil est une borne de pointage ». La borne ouverte dans Safari n'est pas reprise par l'appli installée.
+          Pour retrouver la borne sur l'écran d'accueil de cet iPad, relie-la depuis l'appli installée : écran de connexion, « Cet appareil est une borne de pointage », puis le code donné dans Réglages. La borne ouverte dans Safari n'est pas reprise par l'appli installée.
         </p>
       )}
       <button type="button" className="link" onClick={onLeave}>Ouvrir l'appli sur cet appareil</button>
+      <p className="sub">Version du {buildLabel()}</p>
     </div>
   );
 }
 
 /* ---------- Relier cet appareil à une borne ---------- */
+const PAIR_ERROR: Record<string, string> = {
+  code: 'Code refusé ou expiré. Il est valable 10 minutes : demandes-en un nouveau dans Réglages.',
+  too_many: "Trop de codes refusés. Réessaie dans 10 minutes.",
+};
+
 function Pair({ onToken, onLeave }: { onToken: (t: string) => void; onLeave: () => void }) {
-  const [camera, setCamera] = useState(true);
-  const [pasted, setPasted] = useState('');
+  const [code, setCode] = useState('');
   const [err, setErr] = useState('');
-  const [checking, setChecking] = useState(false);
-  const busy = useRef(false);
+  const [busy, setBusy] = useState(false);
 
-  const tryText = useCallback(
-    async (text: string) => {
-      if (busy.current) return;
-      const t = parseKioskLink(text);
-      if (!t) return setErr("Ce n'est pas le QR code d'une borne. Il s'affiche dans Réglages, juste après « Ajouter une borne ».");
-      busy.current = true;
-      setChecking(true);
-      setErr('');
-      try {
-        const { data, error } = await supabase.rpc('kiosk_code', { p_token: t });
-        if (error) throw error;
-        if (data) return onToken(t);
-        setErr("Cette borne n'est plus valable. Crées-en une nouvelle dans Réglages.");
-      } catch (e) {
-        setErr(frError(e));
-      }
-      setChecking(false);
-      window.setTimeout(() => (busy.current = false), 2500);
-    },
-    [onToken],
-  );
-
-  const video = useQrCamera(camera, (t) => void tryText(t), () => setCamera(false), 'user');
-
-  const submit = (e: FormEvent) => {
+  async function submit(e: FormEvent) {
     e.preventDefault();
-    void tryText(pasted);
-  };
+    if (!/^\d{6}$/.test(code)) return setErr('Le code a 6 chiffres.');
+    setBusy(true);
+    setErr('');
+    const { data, error } = await supabase.rpc('claim_kiosk', { p_code: code });
+    setBusy(false);
+    if (error) return setErr(frError(error));
+    const r = data as { ok: boolean; token?: string; error?: string };
+    if (r.ok && r.token) return onToken(r.token);
+    setErr(PAIR_ERROR[r.error ?? ''] ?? 'Liaison impossible.');
+  }
 
   return (
     <div className="card">
       <div>
         <h1>Relier cette borne</h1>
-        <p className="sub">Cet appareil affichera le QR code de pointage dès l'ouverture de l'appli.</p>
+        <p className="sub">Cet appareil affichera le QR code de pointage à chaque ouverture de l'appli.</p>
       </div>
       <ol className="note" style={{ paddingLeft: 18, display: 'grid', gap: 4 }}>
-        <li>Sur ton téléphone, ouvre Réglages puis « Ajouter une borne ».</li>
-        <li>Présente le QR code qui s'affiche devant la caméra avant de cet appareil.</li>
-        <li>Ensuite, cet appareil s'ouvrira toujours sur la borne.</li>
+        <li>Sur ton téléphone, ouvre Réglages puis « Ajouter une borne » (ou « Relier un appareil » sur une borne existante).</li>
+        <li>Tape ici le code à 6 chiffres qui s'affiche.</li>
       </ol>
-      {camera ? <video ref={video} className="video" playsInline muted aria-label="Caméra" /> : <p className="note">Caméra indisponible ou refusée : colle le lien de la borne ci-dessous.</p>}
       <form className="form" onSubmit={submit}>
-        <Field label="Ou colle ici le lien de la borne">
-          <input className="in" id="pair-link" value={pasted} onChange={(e) => setPasted(e.target.value)} autoComplete="off" autoCapitalize="off" spellCheck={false} />
+        <Field label="Code de liaison">
+          <input className="in code" id="pair-code" inputMode="numeric" autoComplete="off" pattern="[0-9]{6}" maxLength={6} placeholder="000000" value={code} autoFocus
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} />
         </Field>
         {err && <p className="err" role="alert">{err}</p>}
         <div className="acts">
-          <button className="btn pri" disabled={checking || !pasted.trim()}>{checking ? <Spinner /> : 'Relier'}</button>
+          <button className="btn pri" disabled={busy || code.length !== 6}>{busy ? <Spinner /> : 'Relier'}</button>
           <button type="button" className="btn" onClick={onLeave}>Retour à la connexion</button>
         </div>
       </form>

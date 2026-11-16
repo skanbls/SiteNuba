@@ -2,12 +2,8 @@ import { useEffect, useRef } from 'react';
 
 interface Detector { detect(src: HTMLVideoElement): Promise<{ rawValue: string }[]> }
 
-/**
- * Ouvre la caméra et appelle onText pour chaque QR code lu.
- * `facing` : 'environment' pour la caméra arrière (scanner la borne avec son téléphone),
- * 'user' pour la caméra avant (présenter un QR code devant un iPad posé sur son support).
- */
-export function useQrCamera(active: boolean, onText: (t: string) => void, onFail: () => void, facing: 'environment' | 'user' = 'environment') {
+/** Ouvre la caméra arrière et appelle onText pour chaque QR code lu. */
+export function useQrCamera(active: boolean, onText: (t: string) => void, onFail: () => void) {
   const video = useRef<HTMLVideoElement>(null);
   const cb = useRef({ onText, onFail });
   cb.current = { onText, onFail };
@@ -33,7 +29,7 @@ export function useQrCamera(active: boolean, onText: (t: string) => void, onFail
         if (!navigator.mediaDevices?.getUserMedia) throw new Error('caméra indisponible');
         // Le lecteur de secours n'est chargé que si le navigateur ne sait pas lire les QR codes lui-même.
         if (!detector) jsQR = (await import('jsqr')).default;
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing }, audio: false });
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
         const v = video.current;
         if (stopped || !v) {
           stream.getTracks().forEach((t) => t.stop());
@@ -78,7 +74,7 @@ export function useQrCamera(active: boolean, onText: (t: string) => void, onFail
       cancelAnimationFrame(raf);
       stream?.getTracks().forEach((t) => t.stop());
     };
-  }, [active, facing]);
+  }, [active]);
 
   return video;
 }

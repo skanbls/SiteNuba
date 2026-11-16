@@ -8,7 +8,7 @@ En ligne : https://skanbls.github.io/SiteNuba/ (mise à jour automatique à chaq
 
 | Étape | Contenu | État |
 | --- | --- | --- |
-| 1. Socle et équipe | Comptes et rôles, pointeuse par QR code, export des heures | **En ligne** (migration 0001) |
+| 1. Socle et équipe | Comptes et rôles, pointeuse par QR code, export des heures | **En ligne** (migrations 0001 et 0003) |
 | | Planning, congés et échanges de service | **En ligne**, une fois la migration 0002 exécutée |
 | | Checklists | À faire |
 | 2. Marchandise et hygiène | Stocks, fournisseurs et commandes, relevés et traçabilité | À faire |
@@ -39,6 +39,12 @@ Toute l'équipe voit le planning de la semaine ; seul le gérant l'écrit (un se
 
 Une borne (un iPad fixe) affiche un QR code et un code à 6 chiffres qui changent toutes les 30 secondes. Pour pointer son arrivée ou son départ, il faut scanner ce QR code ou saisir ce code : une photo du code ne sert donc à rien plus tard. En prestation extérieure, un responsable affiche le même code sur son téléphone.
 
+Pour transformer un appareil en borne : le gérant ouvre Réglages, « Ajouter une borne » (ou « Relier un appareil »), et tape le code à 6 chiffres obtenu sur l'appareil, depuis l'écran de connexion (« Cet appareil est une borne de pointage »). L'appareil s'ouvre ensuite toujours sur la borne. Relier un nouvel appareil remplace l'ancien.
+
+### Mises à jour
+
+L'appli se met à jour toute seule : elle cherche une nouvelle version à chaque retour à l'écran et toutes les cinq minutes, puis se recharge. La version en cours (date de construction) s'affiche sur l'écran de connexion, sur la borne et dans Mon compte.
+
 ## Relier l'appli à Supabase
 
 1. Créer un projet sur supabase.com, région Europe.
@@ -67,5 +73,7 @@ npm test
 `npm test` vérifie les calculs d'heures et la lecture des QR codes.
 
 `npm run test:db` rejoue les migrations sur un PostgreSQL local et vérifie les règles de sécurité et la pointeuse (voir `scripts/local-db.sh`).
+
+`npm run test:update` vérifie qu'une appli restée ouverte passe seule à une nouvelle version.
 
 `npm run test:e2e` joue le parcours complet dans un vrai navigateur contre cette base locale : inscription du gérant, équipe, borne, pointage d'un équipier, corrections, export (voir `e2e/`). Il demande Playwright.

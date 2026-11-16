@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import QRCode from 'qrcode';
-import { Icon } from '../components/Icon';
+import { useCallback, useState, type FormEvent } from 'react';
 import { Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
 import { useKiosks, useRefresh, useSites } from '../lib/data';
-import { appUrl, frError, supabase } from '../lib/supabase';
+import { frError, supabase } from '../lib/supabase';
 import { fmtDay, fmtTime } from '../lib/time';
 import type { Site } from '../lib/types';
 
@@ -15,10 +13,11 @@ export default function Settings() {
   const kiosks = useKiosks();
   const [addSite, setAddSite] = useState(false);
   const [addKiosk, setAddKiosk] = useState(false);
-  const [link, setLink] = useState('');
+  const [pair, setPair] = useState<{ label: string; code: string } | null>(null);
+  const [busy, setBusy] = useState(false);
   const closeSite = useCallback(() => setAddSite(false), []);
   const closeKiosk = useCallback(() => setAddKiosk(false), []);
-  const closeLink = useCallback(() => setLink(''), []);
+  const closePair = useCallback(() => setPair(null), []);
   const live = (kiosks.data ?? []).filter((k) => !k.revoked_at);
 
   async function toggleSite(s: Site) {
@@ -35,6 +34,14 @@ export default function Settings() {
     toast('Borne désactivée');
   }
 
+  async function relink(id: string, label: string) {
+    setBusy(true);
+    const { data, error } = await supabase.rpc('start_kiosk_pairing', { p_kiosk: id });
+    setBusy(false);
+    if (error) return toast(frError(error), 'bad');
+    setPair({ label, code: data as string });
+  }
+
   return (
     <Layout title="Réglages">
       <div className="cols">
@@ -46,14 +53,17 @@ export default function Settings() {
                 <div className="row wrap" key={k.id}>
                   <div className="grow">
                     <span className="t">{k.label}</span>
-                    <span className="sub">{k.sites?.name} · {k.last_seen_at ? `vue ${fmtDay(k.last_seen_at)} à ${fmtTime(k.last_seen_at)}` : 'jamais ouverte'}</span>
+                    <span className="sub">{k.sites?.name} · {k.last_seen_at ? `vue ${fmtDay(k.last_seen_at)} à ${fmtTime(k.last_seen_at)}` : 'aucun appareil relié pour l\'instant'}</span>
                   </div>
-                  <button type="button" className="btn sm no" onClick={() => void revoke(k.id)}>Désactiver</button>
+                  <div className="end">
+                    <button type="button" className="btn sm" disabled={busy} onClick={() => void relink(k.id, k.label)}>Relier un appareil</button>
+                    <button type="button" className="btn sm no" onClick={() => void revoke(k.id)}>Désactiver</button>
+                  </div>
                 </div>
               ))}
             </div>
           )}
-          <p className="note">Une borne est un appareil qui affiche le QR code de pointage : en général un iPad fixe. Si l'appareil est perdu ou remplacé, désactive sa borne et crée-en une autre.</p>
+          <p className="note">Une borne est un appareil qui affiche le QR code de pointage : en général un iPad fixe. Pour changer d'appareil, touche « Relier un appareil » : le nouveau remplace l'ancien.</p>
         </Section>
 
         <Section title="Lieux de pointage" right={<button type="button" className="link" onClick={() => setAddSite(true)}>Ajouter un lieu</button>}>
@@ -78,8 +88,8 @@ export default function Settings() {
       </div>
 
       {addSite && <SiteSheet onClose={closeSite} />}
-      {addKiosk && <KioskSheet sites={(sites.data ?? []).filter((s) => s.active)} onClose={closeKiosk} onCreated={setLink} />}
-      {link && <KioskLinkSheet link={link} onClose={closeLink} />}
+      {addKiosk && <KioskSheet sites={(sites.data ?? []).filter((s) => s.active)} onClose={closeKiosk} onCreated={setPair} />}
+      {pair && <PairCodeSheet label={pair.label} code={pair.code} onClose={closePair} />}
     </Layout>
   );
 }
@@ -120,7 +130,7 @@ function SiteSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-function KioskSheet({ sites, onClose, onCreated }: { sites: Site[]; onClose: () => void; onCreated: (link: string) => void }) {
+function KioskSheet({ sites, onClose, onCreated }: { sites: Site[]; onClose: () => void; onCreated: (p: { label: string; code: string }) => void }) {
   const refresh = useRefresh();
   const [site, setSite] = useState(sites[0]?.id ?? '');
   const [label, setLabel] = useState('iPad du bar');
@@ -130,12 +140,12 @@ function KioskSheet({ sites, onClose, onCreated }: { sites: Site[]; onClose: () 
     e.preventDefault();
     if (!site) return setErr('Choisis un lieu.');
     setBusy(true);
-    const { data, error } = await supabase.rpc('create_kiosk', { p_site: site, p_label: label });
+    const { data, error } = await supabase.rpc('add_kiosk', { p_site: site, p_label: label });
     setBusy(false);
     if (error) return setErr(frError(error));
     await refresh('kiosks');
     onClose();
-    onCreated(`${appUrl()}#/borne?t=${data as string}`);
+    onCreated({ label: label.trim(), code: (data as { code: string }).code });
   }
   return (
     <Sheet title="Ajouter une borne" onClose={onClose}>
@@ -155,34 +165,22 @@ function KioskSheet({ sites, onClose, onCreated }: { sites: Site[]; onClose: () 
   );
 }
 
-/** Le lien d'une borne ne s'affiche qu'à sa création : il contient son jeton. */
-function KioskLinkSheet({ link, onClose }: { link: string; onClose: () => void }) {
-  const toast = useToast();
-  const [svg, setSvg] = useState('');
-  useEffect(() => {
-    // Le QR code ne porte que le jeton : il se lit dans l'appli (« Cet appareil est une borne de pointage »).
-    // Lu par l'appareil photo d'un iPad, un lien s'ouvrirait dans Safari, dont l'appli installée ne partage pas la mémoire.
-    const token = link.slice(link.lastIndexOf('=') + 1);
-    void QRCode.toString(token, { type: 'svg', margin: 0, errorCorrectionLevel: 'L', color: { dark: '#161a2e', light: '#ffffff' } }).then(setSvg);
-  }, [link]);
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(link);
-      toast('Lien de la borne copié');
-    } catch {
-      toast('Copie impossible : sélectionne le lien à la main', 'bad');
-    }
-  }
+/** Code à taper sur l'appareil qui devient la borne. */
+function PairCodeSheet({ label, code, onClose }: { label: string; code: string; onClose: () => void }) {
   return (
-    <Sheet title="Borne créée" onClose={onClose}>
-      <p>Sur l'iPad, ouvre l'appli Nuba depuis l'écran d'accueil. Sur l'écran de connexion, touche « Cet appareil est une borne de pointage », puis présente ce QR code devant sa caméra avant.</p>
-      <p className="note">N'utilise pas l'appareil photo de l'iPad : ce QR code se lit seulement dans l'appli Nuba.</p>
+    <Sheet title={`Relier « ${label} »`} onClose={onClose}>
+      <ol className="note" style={{ paddingLeft: 18, display: 'grid', gap: 4 }}>
+        <li>Sur l'appareil qui servira de borne, ouvre l'appli Nuba depuis l'écran d'accueil.</li>
+        <li>Si quelqu'un y est connecté : Mon compte, puis « Se déconnecter ».</li>
+        <li>Sur l'écran de connexion, touche « Cet appareil est une borne de pointage ».</li>
+        <li>Tape ce code :</li>
+      </ol>
       <div className="panel">
-        <div className="qr" role="img" aria-label="QR code du lien de la borne" dangerouslySetInnerHTML={{ __html: svg }} />
+        <p className="digits num" data-testid="pair-code">{code}</p>
+        <p className="sub">Valable 10 minutes, pour un seul appareil.</p>
       </div>
-      <input className="in" id="kiosk-link" readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Lien de la borne" />
-      <button type="button" className="btn pri block" onClick={() => void copy()}><Icon name="copy" />Copier le lien</button>
-      <p className="note">Autre possibilité : copie ce lien et colle-le sur l'iPad au même endroit, ou ouvre-le dans le navigateur d'un ordinateur. Ce QR code et ce lien ne s'afficheront plus après la fermeture de cette fenêtre. Ne les partage pas : ils suffisent à afficher le code de pointage.</p>
+      <p className="note">L'appareil relié s'ouvrira ensuite toujours sur la borne. S'il remplace un autre appareil, l'ancien n'affichera plus le code de pointage.</p>
+      <button type="button" className="btn pri block" onClick={onClose}>C'est fait</button>
     </Sheet>
   );
 }

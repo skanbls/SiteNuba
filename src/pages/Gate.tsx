@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Field, Spinner } from '../components/ui';
 import { useSession } from '../lib/session';
 import { appUrl, frError, supabase } from '../lib/supabase';
+import { buildLabel } from '../lib/update';
 import { hasKiosk } from './Kiosk';
 
 /** Écran d'attente au démarrage. */
@@ -111,6 +112,7 @@ export function Login({ linkError }: { linkError: string }) {
           {mode === 'in' && <button type="button" className="btn" onClick={() => go('forgot')}>Mot de passe oublié</button>}
         </div>
         <Link className="link center" to="/borne">{hasKiosk() ? 'Revenir à la borne de pointage' : 'Cet appareil est une borne de pointage'}</Link>
+        <p className="sub center" data-testid="version">Version du {buildLabel()}</p>
       </div>
     </div>
   );

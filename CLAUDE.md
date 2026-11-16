@@ -23,6 +23,9 @@ L'ordre de construction et l'état d'avancement sont dans README.md. Le mettre �
 - Le système visuel est dans `src/styles/app.css` (jetons de couleur, thème clair et sombre). Réutiliser ses classes avant d'en créer.
 - Ne jamais demander au gérant de coller une clé secrète dans la conversation. Seules l'adresse du projet Supabase et sa clé publique vont dans le dépôt.
 
+- Les appareils de la Nuba sont des iPhone et un iPad : l'appli installée sur l'écran d'accueil ne partage pas sa mémoire avec Safari, reste ouverte en arrière-plan pendant des jours, et la borne ne se ferme jamais. Toute nouveauté doit marcher dans ces conditions. La mise à jour automatique est dans `src/lib/update.ts` ; ne pas la casser (`npm run test:update`).
+- Quand le gérant signale qu'une nouveauté n'apparaît pas, lui demander d'abord la version affichée dans Mon compte.
+
 ## Vérifier avant de livrer
 
 ```bash
@@ -35,6 +38,10 @@ npm run test:db
 
 ```bash
 npm run test:e2e
+```
+
+```bash
+npm run test:update
 ```
 
 `test:db` et `test:e2e` demandent un PostgreSQL 16 local (`pg_ctlcluster 16 main start`, mot de passe `postgres` pour l'utilisateur `postgres`). `test:e2e` lance un banc d'essai local (PostgREST téléchargé depuis GitHub et un faux service de comptes, `e2e/gateway.mjs`) puis joue le parcours complet dans un navigateur : demander l'accord du gérant avant de le lancer dans une nouvelle session. Chaque nouveau module ajoute ses tests de base dans `supabase/tests/tests.sql` et son parcours dans `e2e/flow.cjs`.

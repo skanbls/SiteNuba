@@ -5,6 +5,7 @@ import { Field, Layout, Section, Spinner, useToast } from '../components/ui';
 import { useMe, useSession } from '../lib/session';
 import { frError, supabase } from '../lib/supabase';
 import { CONTRACT_LABEL, ROLE_LABEL, fullName } from '../lib/types';
+import { buildLabel, checkForUpdate } from '../lib/update';
 import { hasKiosk, unlinkKiosk } from './Kiosk';
 
 /** Mon compte : mes informations, mon mot de passe, installer l'appli, me déconnecter. */
@@ -16,6 +17,14 @@ export default function Account() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [kiosk, setKiosk] = useState(hasKiosk);
+  const [checking, setChecking] = useState(false);
+
+  async function update() {
+    setChecking(true);
+    const found = await checkForUpdate();
+    setChecking(false);
+    toast(found ? "Nouvelle version trouvée : l'appli va se recharger" : 'Tu as déjà la dernière version');
+  }
 
   async function changePw(e: FormEvent) {
     e.preventDefault();
@@ -72,6 +81,14 @@ export default function Account() {
             <div className="list">
               <div className="row"><div className="grow"><span className="t">iPhone et iPad</span><span className="sub">Dans Safari : bouton Partager, puis « Sur l'écran d'accueil ».</span></div></div>
               <div className="row"><div className="grow"><span className="t">Android</span><span className="sub">Dans Chrome : menu ⋮, puis « Installer l'application ».</span></div></div>
+            </div>
+          </Section>
+          <Section title="Version de l'appli">
+            <div className="list">
+              <div className="row wrap">
+                <div className="grow"><span className="t">Version du {buildLabel()}</span><span className="sub">L'appli se met à jour toute seule. Ce bouton sert en cas de doute.</span></div>
+                <button type="button" className="btn sm" disabled={checking} onClick={() => void update()}>{checking ? <Spinner /> : 'Chercher une mise à jour'}</button>
+              </div>
             </div>
           </Section>
           <button type="button" className="btn no" onClick={() => void signOut()}>Se déconnecter</button>

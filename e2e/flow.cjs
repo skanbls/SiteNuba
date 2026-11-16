@@ -67,42 +67,51 @@ async function main() {
   await shot(boss, '02-equipe');
   step("le gérant compose l'équipe, les doublons d'adresse sont refusés");
 
-  // 3. Il crée la borne et récupère son lien.
+  // 3. Il crée la borne : l'appli lui donne un code de liaison à 6 chiffres.
   await boss.goto(APP + '#/reglages');
   await boss.getByRole('button', { name: 'Ajouter une borne' }).click();
   await boss.getByRole('button', { name: 'Créer la borne' }).click();
-  await see(boss, 'Borne créée');
-  const kioskLink = await boss.inputValue('#kiosk-link');
-  assert.match(kioskLink, /#\/borne\?t=[0-9a-f]{64}$/);
-  await shot(boss, '03-borne-creee');
-  await boss.getByRole('button', { name: 'Fermer' }).click();
-  await see(boss, 'iPad du bar');
-  step('le gérant crée la borne');
+  await see(boss, 'Relier « iPad du bar »');
+  const pairCode = await boss.locator('[data-testid=pair-code]').innerText();
+  assert.match(pairCode, /^\d{6}$/);
+  await shot(boss, '03-borne-code');
+  await boss.getByRole('button', { name: "C'est fait" }).click();
+  await see(boss, "aucun appareil relié pour l'instant");
+  step('le gérant crée la borne et reçoit un code de liaison');
 
-  // 4. L'iPad ouvre le lien : il affiche le code, sans compte, et le jeton quitte la barre d'adresse.
+  // 4. Sur l'iPad, sans compte : « Cet appareil est une borne », on tape le code, la borne s'affiche.
   const ipad = await open('borne', { width: 1024, height: 768 });
-  await ipad.goto(kioskLink);
+  await ipad.goto(APP);
+  await ipad.getByRole('link', { name: 'Cet appareil est une borne de pointage' }).click();
+  await see(ipad, 'Relier cette borne');
+  await ipad.fill('#pair-code', String((Number(pairCode) + 1) % 1000000).padStart(6, '0'));
+  await ipad.getByRole('button', { name: 'Relier' }).click();
+  await see(ipad, 'Code refusé ou expiré');
+  await shot(ipad, '04a-relier-borne');
+  await ipad.fill('#pair-code', pairCode);
+  await ipad.getByRole('button', { name: 'Relier' }).click();
   await see(ipad, 'Scanne ce code pour pointer');
   const code = () => ipad.locator('[data-testid=code]').innerText();
   assert.match(await code(), /^\d{6}$/);
-  assert.ok(!ipad.url().includes('t='), "le jeton doit disparaître de l'adresse");
   await see(ipad, 'La Nuba');
   await shot(ipad, '04-borne-ipad');
-  step('la borne affiche le QR code sans compte');
+  step('la borne se relie par son code et affiche le QR code sans compte');
 
-  // 4 bis. Appli installée sur l'iPad (mémoire séparée de Safari) : on relie la borne depuis l'écran de connexion,
-  // puis l'appli s'ouvre directement sur la borne à chaque lancement.
+  // 4 bis. Une seconde borne sur un appareil où le gérant se connecte aussi :
+  // l'appli s'y rouvre toujours sur la borne, et le code ne sert qu'une fois.
+  await boss.getByRole('button', { name: 'Ajouter une borne' }).click();
+  await boss.fill('#kiosk-label', 'iPad cuisine');
+  await boss.getByRole('button', { name: 'Créer la borne' }).click();
+  await see(boss, 'Relier « iPad cuisine »');
+  const pairCode2 = await boss.locator('[data-testid=pair-code]').innerText();
+  await boss.getByRole('button', { name: "C'est fait" }).click();
   const installed = await open('iPad installé', { width: 1024, height: 768 });
   await installed.goto(APP);
   await installed.getByRole('link', { name: 'Cet appareil est une borne de pointage' }).click();
-  await see(installed, 'Relier cette borne');
-  await see(installed, 'Caméra indisponible');   // pas de caméra dans le navigateur de test : on colle le lien
-  await installed.fill('#pair-link', 'https://exemple.fr/menu.pdf');
+  await installed.fill('#pair-code', pairCode);            // code déjà utilisé par le premier iPad
   await installed.getByRole('button', { name: 'Relier' }).click();
-  await see(installed, "Ce n'est pas le QR code d'une borne");
-  await shot(installed, '04b-relier-borne');
-  await installed.waitForTimeout(100);
-  await installed.fill('#pair-link', kioskLink);
+  await see(installed, 'Code refusé ou expiré');
+  await installed.fill('#pair-code', pairCode2);
   await installed.getByRole('button', { name: 'Relier' }).click();
   await see(installed, 'Scanne ce code pour pointer');
   await installed.goto('about:blank');
@@ -359,6 +368,18 @@ async function main() {
   await ipad.getByRole('button', { name: 'Relier à une nouvelle borne' }).click();
   await see(ipad, 'Relier cette borne');
   step("une borne désactivée n'affiche plus de code");
+
+  // 15 bis. Relier un autre appareil à la borne de la cuisine : il remplace l'ancien.
+  await boss.locator('.row', { hasText: 'iPad cuisine' }).getByRole('button', { name: 'Relier un appareil' }).click();
+  await see(boss, 'Relier « iPad cuisine »');
+  const pairCode3 = await boss.locator('[data-testid=pair-code]').innerText();
+  await boss.getByRole('button', { name: "C'est fait" }).click();
+  await ipad.fill('#pair-code', pairCode3);
+  await ipad.getByRole('button', { name: 'Relier' }).click();
+  await see(ipad, 'Scanne ce code pour pointer');
+  await installed.goto(APP + '#/borne');
+  await installed.getByText('Borne désactivée').waitFor({ timeout: 45_000 });
+  step("relier un nouvel appareil remplace l'ancien");
 
   // 16. Thème sombre, pour l'œil.
   const dark = await open('sombre', { width: 390, height: 844 }, { colorScheme: 'dark' });

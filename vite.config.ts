@@ -5,6 +5,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 // base './' : l'appli fonctionne quel que soit le dossier où elle est hébergée.
 export default defineConfig({
   base: './',
+  // Date de construction, affichée dans l'appli pour savoir quelle version tourne sur un appareil.
+  define: { __BUILD__: JSON.stringify(process.env.BUILD_STAMP || new Date().toISOString()) },
   plugins: [
     react(),
     VitePWA({
