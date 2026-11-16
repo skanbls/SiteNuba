@@ -6,7 +6,7 @@ L'appli de gestion de la Nuba : une appli web installable sur iPhone, Android, i
 
 | Étape | Contenu | État |
 | --- | --- | --- |
-| 1. Socle et équipe | Comptes et rôles, pointeuse par QR code, export des heures | **En cours** : socle et pointeuse écrits |
+| 1. Socle et équipe | Comptes et rôles, pointeuse par QR code, export des heures | **Écrit et testé en local**, à relier à Supabase |
 | | Planning et congés, checklists | À faire |
 | 2. Marchandise et hygiène | Stocks, fournisseurs et commandes, relevés et traçabilité | À faire |
 | 3. Clients et événements | Réservations, privatisations, concerts, expositions, prestations extérieures | À faire |
@@ -57,4 +57,8 @@ npm run build
 npm test
 ```
 
-`npm test` vérifie les calculs d'heures et la lecture des QR codes. `npm run test:db` rejoue les migrations sur un PostgreSQL local et vérifie les règles de sécurité et la pointeuse (voir `scripts/local-db.sh`).
+`npm test` vérifie les calculs d'heures et la lecture des QR codes.
+
+`npm run test:db` rejoue les migrations sur un PostgreSQL local et vérifie les règles de sécurité et la pointeuse (voir `scripts/local-db.sh`).
+
+`npm run test:e2e` joue le parcours complet dans un vrai navigateur contre cette base locale : inscription du gérant, équipe, borne, pointage d'un équipier, corrections, export (voir `e2e/`). Il demande Playwright.

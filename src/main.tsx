@@ -14,7 +14,7 @@ import { supabase } from './lib/supabase';
 registerSW({ immediate: true });
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { staleTime: 15_000, retry: 1, refetchOnWindowFocus: true } },
+  defaultOptions: { queries: { staleTime: 0, retry: 1, refetchOnWindowFocus: true } },
 });
 
 async function start() {

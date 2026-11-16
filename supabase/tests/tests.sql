@@ -159,9 +159,10 @@ begin
   assert (select count(*) from public.time_entries where clock_out is not null) = 1, 'la présence doit être fermée';
   assert (select count(*) from public.time_breaks where ended_at is null) = 0, 'le départ doit fermer la pause';
 
-  update public.time_entries set clock_in = clock_in - interval '1 hour';
-  get diagnostics r = row_count;
-  assert r::int = 0, 'un équipier ne doit pas modifier ses pointages';
+  begin
+    update public.time_entries set clock_in = clock_in - interval '1 hour';
+    raise exception 'TEST: un équipier a pu modifier ses pointages';
+  exception when insufficient_privilege then null; end;
   delete from public.time_entries;
   get diagnostics r = row_count;
   assert r::int = 0, 'un équipier ne doit pas supprimer ses pointages';

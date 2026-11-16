@@ -416,10 +416,18 @@ alter table public.time_breaks      enable row level security;
 alter table public.punch_failures   enable row level security;
 alter table public.time_entry_audit enable row level security;
 
--- Aucun accès direct : ces tables ne se lisent que par les fonctions ci-dessus.
-revoke all on public.site_secrets, public.punch_failures from anon, authenticated;
-revoke all on public.profiles, public.sites, public.kiosks, public.time_entries,
-              public.time_breaks, public.time_entry_audit from anon;
+-- Droits de base, donnés explicitement pour ne dépendre d'aucun réglage par défaut du projet.
+-- Les règles RLS ci-dessous décident ensuite ligne par ligne.
+revoke all on public.profiles, public.sites, public.site_secrets, public.kiosks, public.time_entries,
+              public.time_breaks, public.punch_failures, public.time_entry_audit
+  from anon, authenticated;
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on public.profiles to authenticated;
+grant select, insert, update on public.sites to authenticated;
+grant select, update, delete on public.kiosks to authenticated;
+grant select, delete on public.time_entries to authenticated;
+grant select on public.time_breaks, public.time_entry_audit to authenticated;
+-- site_secrets et punch_failures : aucun accès direct, seulement par les fonctions ci-dessus.
 
 create policy "equipe: lecture par les membres" on public.profiles
   for select to authenticated using ((select public.my_profile_id()) is not null);

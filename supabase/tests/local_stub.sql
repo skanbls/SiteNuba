@@ -23,7 +23,7 @@ $$;
 grant usage on schema auth to anon, authenticated, service_role;
 grant execute on function auth.uid() to anon, authenticated, service_role;
 
-grant usage on schema public to anon, authenticated, service_role;
-alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+-- Cas le plus strict pour les tables : aucun droit par défaut, les migrations doivent tout accorder.
+-- Cas le plus permissif pour les fonctions (exécutables par tous par défaut, comme dans PostgreSQL) :
+-- les migrations doivent retirer ce qui ne doit pas être appelable.
 alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
-alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
