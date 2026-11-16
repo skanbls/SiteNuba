@@ -5,6 +5,8 @@ import { useMe } from '../lib/session';
 
 const HINT: Record<string, string> = {
   '/hygiene': 'Températures, nettoyage, dates limites, huile de friture',
+  '/stocks': 'Quantités, seuils d\'alerte, inventaire',
+  '/commandes': 'Commandes aux fournisseurs et réception des livraisons',
   '/equipe': "Qui a accès à l'appli, avec quel rôle",
   '/reglages': 'Bornes et lieux de pointage',
   '/compte': 'Mes informations, mon mot de passe, me déconnecter',
@@ -28,7 +30,7 @@ export default function More() {
           </Link>
         ))}
       </div>
-      <p className="note">Les prochains modules arriveront ici : stocks et commandes, réservations et événements.</p>
+      <p className="note">Les prochains modules arriveront ici : réservations et événements, puis les outils de pilotage.</p>
     </Layout>
   );
 }

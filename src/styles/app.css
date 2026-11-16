@@ -205,3 +205,11 @@ button.shift:hover { background: color-mix(in srgb, var(--c, var(--ink-3)) 28%, 
 .in.temp { width: 92px; text-align: right; }
 .edit-row { display: flex; gap: 6px; align-items: center; }
 .edit-row .in { flex: 1; }
+
+/* Stocks */
+.step { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; flex: none; background: var(--surface); }
+.step button { min-width: 40px; height: 40px; border: 0; background: none; cursor: pointer; display: grid; place-items: center; padding: 0 6px; }
+.step button:hover { background: var(--sunken); }
+.step button:disabled { opacity: 0.45; cursor: default; }
+.step .qty { min-width: 46px; font-weight: 600; font-variant-numeric: tabular-nums; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.in.qty { width: 84px; text-align: right; }

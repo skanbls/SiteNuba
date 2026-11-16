@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
-import type { Checklist, ColdUnit, Kiosk, LeaveRequest, OilLog, Profile, Shift, ShiftSwap, Site, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
+import type { Checklist, ColdUnit, Kiosk, LeaveRequest, OilLog, Order, Product, Profile, Shift, ShiftSwap, Site, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
 
 const ENTRY = '*, time_breaks(*), profiles(first_name, last_name), sites(name)';
 
@@ -139,6 +139,29 @@ export function useOil() {
   return useQuery({
     queryKey: ['oil'],
     queryFn: async () => must<OilLog[]>(await supabase.from('oil_logs').select('*').order('done_at', { ascending: false }).limit(30)),
+  });
+}
+
+export function useSuppliers() {
+  return useQuery({
+    queryKey: ['suppliers'],
+    queryFn: async () => must<Supplier[]>(await supabase.from('suppliers').select('*').order('name')),
+  });
+}
+
+export function useProducts() {
+  return useQuery({
+    queryKey: ['products'],
+    queryFn: async () => must<Product[]>(await supabase.from('products').select('*').order('category').order('name')),
+  });
+}
+
+/** Commandes, les plus récentes d'abord, avec leurs lignes. */
+export function useOrders() {
+  return useQuery({
+    queryKey: ['orders'],
+    queryFn: async () =>
+      must<Order[]>(await supabase.from('orders').select('*, suppliers(name, phone, email), order_lines(*, products(name, unit))').order('created_at', { ascending: false }).limit(60)),
   });
 }
 

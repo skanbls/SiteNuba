@@ -7,9 +7,11 @@ import Checklists from './pages/Checklists';
 import Hygiene from './pages/Hygiene';
 import Kiosk from './pages/Kiosk';
 import More from './pages/More';
+import Orders from './pages/Orders';
 import Planning from './pages/Planning';
 import Pointeuse, { PunchFromLink } from './pages/Pointeuse';
 import Settings from './pages/Settings';
+import Stocks from './pages/Stocks';
 import Team from './pages/Team';
 import Today from './pages/Today';
 
@@ -36,6 +38,8 @@ export default function App({ linkError }: { linkError: string }) {
       <Route path="/pointer" element={<PunchFromLink />} />
       <Route path="/checklists" element={<Checklists />} />
       <Route path="/hygiene" element={<Hygiene />} />
+      <Route path="/stocks" element={<Stocks />} />
+      <Route path="/commandes" element={<Orders />} />
       <Route path="/planning" element={<Planning />} />
       <Route path="/plus" element={<More />} />
       <Route path="/compte" element={<Account />} />

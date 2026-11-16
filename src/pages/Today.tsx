@@ -85,6 +85,21 @@ export default function Today() {
                 <span className="chev"><Icon name="chev" size={18} /></span>
               </div>
             </Link>
+            {t.low_stock !== undefined && (t.low_stock > 0 || (t.deliveries ?? 0) > 0) && (
+              <Link className="row wrap" to={t.low_stock > 0 ? '/stocks' : '/commandes'}>
+                <div className="grow">
+                  <span className="t">Stocks et commandes</span>
+                  <span className="sub">
+                    {[t.low_stock > 0 ? `${t.low_stock} produit${t.low_stock > 1 ? 's' : ''} sous le seuil` : '',
+                      (t.deliveries ?? 0) > 0 ? `${t.deliveries} livraison${(t.deliveries ?? 0) > 1 ? 's' : ''} attendue${(t.deliveries ?? 0) > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ')}
+                  </span>
+                </div>
+                <div className="end">
+                  {t.low_stock > 0 && <span className="pill warn">À commander</span>}
+                  <span className="chev"><Icon name="chev" size={18} /></span>
+                </div>
+              </Link>
+            )}
           </div>
         </Section>
       )}

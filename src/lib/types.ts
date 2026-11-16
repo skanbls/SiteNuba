@@ -142,6 +142,63 @@ export interface OilLog {
   done_at: string;
 }
 
+export interface Supplier {
+  id: string;
+  name: string;
+  contact: string;
+  phone: string;
+  email: string;
+  delivery_days: string;
+  order_cutoff: string;
+  minimum: string;
+  note: string;
+  active: boolean;
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  category: string;
+  unit: string;
+  quantity: number;
+  threshold: number;
+  /** Quantité à retrouver après une commande. Vide : deux fois le seuil. */
+  target: number | null;
+  unit_price: number;
+  supplier_id: string | null;
+  active: boolean;
+}
+
+export interface OrderLine {
+  id: string;
+  order_id: string;
+  product_id: string;
+  quantity: number;
+  unit_price: number;
+  received_quantity: number | null;
+  products?: Pick<Product, 'name' | 'unit'> | null;
+}
+
+export type OrderStatus = 'draft' | 'sent' | 'received' | 'cancelled';
+
+export interface Order {
+  id: string;
+  supplier_id: string;
+  status: OrderStatus;
+  note: string;
+  created_by: string | null;
+  created_at: string;
+  sent_by: string | null;
+  sent_at: string | null;
+  received_by: string | null;
+  received_at: string | null;
+  reception_ok: boolean | null;
+  reception_temp: number | null;
+  reception_note: string;
+  suppliers?: Pick<Supplier, 'name' | 'phone' | 'email'> | null;
+  order_lines: OrderLine[];
+}
+
 /** Ce que renvoie today_tasks : ce qu'il reste à faire pour le jour de service en cours. */
 export interface TodayTasks {
   day: string;
@@ -152,6 +209,9 @@ export interface TodayTasks {
   temps_alerts: number;
   dlc_today: number;
   dlc_late: number;
+  /** Présents seulement une fois la migration des stocks exécutée. */
+  low_stock?: number;
+  deliveries?: number;
 }
 
 export interface Kiosk {
@@ -185,6 +245,10 @@ export const STATUS_PILL: Record<RequestStatus, string> = { pending: 'warn', app
 export const LEAVE_LABEL: Record<LeaveRequest['kind'], string> = { conge: 'Congé', indisponibilite: 'Indisponibilité' };
 export const FREQUENCY_LABEL: Record<Frequency, string> = { daily: 'Chaque jour', weekly: 'Chaque semaine', monthly: 'Chaque mois' };
 export const PERIOD_NOW: Record<Frequency, string> = { daily: "Aujourd'hui", weekly: 'Cette semaine', monthly: 'Ce mois-ci' };
+export const ORDER_LABEL: Record<OrderStatus, string> = { draft: 'Brouillon', sent: 'Envoyée', received: 'Reçue', cancelled: 'Annulée' };
+export const ORDER_PILL: Record<OrderStatus, string> = { draft: '', sent: 'info', received: 'ok', cancelled: 'bad' };
+/** Quantité à commander pour revenir au niveau voulu. */
+export const toOrder = (p: Pick<Product, 'quantity' | 'threshold' | 'target'>) => Math.max(1, Math.ceil((p.target ?? p.threshold * 2) - p.quantity));
 export const ROLE_LABEL: Record<Role, string> = { gerant: 'Gérant', responsable: 'Responsable', equipier: 'Équipier' };
 export const CONTRACT_LABEL: Record<Contract, string> = { cdi: 'CDI', cdd: 'CDD', extra: 'Extra', autre: 'Autre' };
 export const fullName = (p: Pick<Profile, 'first_name' | 'last_name'> | null | undefined) =>

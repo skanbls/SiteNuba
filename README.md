@@ -13,7 +13,7 @@ En ligne : https://skanbls.github.io/SiteNuba/ (mise à jour automatique à chaq
 | | iPad partagé : identification par code PIN | **En ligne**, une fois la migration 0004 exécutée |
 | | Checklists | **En ligne**, une fois la migration 0005 exécutée |
 | 2. Marchandise et hygiène | Hygiène : températures, nettoyage, dates limites, huile de friture | **En ligne**, une fois la migration 0005 exécutée |
-| | Stocks, fournisseurs et commandes | À faire |
+| | Stocks, fournisseurs et commandes | **En ligne**, une fois la migration 0006 exécutée |
 | 3. Clients et événements | Réservations, privatisations, concerts, expositions, prestations extérieures | À faire |
 | 4. Pilotage | Fiches techniques, ventes Zelty, RH, maintenance, formation | À faire |
 
@@ -48,6 +48,10 @@ Pour transformer un appareil en borne : le gérant ouvre Réglages, « Ajouter u
 Une checklist se coche pour une période : le jour de service (de 5 h à 5 h le lendemain, pour que la fermeture appartienne à la soirée), la semaine ou le mois. Chaque case garde qui l'a cochée et quand. Le gérant compose les listes ; des modèles sont fournis.
 
 Hygiène regroupe les relevés de température (hors de la cible, l'action corrective est demandée), le plan de nettoyage (des checklists), les dates limites des préparations et produits entamés, et le suivi de l'huile de friture. Le gérant exporte le tout en un fichier pour un contrôle. L'accueil rappelle à chacun ce qu'il reste à faire.
+
+### Stocks et commandes
+
+Chaque produit a une quantité, un seuil d'alerte, une quantité voulue et un fournisseur. La quantité ne change que par un mouvement signé : boutons − et +, inventaire, ou réception d'une commande. Sous son seuil, un produit est proposé à la commande chez son fournisseur ; la commande se prépare, s'envoie (texte à copier, e-mail ou WhatsApp) puis se réceptionne, ce qui met le stock à jour et garde le contrôle à réception. Toute l'équipe peut le faire ; le gérant tient le catalogue (produits, seuils, prix, fournisseurs) et peut annuler une commande.
 
 ### iPad partagé
 

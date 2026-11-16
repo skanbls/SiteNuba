@@ -484,6 +484,85 @@ async function main() {
   }
   step("le gérant exporte le dossier d'hygiène");
 
+  // 13 quinquies. Stocks et commandes.
+  await boss.goto(APP + '#/commandes');
+  await see(boss, 'Aucun fournisseur. Ajoute le premier');
+  await boss.getByRole('button', { name: 'Ajouter un fournisseur' }).click();
+  await boss.fill('#sup-name', 'Cave Garonne');
+  await boss.fill('#sup-phone', '06 12 34 56 78');
+  await boss.fill('#sup-email', 'commandes@cave.test');
+  await boss.fill('#sup-days', 'Mardi et vendredi');
+  await boss.getByRole('button', { name: 'Enregistrer' }).click();
+  await see(boss, 'Fournisseur ajouté');
+  await boss.goto(APP + '#/stocks');
+  for (const [name, unit, threshold, target, price] of [['Gin', 'bouteille 70 cl', '3', '8', '21'], ['Vin blanc', 'bouteille', '12', '', '6,5']]) {
+    await boss.getByRole('button', { name: 'Produit', exact: true }).click();
+    await boss.fill('#prod-name', name);
+    await boss.fill('#prod-unit', unit);
+    await boss.fill('#prod-threshold', threshold);
+    await boss.fill('#prod-target', target);
+    await boss.fill('#prod-price', price);
+    await boss.selectOption('#prod-supplier', { label: 'Cave Garonne' });
+    await boss.getByRole('button', { name: 'Enregistrer' }).click();
+    await see(boss, 'Produit ajouté');
+    await boss.locator(`[data-product="${name}"]`).waitFor();
+  }
+  await boss.locator('[data-product="Gin"]').getByText('Rupture').waitFor();
+  await shot(boss, '13j-stocks-gerant');
+  step('le gérant crée un fournisseur et ses produits');
+
+  await theo.goto(APP + '#/stocks');
+  const gin = theo.locator('[data-product="Gin"]');
+  await gin.getByRole('button', { name: 'Ajouter 1 Gin' }).click();
+  await gin.getByLabel('Quantité de Gin').getByText('1', { exact: true }).waitFor();
+  await gin.getByText('Bas').waitFor();
+  await theo.getByRole('button', { name: "Faire l'inventaire" }).click();
+  await theo.getByLabel('Quantité comptée de Vin blanc').fill('9');
+  await theo.getByRole('button', { name: /Enregistrer l'inventaire \(1\)/ }).click();
+  await see(theo, 'Inventaire enregistré : 1 quantité mise à jour');
+  await noOverflow(theo, 'stocks');
+  await shot(theo, '13k-stocks');
+  await theo.getByRole('link', { name: /Préparer les commandes \(2 à commander\)/ }).click();
+  await theo.locator('[data-suggest="Cave Garonne"]').getByRole('button', { name: 'Préparer la commande' }).click();
+  await see(theo, 'Cave Garonne · brouillon');
+  await theo.locator('[data-line="Gin"]').getByText('7', { exact: true }).waitFor();          // 8 voulues − 1 en stock
+  await theo.locator('[data-line="Vin blanc"]').getByText('15', { exact: true }).waitFor();   // 2 × 12 − 9
+  await theo.getByRole('button', { name: 'Commander 1 Gin de moins' }).click();
+  await theo.fill('#order-note', 'Livraison avant 16 h');
+  assert.match(await theo.getByRole('link', { name: 'Par WhatsApp' }).getAttribute('href'), /^https:\/\/wa\.me\/33612345678\?text=.*6%20%C3%97%20Gin/);
+  await noOverflow(theo, 'commande');
+  await shot(theo, '13l-commande');
+  await theo.getByRole('button', { name: 'Commande envoyée' }).click();
+  await see(theo, 'Commande notée comme envoyée');
+  await theo.locator('[data-order="Cave Garonne"]').getByText('Envoyée', { exact: true }).waitFor();
+  step("un équipier ajuste le stock, fait l'inventaire, prépare et envoie la commande");
+
+  // La livraison arrive : Hugo la réceptionne sur l'iPad, avec un manquant.
+  await ipad.getByRole('button', { name: "Utiliser l'appli sur cet appareil" }).click();
+  await ipad.getByRole('dialog').getByRole('button', { name: /Hugo/ }).click();
+  await ipad.fill('#pin-code', '2580');
+  await see(ipad, 'Bonjour Hugo');
+  await see(ipad, '1 livraison attendue');
+  await ipad.getByRole('link', { name: 'Commandes' }).first().click();
+  await ipad.locator('[data-order="Cave Garonne"]').click();
+  await ipad.getByRole('button', { name: 'Réceptionner la livraison' }).click();
+  await ipad.getByLabel('Quantité reçue de Vin blanc').fill('12');
+  await ipad.selectOption('#rec-ok', 'non');
+  await ipad.getByRole('button', { name: 'Valider la réception' }).click();
+  await see(ipad, 'Décris le problème constaté');
+  await ipad.fill('#rec-note', '3 bouteilles manquantes');
+  await ipad.getByRole('button', { name: 'Valider la réception' }).click();
+  await see(ipad, 'Livraison réceptionnée, stock mis à jour');
+  await ipad.getByRole('link', { name: 'Stocks' }).first().click();
+  await ipad.locator('[data-product="Gin"]').getByLabel('Quantité de Gin').getByText('7', { exact: true }).waitFor();          // 1 + 6
+  await ipad.locator('[data-product="Vin blanc"]').getByLabel('Quantité de Vin blanc').getByText('21', { exact: true }).waitFor();   // 9 + 12
+  await shot(ipad, '13m-ipad-stocks');
+  await ipad.getByRole('button', { name: /Terminer/ }).click();
+  await see(ipad, 'Scanne ce code pour pointer');
+  await boss.goto(APP + '#/commandes');
+  await boss.locator('[data-order="Cave Garonne"]').getByText('Problème signalé').waitFor();
+  step("sur l'iPad, la livraison est réceptionnée et le stock mis à jour");
+
   // 14. Le gérant désactive Théo : il perd l'accès.
   await boss.goto(APP + '#/equipe');
   await boss.locator('button.row', { hasText: 'Théo Martin' }).click();

@@ -35,6 +35,8 @@ export const NAV: NavItem[] = [
   { to: '/checklists', label: 'Checklists', icon: 'check', tab: true },
   { to: '/planning', label: 'Planning', icon: 'cal', tab: true },
   { to: '/hygiene', label: 'Hygiène', icon: 'thermo' },
+  { to: '/stocks', label: 'Stocks', icon: 'box' },
+  { to: '/commandes', label: 'Commandes', icon: 'truck' },
   { to: '/equipe', label: 'Équipe', icon: 'team', gerant: true },
   { to: '/reglages', label: 'Réglages', icon: 'cog', gerant: true },
   { to: '/compte', label: 'Mon compte', icon: 'user' },
