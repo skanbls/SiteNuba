@@ -13,7 +13,9 @@ const TABS: [Tab, string][] = [['temp', 'Températures'], ['net', 'Nettoyage'], 
 const POLAR_LIMIT = 25;
 
 const deg = (v: number) => `${v.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).replace('-', '−')} °C`;
-const target = (u: Pick<ColdUnit, 'min_temp' | 'max_temp'>) => (u.min_temp <= -25 ? `${deg(u.max_temp)} ou moins` : `de ${deg(u.min_temp)} à ${deg(u.max_temp)}`);
+const plain = (v: number) => v.toLocaleString('fr-FR', { maximumFractionDigits: 1 }).replace('-', '−');
+/** Cible lisible : « de 0 à 4 °C », ou « −18 °C ou moins » pour le froid négatif. */
+const target = (u: Pick<ColdUnit, 'min_temp' | 'max_temp'>) => (u.min_temp <= -25 ? `${plain(u.max_temp)} °C ou moins` : `de ${plain(u.min_temp)} à ${plain(u.max_temp)} °C`);
 const num = (s: string) => Number(s.replace(',', '.').replace('−', '-'));
 
 /** Hygiène : températures, plan de nettoyage, dates limites, huile de friture. */

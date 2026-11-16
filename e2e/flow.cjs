@@ -401,6 +401,89 @@ async function main() {
   await ipad.getByText('Scanne ce code pour pointer').waitFor({ timeout: 20_000 });
   step("la session à code PIN se referme seule sans activité");
 
+  // 13 quater. Checklists et hygiène, sur le téléphone, sur l'iPad par code PIN, puis l'export du gérant.
+  await theo.goto(APP + '#/checklists');
+  await see(theo, 'Ouverture bar');
+  await theo.locator('button.row', { hasText: 'Machine à glaçons' }).click();
+  await see(theo, 'Fait par Théo');
+  await noOverflow(theo, 'checklists');
+  await shot(theo, '13f-checklists');
+  await boss.goto(APP + '#/');
+  await see(boss, "À faire aujourd'hui");
+  await see(boss, 'cases cochées');
+  await boss.goto(APP + '#/checklists');
+  await boss.locator('button.row', { hasText: 'Machine à glaçons' }).waitFor();
+  await boss.getByRole('button', { name: 'Nouvelle liste' }).click();
+  await boss.fill('#cl-name', 'Brunch');
+  await boss.getByLabel('Case 1').fill('Dresser le buffet');
+  await boss.getByRole('button', { name: 'Ajouter une case' }).click();
+  await boss.getByLabel('Case 2').fill('Presser les oranges');
+  await boss.getByRole('button', { name: 'Enregistrer' }).click();
+  await see(boss, 'Liste créée');
+  await boss.locator('button.row', { hasText: 'Dresser le buffet' }).waitFor();
+  await shot(boss, '13g-checklists-gerant');
+  step('chacun coche ses checklists, le gérant compose ses listes');
+
+  await theo.goto(APP + '#/hygiene');
+  await theo.getByLabel('Température de Frigo bar').fill('3,4');
+  await theo.locator('[data-unit="Frigo bar"]').getByRole('button', { name: 'Relever' }).click();
+  await see(theo, 'Relevé enregistré');
+  const vitrine = theo.locator('[data-unit="Vitrine desserts"]');
+  await theo.getByLabel('Température de Vitrine desserts').fill('6');
+  await vitrine.getByRole('button', { name: 'Relever' }).click();
+  await see(theo, 'Hors limite');
+  await theo.getByLabel('Action corrective pour Vitrine desserts').fill('Porte refermée, recontrôle dans 30 min');
+  await vitrine.getByRole('button', { name: 'Noter' }).click();
+  await see(theo, 'Action corrective enregistrée');
+  await vitrine.getByText('Corrigé').waitFor();
+  await noOverflow(theo, 'hygiène, températures');
+  await shot(theo, '13h-hygiene-temperatures');
+  await theo.getByRole('button', { name: 'Dates limites', exact: true }).click();
+  await theo.fill('#trace-name', 'Chimichurri maison');
+  await theo.getByRole('button', { name: '+3 j' }).click();
+  await theo.getByRole('button', { name: "Enregistrer l'étiquette" }).click();
+  await see(theo, 'Étiquette enregistrée');
+  await see(theo, 'Encore 3 j');
+  await noOverflow(theo, 'hygiène, dates limites');
+  await theo.locator('[data-trace="Chimichurri maison"]').getByRole('button', { name: 'Terminé' }).click();
+  await see(theo, 'Chimichurri maison : terminé');
+  await theo.getByRole('button', { name: 'Friteuse', exact: true }).click();
+  await theo.fill('#oil-pct', '27');
+  await theo.getByRole('button', { name: 'Noter le test' }).click();
+  await see(theo, "l'huile est à changer");
+  await theo.getByRole('button', { name: 'Huile changée' }).click();
+  await see(theo, "Huile changée aujourd'hui");
+  await theo.getByRole('button', { name: 'Nettoyage', exact: true }).click();
+  await see(theo, 'Nettoyage du jour');
+  await theo.locator('button.row', { hasText: 'Sanitaires' }).click();
+  await see(theo, 'Fait par Théo');
+  step('hygiène : relevé conforme, hors limite corrigé, date limite, friteuse, nettoyage');
+
+  await ipad.getByRole('button', { name: "Utiliser l'appli sur cet appareil" }).click();
+  await ipad.getByRole('dialog').getByRole('button', { name: /Hugo/ }).click();
+  await ipad.fill('#pin-code', '2580');
+  await see(ipad, 'Bonjour Hugo');
+  await ipad.getByRole('link', { name: 'Checklists' }).first().click();
+  await ipad.locator('button.row', { hasText: 'Fûts contrôlés' }).click();
+  await see(ipad, 'Fait par Hugo');
+  await ipad.getByRole('link', { name: 'Hygiène' }).first().click();
+  await ipad.getByLabel('Température de Chambre froide').fill('2,5');
+  await ipad.locator('[data-unit="Chambre froide"]').getByRole('button', { name: 'Relever' }).click();
+  await see(ipad, 'Relevé enregistré');
+  await shot(ipad, '13i-ipad-hygiene');
+  await ipad.getByRole('button', { name: /Terminer/ }).click();
+  await see(ipad, 'Scanne ce code pour pointer');
+  step("sur l'iPad, par code PIN, on coche et on relève aussi");
+
+  await boss.goto(APP + '#/hygiene');
+  await boss.locator('[data-unit="Chambre froide"]').getByText('Conforme').waitFor();
+  const [hyg] = await Promise.all([boss.waitForEvent('download'), boss.getByRole('button', { name: /Exporter le dossier/ }).click()]);
+  const hygCsv = fs.readFileSync(await hyg.path(), 'utf8');
+  for (const part of ['RELEVÉS DE TEMPÉRATURE', 'Vitrine desserts;6;Non;Porte refermée, recontrôle dans 30 min;Théo Martin', 'Chambre froide;2,5;Oui;;Hugo', 'PLAN DE NETTOYAGE', 'Nettoyage du jour;Sanitaires;Théo Martin', 'Chimichurri maison;Préparation', 'HUILE DE FRITURE', 'Test;27;Théo Martin']) {
+    assert.ok(hygCsv.includes(part), "l'export d'hygiène doit contenir : " + part + '\n' + hygCsv);
+  }
+  step("le gérant exporte le dossier d'hygiène");
+
   // 14. Le gérant désactive Théo : il perd l'accès.
   await boss.goto(APP + '#/equipe');
   await boss.locator('button.row', { hasText: 'Théo Martin' }).click();

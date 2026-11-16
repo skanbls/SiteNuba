@@ -11,8 +11,9 @@ En ligne : https://skanbls.github.io/SiteNuba/ (mise à jour automatique à chaq
 | 1. Socle et équipe | Comptes et rôles, pointeuse par QR code, export des heures | **En ligne** (migrations 0001 et 0003) |
 | | Planning, congés et échanges de service | **En ligne**, une fois la migration 0002 exécutée |
 | | iPad partagé : identification par code PIN | **En ligne**, une fois la migration 0004 exécutée |
-| | Checklists | À faire |
-| 2. Marchandise et hygiène | Stocks, fournisseurs et commandes, relevés et traçabilité | À faire |
+| | Checklists | **En ligne**, une fois la migration 0005 exécutée |
+| 2. Marchandise et hygiène | Hygiène : températures, nettoyage, dates limites, huile de friture | **En ligne**, une fois la migration 0005 exécutée |
+| | Stocks, fournisseurs et commandes | À faire |
 | 3. Clients et événements | Réservations, privatisations, concerts, expositions, prestations extérieures | À faire |
 | 4. Pilotage | Fiches techniques, ventes Zelty, RH, maintenance, formation | À faire |
 
@@ -41,6 +42,12 @@ Toute l'équipe voit le planning de la semaine ; seul le gérant l'écrit (un se
 Une borne (un iPad fixe) affiche un QR code et un code à 6 chiffres qui changent toutes les 30 secondes. Pour pointer son arrivée ou son départ, il faut scanner ce QR code ou saisir ce code : une photo du code ne sert donc à rien plus tard. En prestation extérieure, un responsable affiche le même code sur son téléphone.
 
 Pour transformer un appareil en borne : le gérant ouvre Réglages, « Ajouter une borne » (ou « Relier un appareil »), et tape le code à 6 chiffres obtenu sur l'appareil, depuis l'écran de connexion (« Cet appareil est une borne de pointage »). L'appareil s'ouvre ensuite toujours sur la borne. Relier un nouvel appareil remplace l'ancien.
+
+### Checklists et hygiène
+
+Une checklist se coche pour une période : le jour de service (de 5 h à 5 h le lendemain, pour que la fermeture appartienne à la soirée), la semaine ou le mois. Chaque case garde qui l'a cochée et quand. Le gérant compose les listes ; des modèles sont fournis.
+
+Hygiène regroupe les relevés de température (hors de la cible, l'action corrective est demandée), le plan de nettoyage (des checklists), les dates limites des préparations et produits entamés, et le suivi de l'huile de friture. Le gérant exporte le tout en un fichier pour un contrôle. L'accueil rappelle à chacun ce qu'il reste à faire.
 
 ### iPad partagé
 
