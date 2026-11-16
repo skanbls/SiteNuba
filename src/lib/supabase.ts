@@ -15,7 +15,10 @@ export const appUrl = () => window.location.origin + window.location.pathname;
 
 /** Messages de Supabase traduits pour l'équipe. */
 export function frError(e: unknown): string {
-  const m = (e as { message?: string } | null)?.message || String(e);
+  const err = e as { message?: string; code?: string } | null;
+  const m = [err?.code, err?.message || String(e)].filter(Boolean).join(' ');
+  if (/email_address_not_authorized|not authorized/i.test(m)) return "L'envoi d'e-mails n'est pas encore ouvert à cette adresse. Préviens le gérant.";
+  if (/over_email_send_rate_limit|email rate limit/i.test(m)) return "Trop d'e-mails envoyés pour l'instant. Réessaie dans une heure.";
   if (/Invalid login credentials/i.test(m)) return 'E-mail ou mot de passe incorrect.';
   if (/Email not confirmed/i.test(m)) return "Confirme d'abord ton adresse avec le lien reçu par e-mail.";
   if (/already registered|already been registered|user_already_exists/i.test(m)) return 'Un compte existe déjà avec cette adresse. Connecte-toi, ou utilise « Mot de passe oublié ».';
@@ -26,5 +29,5 @@ export function frError(e: unknown): string {
   if (/time_entries_one_open/i.test(m)) return 'Cette personne a déjà une présence en cours.';
   if (/violates foreign key constraint.*time_entries/i.test(m)) return 'Cette personne a des pointages : désactive-la plutôt que de la supprimer.';
   if (/row-level security|permission denied|42501/i.test(m)) return "Tu n'as pas le droit de faire cette action.";
-  return m;
+  return err?.message || String(e);
 }
