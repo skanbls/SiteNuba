@@ -4,5 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 SUPER="${PGSUPER_URL:-postgres://postgres:postgres@127.0.0.1:5432}"
 bash scripts/local-db.sh nuba_test
-psql -q -v ON_ERROR_STOP=1 "$SUPER/nuba_test" -f supabase/tests/tests.sql
+for f in supabase/tests/tests*.sql; do
+  psql -q -v ON_ERROR_STOP=1 "$SUPER/nuba_test" -f "$f"
+done
 echo "Tests de la base : OK"
