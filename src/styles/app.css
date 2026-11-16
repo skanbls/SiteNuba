@@ -196,3 +196,12 @@ button.shift:hover { background: color-mix(in srgb, var(--c, var(--ink-3)) 28%, 
 .bar { height: 8px; border-radius: 99px; background: var(--sunken); overflow: hidden; margin-top: 8px; }
 .bar > i { display: block; height: 100%; border-radius: 99px; background: var(--accent); }
 .bar.over > i { background: var(--warn); }
+
+/* Cases à cocher (checklists, nettoyage) */
+.chk { width: 26px; height: 26px; border-radius: 8px; border: 2px solid var(--ink-3); display: grid; place-items: center; flex: none; color: transparent; }
+.done .chk { background: var(--ok); border-color: var(--ok); color: var(--surface); }
+.done .t { color: var(--ink-2); text-decoration: line-through; font-weight: 500; }
+.bar.full > i { background: var(--ok); }
+.in.temp { width: 92px; text-align: right; }
+.edit-row { display: flex; gap: 6px; align-items: center; }
+.edit-row .in { flex: 1; }

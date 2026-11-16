@@ -3,6 +3,8 @@ import { useSession } from './lib/session';
 import { configured } from './lib/supabase';
 import Account from './pages/Account';
 import { Login, NewPassword, NoAccess, Setup, Splash } from './pages/Gate';
+import Checklists from './pages/Checklists';
+import Hygiene from './pages/Hygiene';
 import Kiosk from './pages/Kiosk';
 import More from './pages/More';
 import Planning from './pages/Planning';
@@ -32,6 +34,8 @@ export default function App({ linkError }: { linkError: string }) {
       <Route path="/" element={<Today />} />
       <Route path="/pointeuse" element={<Pointeuse />} />
       <Route path="/pointer" element={<PunchFromLink />} />
+      <Route path="/checklists" element={<Checklists />} />
+      <Route path="/hygiene" element={<Hygiene />} />
       <Route path="/planning" element={<Planning />} />
       <Route path="/plus" element={<More />} />
       <Route path="/compte" element={<Account />} />

@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
-import type { Kiosk, LeaveRequest, Profile, Shift, ShiftSwap, Site, TimeEntry } from './types';
+import type { Checklist, ColdUnit, Kiosk, LeaveRequest, OilLog, Profile, Shift, ShiftSwap, Site, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
 
 const ENTRY = '*, time_breaks(*), profiles(first_name, last_name), sites(name)';
 
@@ -90,6 +90,55 @@ export function useSwaps() {
     queryKey: ['swaps'],
     queryFn: async () =>
       must<ShiftSwap[]>(await supabase.from('shift_swaps').select('*, shifts(starts_at, ends_at, area)').order('created_at', { ascending: false }).limit(50)),
+  });
+}
+
+/** Les checklists actives, avec leurs cases cochées ou non pour la période en cours. */
+export function useChecklists() {
+  return useQuery({
+    queryKey: ['checklists'],
+    queryFn: async () => must<Checklist[]>(await supabase.rpc('checklists_today')),
+    refetchInterval: 60_000,
+  });
+}
+
+/** Ce qu'il reste à faire aujourd'hui : checklists, relevés, dates limites. */
+export function useTodayTasks() {
+  return useQuery({
+    queryKey: ['tasks'],
+    queryFn: async () => must<TodayTasks>(await supabase.rpc('today_tasks')),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useColdUnits() {
+  return useQuery({
+    queryKey: ['units'],
+    queryFn: async () => must<ColdUnit[]>(await supabase.from('cold_units').select('*').order('position').order('name')),
+  });
+}
+
+/** Relevés de température d'un jour de service (AAAA-MM-JJ). */
+export function useReadings(day: string | undefined) {
+  return useQuery({
+    queryKey: ['readings', day],
+    enabled: !!day,
+    queryFn: async () => must<TempReading[]>(await supabase.from('temp_readings').select('*').eq('day', day!).order('taken_at')),
+  });
+}
+
+/** Préparations et produits entamés encore en cours, la date limite la plus proche d'abord. */
+export function useTrace() {
+  return useQuery({
+    queryKey: ['trace'],
+    queryFn: async () => must<TraceItem[]>(await supabase.from('trace_items').select('*').is('closed_at', null).order('use_by')),
+  });
+}
+
+export function useOil() {
+  return useQuery({
+    queryKey: ['oil'],
+    queryFn: async () => must<OilLog[]>(await supabase.from('oil_logs').select('*').order('done_at', { ascending: false }).limit(30)),
   });
 }
 

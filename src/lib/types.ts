@@ -80,6 +80,80 @@ export interface ShiftSwap {
   shifts?: Pick<Shift, 'starts_at' | 'ends_at' | 'area'> | null;
 }
 
+export interface ChecklistItem {
+  id: string;
+  label: string;
+  done: boolean;
+  done_by: string | null;
+  done_by_name: string | null;
+  done_at: string | null;
+}
+
+export type Frequency = 'daily' | 'weekly' | 'monthly';
+
+export interface Checklist {
+  id: string;
+  name: string;
+  kind: 'service' | 'nettoyage';
+  frequency: Frequency;
+  items: ChecklistItem[];
+}
+
+export interface ColdUnit {
+  id: string;
+  name: string;
+  min_temp: number;
+  max_temp: number;
+  readings_per_day: 1 | 2;
+  position: number;
+  active: boolean;
+}
+
+export interface TempReading {
+  id: string;
+  unit_id: string;
+  value: number;
+  day: string;
+  slot: 'matin' | 'soir';
+  out_of_range: boolean;
+  corrective: string;
+  taken_by: string | null;
+  taken_at: string;
+}
+
+export interface TraceItem {
+  id: string;
+  name: string;
+  kind: 'preparation' | 'ouverture';
+  made_on: string;
+  use_by: string;
+  note: string;
+  created_by: string | null;
+  closed_at: string | null;
+  closed_reason: 'utilise' | 'jete' | null;
+}
+
+export interface OilLog {
+  id: string;
+  action: 'test' | 'changement';
+  polar_pct: number | null;
+  note: string;
+  done_by: string | null;
+  done_at: string;
+}
+
+/** Ce que renvoie today_tasks : ce qu'il reste à faire pour le jour de service en cours. */
+export interface TodayTasks {
+  day: string;
+  slot: 'matin' | 'soir';
+  checks_total: number;
+  checks_done: number;
+  temps_due: number;
+  temps_alerts: number;
+  dlc_today: number;
+  dlc_late: number;
+}
+
 export interface Kiosk {
   id: string;
   site_id: string;
@@ -109,6 +183,8 @@ export type PunchResult =
 export const STATUS_LABEL: Record<RequestStatus, string> = { pending: 'En attente', approved: 'Acceptée', refused: 'Refusée' };
 export const STATUS_PILL: Record<RequestStatus, string> = { pending: 'warn', approved: 'ok', refused: 'bad' };
 export const LEAVE_LABEL: Record<LeaveRequest['kind'], string> = { conge: 'Congé', indisponibilite: 'Indisponibilité' };
+export const FREQUENCY_LABEL: Record<Frequency, string> = { daily: 'Chaque jour', weekly: 'Chaque semaine', monthly: 'Chaque mois' };
+export const PERIOD_NOW: Record<Frequency, string> = { daily: "Aujourd'hui", weekly: 'Cette semaine', monthly: 'Ce mois-ci' };
 export const ROLE_LABEL: Record<Role, string> = { gerant: 'Gérant', responsable: 'Responsable', equipier: 'Équipier' };
 export const CONTRACT_LABEL: Record<Contract, string> = { cdi: 'CDI', cdd: 'CDD', extra: 'Extra', autre: 'Autre' };
 export const fullName = (p: Pick<Profile, 'first_name' | 'last_name'> | null | undefined) =>

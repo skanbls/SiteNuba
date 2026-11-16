@@ -32,7 +32,9 @@ interface NavItem { to: string; label: string; icon: IconName; gerant?: boolean;
 export const NAV: NavItem[] = [
   { to: '/', label: "Aujourd'hui", icon: 'home', tab: true },
   { to: '/pointeuse', label: 'Pointeuse', icon: 'qr', tab: true },
+  { to: '/checklists', label: 'Checklists', icon: 'check', tab: true },
   { to: '/planning', label: 'Planning', icon: 'cal', tab: true },
+  { to: '/hygiene', label: 'Hygiène', icon: 'thermo' },
   { to: '/equipe', label: 'Équipe', icon: 'team', gerant: true },
   { to: '/reglages', label: 'Réglages', icon: 'cog', gerant: true },
   { to: '/compte', label: 'Mon compte', icon: 'user' },

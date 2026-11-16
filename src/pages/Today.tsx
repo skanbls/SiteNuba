@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Avatar, Layout, Loading, Section } from '../components/ui';
-import { useEntries, useMyOpenEntry, useOpenEntries, useShifts, useTeam } from '../lib/data';
+import { useEntries, useMyOpenEntry, useOpenEntries, useShifts, useTeam, useTodayTasks } from '../lib/data';
 import { useMe } from '../lib/session';
 import { addDays, dayKey, fmtDayLong, fmtDur, fmtTime, periodRange, workedMs } from '../lib/time';
 import { fullName, type Shift, type TimeEntry } from '../lib/types';
@@ -34,6 +34,8 @@ export default function Today() {
   const mineToday = (myShifts.data ?? []).filter((s) => dayKey(s.starts_at) === dayKey(day0));
   const next = (myShifts.data ?? []).filter((s) => new Date(s.starts_at) >= day1).slice(0, 3);
   const people = new Map((team.data ?? []).map((p) => [p.id, p]));
+  const tasks = useTodayTasks();
+  const t = tasks.data;
 
   return (
     <Layout title="Aujourd'hui">
@@ -55,6 +57,37 @@ export default function Today() {
           {e ? 'Ouvrir la pointeuse' : 'Pointer mon arrivée'}
         </Link>
       </div>
+
+      {t && (
+        <Section title="À faire aujourd'hui">
+          <div className="list">
+            <Link className="row" to="/checklists">
+              <div className="grow">
+                <span className="t">Checklists du jour</span>
+                <span className="sub num">{t.checks_done} sur {t.checks_total} cases cochées</span>
+                <div className={'bar' + (t.checks_total > 0 && t.checks_done >= t.checks_total ? ' full' : '')}><i style={{ width: `${t.checks_total ? Math.min(100, (t.checks_done / t.checks_total) * 100) : 0}%` }} /></div>
+              </div>
+              <span className="chev"><Icon name="chev" size={18} /></span>
+            </Link>
+            <Link className="row wrap" to="/hygiene">
+              <div className="grow">
+                <span className="t">Hygiène</span>
+                <span className="sub">
+                  {[t.temps_due > 0 ? `${t.temps_due} relevé${t.temps_due > 1 ? 's' : ''} de température à faire (${t.slot})` : '',
+                    t.dlc_today > 0 ? `${t.dlc_today} produit${t.dlc_today > 1 ? 's' : ''} à utiliser aujourd'hui` : ''].filter(Boolean).join(' · ') || 'Relevés à jour'}
+                </span>
+              </div>
+              <div className="end">
+                {t.temps_alerts > 0 && <span className="pill bad">{t.temps_alerts} hors limite</span>}
+                {t.dlc_late > 0 && <span className="pill bad">{t.dlc_late} date{t.dlc_late > 1 ? 's' : ''} dépassée{t.dlc_late > 1 ? 's' : ''}</span>}
+                {t.temps_alerts === 0 && t.dlc_late === 0 && t.temps_due > 0 && <span className="pill warn">À faire</span>}
+                {t.temps_alerts === 0 && t.dlc_late === 0 && t.temps_due === 0 && <span className="pill ok">À jour</span>}
+                <span className="chev"><Icon name="chev" size={18} /></span>
+              </div>
+            </Link>
+          </div>
+        </Section>
+      )}
 
       <div className="cols">
         <Section title="Ma semaine">
