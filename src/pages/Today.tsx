@@ -5,7 +5,7 @@ import { Avatar, Layout, Loading, Section } from '../components/ui';
 import { useEntries, useMyOpenEntry, useOpenEntries, useShifts, useTeam, useTodayTasks } from '../lib/data';
 import { useMe } from '../lib/session';
 import { addDays, dayKey, fmtDayLong, fmtDur, fmtTime, periodRange, workedMs } from '../lib/time';
-import { fullName, type Shift, type TimeEntry } from '../lib/types';
+import { EVENT_KIND, fullName, type Shift, type TimeEntry } from '../lib/types';
 
 const startOfToday = () => {
   const d = new Date();
@@ -85,6 +85,25 @@ export default function Today() {
                 <span className="chev"><Icon name="chev" size={18} /></span>
               </div>
             </Link>
+            {(t.events_today ?? []).map((ev) => (
+              <Link className="row" to="/evenements" key={ev.id}>
+                <div className="grow">
+                  <span className={`tag k-${ev.kind}`}>{EVENT_KIND[ev.kind]}, aujourd'hui</span>
+                  <span className="t">{ev.title}</span>
+                  <span className="sub">{[ev.start_time, ev.guests ? `${ev.guests} personnes` : ''].filter(Boolean).join(' · ')}</span>
+                </div>
+                <span className="chev"><Icon name="chev" size={18} /></span>
+              </Link>
+            ))}
+            {manager && (t.event_requests ?? 0) > 0 && (
+              <Link className="row" to="/evenements">
+                <div className="grow">
+                  <span className="t">Demandes d'événement</span>
+                  <span className="sub">{t.event_requests} demande{(t.event_requests ?? 0) > 1 ? 's' : ''} à traiter</span>
+                </div>
+                <div className="end"><span className="pill info">À voir</span><span className="chev"><Icon name="chev" size={18} /></span></div>
+              </Link>
+            )}
             {t.bookings !== undefined && (
               <Link className="row" to="/reservations">
                 <div className="grow">

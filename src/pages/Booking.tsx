@@ -256,3 +256,93 @@ export function BookingManage() {
     </div>
   );
 }
+
+const REQUEST_ERROR: Record<string, string> = {
+  contact: 'Indiquez votre nom et un numéro de téléphone valide.',
+  kind: "Choisissez le type d'événement.",
+  day: 'Indiquez une date à venir.',
+  guests: 'Indiquez le nombre de personnes.',
+  too_many: 'Trop de demandes en même temps. Réessayez dans quelques minutes, ou appelez-nous.',
+};
+
+/** Demander une privatisation ou une prestation extérieure : page publique. */
+export function EventRequest() {
+  const [kind, setKind] = useState('privatisation');
+  const [day, setDay] = useState('');
+  const [guests, setGuests] = useState('');
+  const [name, setName] = useState('');
+  const [company, setCompany] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const [trap, setTrap] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    document.title = 'Privatiser · La Nuba';
+  }, []);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr('');
+    const { data, error } = await supabase.rpc('request_private_event', {
+      p_kind: kind, p_day: day, p_guests: Number(guests), p_name: name, p_company: company, p_phone: phone, p_email: email, p_message: message, p_trap: trap,
+    });
+    setBusy(false);
+    if (error) return setErr(unreachable);
+    const r = data as { ok: boolean; error?: string };
+    if (r.ok) return setDone(true);
+    setErr(REQUEST_ERROR[r.error ?? ''] ?? "La demande n'a pas pu être envoyée.");
+  }
+
+  if (done)
+    return (
+      <div className="full">
+        <div className="card wide">
+          <div>
+            <h1>Demande envoyée</h1>
+            <p className="sub">La Nuba, Toulouse</p>
+          </div>
+          <p>Merci {name.trim()}. Nous avons bien reçu votre demande pour le {longDay(day)} et nous vous rappelons au {phone.trim()} pour en parler.</p>
+          <p className="note">Votre date n'est pas encore réservée : elle le sera une fois le devis accepté.</p>
+        </div>
+      </div>
+    );
+
+  return (
+    <div className="full">
+      <form className="card wide" onSubmit={submit}>
+        <div>
+          <h1>Votre événement à la Nuba</h1>
+          <p className="sub">Dites-nous ce que vous imaginez : nous vous rappelons avec une proposition.</p>
+        </div>
+        <Field label="Votre projet">
+          <select className="in" id="pe-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
+            <option value="privatisation">Privatiser la Nuba (anniversaire, soirée, repas de groupe…)</option>
+            <option value="exterieur">Une prestation chez vous (cocktail, traiteur, bar)</option>
+          </select>
+        </Field>
+        <div className="two">
+          <Field label="Date souhaitée"><input className="in" id="pe-day" type="date" value={day} min={dayKey(new Date())} onChange={(e) => setDay(e.target.value)} required /></Field>
+          <Field label="Nombre de personnes"><input className="in" id="pe-guests" type="number" inputMode="numeric" min={1} max={2000} value={guests} onChange={(e) => setGuests(e.target.value)} required /></Field>
+        </div>
+        <Field label="Nom"><input className="in" id="pe-name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required maxLength={80} /></Field>
+        <Field label="Société ou association" hint="Facultatif."><input className="in" id="pe-company" value={company} onChange={(e) => setCompany(e.target.value)} autoComplete="organization" maxLength={100} /></Field>
+        <div className="two">
+          <Field label="Téléphone"><input className="in" id="pe-phone" type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" required maxLength={30} /></Field>
+          <Field label="Adresse e-mail" hint="Facultative."><input className="in" id="pe-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" maxLength={120} /></Field>
+        </div>
+        <Field label="Votre message" hint="Occasion, horaires, budget, envies…"><textarea className="in" id="pe-message" value={message} onChange={(e) => setMessage(e.target.value)} maxLength={1000} /></Field>
+        <div aria-hidden="true" style={{ position: 'absolute', left: -9999, width: 1, height: 1, overflow: 'hidden' }}>
+          <label>Site web<input tabIndex={-1} autoComplete="off" value={trap} onChange={(e) => setTrap(e.target.value)} /></label>
+        </div>
+        {err && <p className="err" role="alert">{err}</p>}
+        <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : 'Envoyer ma demande'}</button>
+        <p className="note">Vos coordonnées servent uniquement à répondre à cette demande. Seule l'équipe de la Nuba y a accès.</p>
+      </form>
+    </div>
+  );
+}

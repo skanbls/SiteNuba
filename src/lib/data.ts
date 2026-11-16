@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
-import type { BookingSettings, Checklist, ColdUnit, Kiosk, LeaveRequest, OilLog, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftSwap, Site, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
+import type { BookingSettings, Checklist, ColdUnit, Customer, Kiosk, NubaEvent, LeaveRequest, OilLog, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftSwap, Site, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
 
 const ENTRY = '*, time_breaks(*), profiles(first_name, last_name), sites(name)';
 
@@ -187,6 +187,24 @@ export function useOpeningHours(enabled: boolean) {
     queryKey: ['booking', 'hours'],
     enabled,
     queryFn: async () => must<OpeningHour[]>(await supabase.from('opening_hours').select('*').order('weekday')),
+  });
+}
+
+export function useCustomers() {
+  return useQuery({
+    queryKey: ['customers'],
+    queryFn: async () => must<Customer[]>(await supabase.from('customers').select('*').order('name')),
+  });
+}
+
+/** Événements à partir d'un jour (AAAA-MM-JJ), ou passés si `past`, avec leur préparation. */
+export function useEvents(from: string, past: boolean) {
+  return useQuery({
+    queryKey: ['events', from, past],
+    queryFn: async () => {
+      const q = supabase.from('events').select('*, event_tasks(*)');
+      return must<NubaEvent[]>(await (past ? q.lt('day', from).order('day', { ascending: false }).limit(40) : q.or(`day.gte.${from},end_day.gte.${from}`).order('day').limit(200)));
+    },
   });
 }
 

@@ -3,8 +3,10 @@ import { useSession } from './lib/session';
 import { configured } from './lib/supabase';
 import Account from './pages/Account';
 import { Login, NewPassword, NoAccess, Setup, Splash } from './pages/Gate';
-import Booking, { BookingManage } from './pages/Booking';
+import Booking, { BookingManage, EventRequest } from './pages/Booking';
 import Checklists from './pages/Checklists';
+import Customers from './pages/Customers';
+import Events from './pages/Events';
 import Hygiene from './pages/Hygiene';
 import Kiosk from './pages/Kiosk';
 import More from './pages/More';
@@ -27,6 +29,7 @@ export default function App({ linkError }: { linkError: string }) {
   // Pages publiques des clients : réserver une table, voir ou annuler sa réservation.
   if (pathname === '/reserver') return <Booking />;
   if (pathname === '/reservation') return <BookingManage />;
+  if (pathname === '/privatiser') return <EventRequest />;
   if (loading) return <Splash />;
   // Pas de redirection : après la connexion, on reste sur la page demandée (par exemple le lien d'un QR code).
   if (!session && !pin) return <Login linkError={linkError} />;
@@ -43,6 +46,8 @@ export default function App({ linkError }: { linkError: string }) {
       <Route path="/pointer" element={<PunchFromLink />} />
       <Route path="/checklists" element={<Checklists />} />
       <Route path="/reservations" element={<Reservations />} />
+      <Route path="/evenements" element={<Events />} />
+      <Route path="/clients" element={<Customers />} />
       <Route path="/hygiene" element={<Hygiene />} />
       <Route path="/stocks" element={<Stocks />} />
       <Route path="/commandes" element={<Orders />} />

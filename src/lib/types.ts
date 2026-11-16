@@ -251,6 +251,51 @@ export interface BookingInfo {
   open_weekdays: number[];
 }
 
+export type CustomerKind = 'particulier' | 'entreprise' | 'artiste' | 'prestataire';
+
+export interface Customer {
+  id: string;
+  name: string;
+  kind: CustomerKind;
+  company: string;
+  phone: string;
+  email: string;
+  note: string;
+  active: boolean;
+}
+
+export type EventKind = 'privatisation' | 'concert' | 'exposition' | 'exterieur';
+export type EventStatus = 'demande' | 'devis' | 'acompte' | 'confirme' | 'termine' | 'annule';
+
+export interface EventTask {
+  id: string;
+  event_id: string;
+  label: string;
+  position: number;
+  done_by: string | null;
+  done_at: string | null;
+}
+
+export interface NubaEvent {
+  id: string;
+  kind: EventKind;
+  title: string;
+  day: string;
+  end_day: string | null;
+  start_time: string | null;
+  guests: number | null;
+  status: EventStatus;
+  customer_id: string | null;
+  site_id: string | null;
+  amount: number | null;
+  deposit: number | null;
+  deposit_paid: boolean;
+  details: string;
+  note: string;
+  source: 'equipe' | 'en_ligne';
+  event_tasks: EventTask[];
+}
+
 /** Ce que renvoie today_tasks : ce qu'il reste à faire pour le jour de service en cours. */
 export interface TodayTasks {
   day: string;
@@ -267,6 +312,9 @@ export interface TodayTasks {
   /** Présents seulement une fois la migration des réservations exécutée. */
   bookings?: number;
   covers?: number;
+  /** Présents seulement une fois la migration des événements exécutée. */
+  events_today?: { id: string; kind: EventKind; title: string; start_time: string | null; guests: number | null }[];
+  event_requests?: number;
 }
 
 export interface Kiosk {
@@ -300,6 +348,10 @@ export const STATUS_PILL: Record<RequestStatus, string> = { pending: 'warn', app
 export const LEAVE_LABEL: Record<LeaveRequest['kind'], string> = { conge: 'Congé', indisponibilite: 'Indisponibilité' };
 export const FREQUENCY_LABEL: Record<Frequency, string> = { daily: 'Chaque jour', weekly: 'Chaque semaine', monthly: 'Chaque mois' };
 export const PERIOD_NOW: Record<Frequency, string> = { daily: "Aujourd'hui", weekly: 'Cette semaine', monthly: 'Ce mois-ci' };
+export const CUSTOMER_KIND: Record<CustomerKind, string> = { particulier: 'Particulier', entreprise: 'Entreprise', artiste: 'Artiste', prestataire: 'Prestataire' };
+export const EVENT_KIND: Record<EventKind, string> = { privatisation: 'Privatisation', concert: 'Concert', exposition: 'Exposition', exterieur: 'Hors les murs' };
+export const EVENT_STATUS: Record<EventStatus, string> = { demande: 'Demande', devis: 'Devis envoyé', acompte: 'Acompte reçu', confirme: 'Confirmé', termine: 'Terminé', annule: 'Annulé' };
+export const EVENT_PILL: Record<EventStatus, string> = { demande: 'info', devis: 'warn', acompte: 'info', confirme: 'ok', termine: '', annule: 'bad' };
 export const SOURCE_LABEL: Record<ReservationSource, string> = { en_ligne: 'En ligne', telephone: 'Téléphone', sur_place: 'Sur place', instagram: 'Instagram', autre: 'Autre' };
 export const WEEKDAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 export const ORDER_LABEL: Record<OrderStatus, string> = { draft: 'Brouillon', sent: 'Envoyée', received: 'Reçue', cancelled: 'Annulée' };

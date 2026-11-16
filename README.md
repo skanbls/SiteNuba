@@ -15,7 +15,7 @@ En ligne : https://skanbls.github.io/SiteNuba/ (mise à jour automatique à chaq
 | 2. Marchandise et hygiène | Hygiène : températures, nettoyage, dates limites, huile de friture | **En ligne**, une fois la migration 0005 exécutée |
 | | Stocks, fournisseurs et commandes | **En ligne**, une fois la migration 0006 exécutée |
 | 3. Clients et événements | Réservations de tables, en ligne et par l'équipe | **En ligne**, une fois la migration 0007 exécutée |
-| | Privatisations, concerts, expositions, prestations extérieures, fichier clients | À faire |
+| | Événements (privatisations, concerts, expositions, prestations extérieures) et fichier clients | **En ligne**, une fois la migration 0008 exécutée |
 | 4. Pilotage | Fiches techniques, ventes Zelty, RH, maintenance, formation | À faire |
 
 ## Comment ça marche
@@ -57,6 +57,10 @@ Chaque produit a une quantité, un seuil d'alerte, une quantité voulue et un fo
 ### Réservations
 
 Les clients réservent sur une page publique, `#/reserver`, à ouvrir par un lien (site web, Instagram, fiche Google) ou à intégrer dans une page du site avec le code donné dans les réglages. La réservation est confirmée à l'écran, avec un lien pour la consulter ou l'annuler ; aucun e-mail n'est envoyé pour l'instant. En ligne : jusqu'à 9 personnes, au moins une heure à l'avance, sur les créneaux d'ouverture ; à partir de 10, la page invite à appeler. L'équipe saisit les réservations prises par téléphone ou sur place, sans limite, et note les arrivées et les absences. Le gérant règle les créneaux jour par jour, la capacité par créneau, le téléphone affiché, et peut fermer la réservation en ligne.
+
+### Événements et fichier clients
+
+Un événement est une privatisation, un concert, une exposition ou une prestation extérieure. Il avance de la demande au devis, à l'acompte, puis à la confirmation, et porte sa liste de choses à préparer, que l'équipe coche. Les clients envoient une demande par la page publique `#/privatiser` ; l'équipe peut aussi en noter une. Le gérant chiffre, confirme et modifie ; toute l'équipe consulte. L'accueil montre les événements du jour et, au gérant, les demandes à traiter. Le fichier clients regroupe particuliers, entreprises, artistes et prestataires ; une demande en ligne crée sa fiche toute seule.
 
 ### iPad partagé
 

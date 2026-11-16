@@ -221,3 +221,10 @@ button.shift:hover { background: color-mix(in srgb, var(--c, var(--ink-3)) 28%, 
 .slots .chip { justify-content: center; }
 .chip:disabled { opacity: 0.4; cursor: default; }
 .hours-row { display: grid; grid-template-columns: minmax(96px, 1fr) repeat(2, minmax(0, 1fr)); gap: 8px; align-items: center; }
+
+/* Événements */
+.date { flex: none; width: 52px; text-align: center; border-radius: 10px; background: var(--sunken); padding: 7px 0; }
+.date b { display: block; font: 700 20px/1 var(--display); }
+.date span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-2); }
+.k-privatisation { --c: var(--cat-b); } .k-concert { --c: var(--cat-a); } .k-exposition { --c: var(--cat-d); } .k-exterieur { --c: var(--cat-c); }
+.stats.four { grid-template-columns: repeat(4, 1fr); }
