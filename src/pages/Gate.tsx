@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { Field, Spinner } from '../components/ui';
 import { useSession } from '../lib/session';
 import { appUrl, frError, supabase } from '../lib/supabase';
+import { hasKiosk } from './Kiosk';
 
 /** Écran d'attente au démarrage. */
 export const Splash = () => (
@@ -108,6 +110,7 @@ export function Login({ linkError }: { linkError: string }) {
           {mode !== 'up' && <button type="button" className="btn" onClick={() => go('up')}>Créer mon compte</button>}
           {mode === 'in' && <button type="button" className="btn" onClick={() => go('forgot')}>Mot de passe oublié</button>}
         </div>
+        <Link className="link center" to="/borne">{hasKiosk() ? 'Revenir à la borne de pointage' : 'Cet appareil est une borne de pointage'}</Link>
       </div>
     </div>
   );

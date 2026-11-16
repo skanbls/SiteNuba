@@ -41,7 +41,7 @@ export default function Settings() {
         <Section title="Bornes de pointage" right={<button type="button" className="link" onClick={() => setAddKiosk(true)}>Ajouter une borne</button>}>
           {kiosks.isLoading ? <Loading /> : (
             <div className="list">
-              {live.length === 0 && <p className="empty">Aucune borne. Ajoute-en une, puis ouvre son lien sur l'iPad qui restera à la Nuba.</p>}
+              {live.length === 0 && <p className="empty">Aucune borne. Ajoute-en une, puis relie-la à l'iPad qui restera à la Nuba.</p>}
               {live.map((k) => (
                 <div className="row wrap" key={k.id}>
                   <div className="grow">
@@ -172,13 +172,13 @@ function KioskLinkSheet({ link, onClose }: { link: string; onClose: () => void }
   }
   return (
     <Sheet title="Borne créée" onClose={onClose}>
-      <p>Ouvre ce lien sur l'appareil qui servira de borne. Le plus simple : scanne ce QR code avec l'appareil photo de l'iPad.</p>
+      <p>Sur l'iPad, ouvre l'appli Nuba installée sur l'écran d'accueil, touche « Cet appareil est une borne de pointage », puis présente ce QR code devant sa caméra avant.</p>
       <div className="panel">
         <div className="qr" role="img" aria-label="QR code du lien de la borne" dangerouslySetInnerHTML={{ __html: svg }} />
       </div>
       <input className="in" id="kiosk-link" readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Lien de la borne" />
       <button type="button" className="btn pri block" onClick={() => void copy()}><Icon name="copy" />Copier le lien</button>
-      <p className="note">Ce lien ne s'affichera plus après la fermeture de cette fenêtre. Ne le partage pas : il suffit à afficher le code de pointage.</p>
+      <p className="note">Sans caméra, copie ce lien et colle-le sur l'iPad au même endroit. Ce QR code et ce lien ne s'afficheront plus après la fermeture de cette fenêtre. Ne les partage pas : ils suffisent à afficher le code de pointage.</p>
     </Sheet>
   );
 }

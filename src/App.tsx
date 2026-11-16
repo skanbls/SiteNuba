@@ -3,7 +3,7 @@ import { useSession } from './lib/session';
 import { configured } from './lib/supabase';
 import Account from './pages/Account';
 import { Login, NewPassword, NoAccess, Setup, Splash } from './pages/Gate';
-import Kiosk from './pages/Kiosk';
+import Kiosk, { opensOnKiosk } from './pages/Kiosk';
 import Pointeuse, { PunchFromLink } from './pages/Pointeuse';
 import Settings from './pages/Settings';
 import Team from './pages/Team';
@@ -17,6 +17,8 @@ export default function App({ linkError }: { linkError: string }) {
   // La borne s'affiche sans compte : elle n'a que le jeton de son lien.
   if (pathname === '/borne') return <Kiosk />;
   if (loading) return <Splash />;
+  // Un appareil relié à une borne (l'iPad fixe) s'ouvre directement dessus tant que personne n'y est connecté.
+  if (!session && opensOnKiosk()) return <Navigate to="/borne" replace />;
   // Pas de redirection : après la connexion, on reste sur la page demandée (par exemple le lien d'un QR code).
   if (!session) return <Login linkError={linkError} />;
   if (recovery) return <NewPassword />;

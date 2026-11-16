@@ -90,6 +90,30 @@ async function main() {
   await shot(ipad, '04-borne-ipad');
   step('la borne affiche le QR code sans compte');
 
+  // 4 bis. Appli installée sur l'iPad (mémoire séparée de Safari) : on relie la borne depuis l'écran de connexion,
+  // puis l'appli s'ouvre directement sur la borne à chaque lancement.
+  const installed = await open('iPad installé', { width: 1024, height: 768 });
+  await installed.goto(APP);
+  await installed.getByRole('link', { name: 'Cet appareil est une borne de pointage' }).click();
+  await see(installed, 'Relier cette borne');
+  await see(installed, 'Caméra indisponible');   // pas de caméra dans le navigateur de test : on colle le lien
+  await installed.fill('#pair-link', 'https://exemple.fr/menu.pdf');
+  await installed.getByRole('button', { name: 'Relier' }).click();
+  await see(installed, "Ce n'est pas le QR code d'une borne");
+  await shot(installed, '04b-relier-borne');
+  await installed.waitForTimeout(100);
+  await installed.fill('#pair-link', kioskLink);
+  await installed.getByRole('button', { name: 'Relier' }).click();
+  await see(installed, 'Scanne ce code pour pointer');
+  await installed.goto('about:blank');
+  await installed.goto(APP);                      // relance de l'appli : directement la borne
+  await see(installed, 'Scanne ce code pour pointer');
+  await installed.getByRole('button', { name: "Ouvrir l'appli sur cet appareil" }).click();
+  await see(installed, "Connecte-toi pour accéder à l'appli");
+  await installed.getByRole('link', { name: 'Revenir à la borne de pointage' }).click();
+  await see(installed, 'Scanne ce code pour pointer');
+  step("l'appli installée se relie à la borne et s'ouvre directement dessus");
+
   // 5. Théo s'inscrit avec l'adresse enregistrée : son compte se rattache à sa fiche.
   const theo = await open('équipier', { width: 390, height: 844 });
   await signup(theo, 'Peu importe', 'theo@nuba.test');
@@ -225,6 +249,8 @@ async function main() {
   await see(boss, 'Borne désactivée');
   await ipad.getByText('Borne désactivée').waitFor({ timeout: 45_000 });
   await shot(ipad, '15-borne-desactivee');
+  await ipad.getByRole('button', { name: 'Relier à une nouvelle borne' }).click();
+  await see(ipad, 'Relier cette borne');
   step("une borne désactivée n'affiche plus de code");
 
   // 16. Thème sombre, pour l'œil.

@@ -14,6 +14,14 @@ export function parsePunchLink(text: string): { site: string; code: string } | n
   return /^[0-9a-f-]{36}$/i.test(site) && /^\d{6}$/.test(code) ? { site, code } : null;
 }
 
+/** Retrouve le jeton d'une borne dans son lien (ou dans le jeton collé seul). */
+export function parseKioskLink(text: string): string | null {
+  const t = text.trim();
+  if (/^[0-9a-f]{64}$/i.test(t)) return t.toLowerCase();
+  const m = /#\/borne\?(?:.*&)?t=([0-9a-f]{64})(?:&|$)/i.exec(t);
+  return m ? m[1].toLowerCase() : null;
+}
+
 export const PUNCH_ERROR: Record<PunchError, string> = {
   code: 'Code refusé. Il change toutes les 30 secondes : scanne ou saisis celui qui est affiché maintenant.',
   too_many: 'Trop de codes refusés. Attends 10 minutes ou préviens le gérant.',
