@@ -8,7 +8,6 @@ import { frError, supabase } from '../lib/supabase';
 import type { CodeInfo } from '../lib/types';
 
 const KEY = 'nuba.borne';
-const PAUSED = 'nuba.borne.pause';
 
 const read = () => {
   try {
@@ -25,28 +24,18 @@ const write = (t: string) => {
     /* stockage refusé : la borne marchera jusqu'à la fermeture de la page */
   }
 };
-const setPaused = (on: boolean) => {
-  try {
-    if (on) sessionStorage.setItem(PAUSED, '1');
-    else sessionStorage.removeItem(PAUSED);
-  } catch {
-    /* sans importance */
-  }
-};
 
-/** Cet appareil est relié à une borne (un iPad fixe, en général). */
+/** Cet appareil est relié à une borne (un iPad fixe, en général) : l'appli s'ouvre alors directement sur la borne. */
 export const hasKiosk = () => !!read();
 
-/**
- * Vrai si l'appli doit s'ouvrir directement sur la borne : l'appareil est relié,
- * et personne n'a choisi « Ouvrir l'appli » depuis la borne pendant cette utilisation.
- */
-export function opensOnKiosk(): boolean {
-  try {
-    return hasKiosk() && !sessionStorage.getItem(PAUSED);
-  } catch {
-    return hasKiosk();
-  }
+/** Cet appareil n'est plus une borne. */
+export const unlinkKiosk = () => write('');
+
+/** iPhone ou iPad dans Safari, et non dans l'appli installée sur l'écran d'accueil. */
+function inIosBrowser(): boolean {
+  const nav = navigator as Navigator & { standalone?: boolean };
+  const ios = /iPad|iPhone|iPod/.test(nav.userAgent) || (nav.platform === 'MacIntel' && nav.maxTouchPoints > 1);
+  return ios && nav.standalone !== true && !window.matchMedia('(display-mode: standalone)').matches;
 }
 
 /** Écran de la borne : l'appareil fixe qui affiche le QR code de pointage. Aucun compte requis, seulement le jeton de la borne. */
@@ -54,15 +43,22 @@ export default function Kiosk() {
   const [params] = useSearchParams();
   const nav = useNavigate();
   const [token, setToken] = useState(read);
+  const [dead, setDead] = useState(false);
 
   const link = useCallback((t: string) => {
     write(t);
     setToken(t);
+    setDead(false);
+  }, []);
+
+  // Borne désactivée par le gérant : l'appareil l'oublie, pour ne plus s'ouvrir dessus.
+  const onDead = useCallback(() => {
+    write('');
+    setDead(true);
   }, []);
 
   // Arrivée par le lien de la borne : le jeton reste sur l'appareil et disparaît de la barre d'adresse.
   useEffect(() => {
-    setPaused(false);
     const t = params.get('t');
     if (!t) return;
     link(t);
@@ -73,20 +69,26 @@ export default function Kiosk() {
     document.title = 'Borne de pointage · Nuba Gestion';
   }, []);
 
-  const leave = () => {
-    setPaused(true);
-    nav('/', { replace: true });
-  };
+  const leave = () => nav('/', { replace: true });
 
   return (
     <div className="full">
-      {token ? <Live token={token} onUnlink={() => link('')} onLeave={leave} /> : <Pair onToken={link} onLeave={leave} />}
+      {dead ? (
+        <div className="card">
+          <h1>Borne désactivée</h1>
+          <p>Cette borne n'est plus valable : le gérant l'a désactivée.</p>
+          <div className="acts">
+            <button type="button" className="btn pri" onClick={() => link('')}>Relier à une nouvelle borne</button>
+            <button type="button" className="btn" onClick={leave}>Ouvrir l'appli</button>
+          </div>
+        </div>
+      ) : token ? <Live token={token} onDead={onDead} onLeave={leave} /> : <Pair onToken={link} onLeave={leave} />}
     </div>
   );
 }
 
 /* ---------- Borne en service ---------- */
-function Live({ token, onUnlink, onLeave }: { token: string; onUnlink: () => void; onLeave: () => void }) {
+function Live({ token, onDead, onLeave }: { token: string; onDead: () => void; onLeave: () => void }) {
   const [clock, setClock] = useState(new Date());
 
   // Garde l'écran allumé tant que la borne est affichée.
@@ -113,17 +115,9 @@ function Live({ token, onUnlink, onLeave }: { token: string; onUnlink: () => voi
   }, [token]);
   const { info, left, state } = useRollingCode(fetcher);
 
-  if (state === 'revoked')
-    return (
-      <div className="card">
-        <h1>Borne désactivée</h1>
-        <p>Cette borne n'est plus valable : le gérant l'a désactivée.</p>
-        <div className="acts">
-          <button type="button" className="btn pri" onClick={onUnlink}>Relier à une nouvelle borne</button>
-          <button type="button" className="btn" onClick={onLeave}>Ouvrir l'appli</button>
-        </div>
-      </div>
-    );
+  useEffect(() => {
+    if (state === 'revoked') onDead();
+  }, [state, onDead]);
 
   return (
     <div className="borne">
@@ -132,6 +126,11 @@ function Live({ token, onUnlink, onLeave }: { token: string; onUnlink: () => voi
       <CodeView info={info} left={left} />
       {state === 'offline' && <p className="pill bad">Connexion perdue, nouvel essai en cours</p>}
       <p className="note center">Ouvre la pointeuse dans l'appli Nuba, puis scanne ce QR code ou saisis les 6 chiffres. Le code change toutes les 30 secondes.</p>
+      {inIosBrowser() && (
+        <p className="note center">
+          Pour retrouver la borne sur l'écran d'accueil de cet iPad, relie-la depuis l'appli installée : écran de connexion, puis « Cet appareil est une borne de pointage ». La borne ouverte dans Safari n'est pas reprise par l'appli installée.
+        </p>
+      )}
       <button type="button" className="link" onClick={onLeave}>Ouvrir l'appli sur cet appareil</button>
     </div>
   );
@@ -183,6 +182,7 @@ function Pair({ onToken, onLeave }: { onToken: (t: string) => void; onLeave: () 
       <ol className="note" style={{ paddingLeft: 18, display: 'grid', gap: 4 }}>
         <li>Sur ton téléphone, ouvre Réglages puis « Ajouter une borne ».</li>
         <li>Présente le QR code qui s'affiche devant la caméra avant de cet appareil.</li>
+        <li>Ensuite, cet appareil s'ouvrira toujours sur la borne.</li>
       </ol>
       {camera ? <video ref={video} className="video" playsInline muted aria-label="Caméra" /> : <p className="note">Caméra indisponible ou refusée : colle le lien de la borne ci-dessous.</p>}
       <form className="form" onSubmit={submit}>

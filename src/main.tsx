@@ -9,6 +9,7 @@ import './styles/app.css';
 import App from './App';
 import { ToastProvider } from './components/ui';
 import { SessionProvider } from './lib/session';
+import { hasKiosk } from './pages/Kiosk';
 import { supabase } from './lib/supabase';
 
 registerSW({ immediate: true });
@@ -30,7 +31,11 @@ async function start() {
       : "Le lien n'a pas fonctionné. Réessaie ou connecte-toi.";
   }
   await supabase.auth.getSession();
-  if (fromEmail) window.history.replaceState(null, '', window.location.pathname + window.location.search + '#/');
+  const base = window.location.pathname + window.location.search;
+  if (fromEmail) window.history.replaceState(null, '', base + '#/');
+  // Un appareil relié à une borne (l'iPad fixe) s'ouvre toujours sur la borne, que quelqu'un y soit connecté ou non.
+  // Seulement au lancement de l'appli : un lien précis (pointage, e-mail) garde sa destination.
+  else if (/^#?\/?$/.test(hash) && hasKiosk()) window.history.replaceState(null, '', base + '#/borne');
 
   createRoot(document.getElementById('root')!).render(
     <StrictMode>

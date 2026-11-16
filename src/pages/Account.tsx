@@ -5,6 +5,7 @@ import { Field, Layout, Section, Spinner, useToast } from '../components/ui';
 import { useMe, useSession } from '../lib/session';
 import { frError, supabase } from '../lib/supabase';
 import { CONTRACT_LABEL, ROLE_LABEL, fullName } from '../lib/types';
+import { hasKiosk, unlinkKiosk } from './Kiosk';
 
 /** Mon compte : mes informations, mon mot de passe, installer l'appli, me déconnecter. */
 export default function Account() {
@@ -14,6 +15,7 @@ export default function Account() {
   const [pw, setPw] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [kiosk, setKiosk] = useState(hasKiosk);
 
   async function changePw(e: FormEvent) {
     e.preventDefault();
@@ -56,6 +58,16 @@ export default function Account() {
         </div>
 
         <div className="stack">
+          {kiosk && (
+            <Section title="Borne de pointage">
+              <div className="list">
+                <Link className="row" to="/borne"><Icon name="qr" /><div className="grow"><span className="t">Afficher la borne</span><span className="sub">Cet appareil est relié à une borne : l'appli s'ouvre dessus à chaque lancement.</span></div><span className="chev"><Icon name="chev" size={18} /></span></Link>
+              </div>
+              {me.role !== 'equipier' && (
+                <button type="button" className="btn" onClick={() => { unlinkKiosk(); setKiosk(false); toast("Cet appareil n'est plus une borne"); }}>Ne plus utiliser cet appareil comme borne</button>
+              )}
+            </Section>
+          )}
           <Section title="Installer l'appli sur mon téléphone">
             <div className="list">
               <div className="row"><div className="grow"><span className="t">iPhone et iPad</span><span className="sub">Dans Safari : bouton Partager, puis « Sur l'écran d'accueil ».</span></div></div>

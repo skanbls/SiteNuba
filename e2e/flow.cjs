@@ -112,7 +112,24 @@ async function main() {
   await see(installed, "Connecte-toi pour accéder à l'appli");
   await installed.getByRole('link', { name: 'Revenir à la borne de pointage' }).click();
   await see(installed, 'Scanne ce code pour pointer');
-  step("l'appli installée se relie à la borne et s'ouvre directement dessus");
+  // Le gérant se connecte sur cet appareil, ferme l'appli, la rouvre : c'est encore la borne.
+  await installed.getByRole('button', { name: "Ouvrir l'appli sur cet appareil" }).click();
+  await installed.fill('#login-email', 'boss@nuba.test');
+  await installed.fill('#login-pw', PW);
+  await installed.getByRole('button', { name: 'Se connecter' }).click();
+  await see(installed, 'Bonjour Sam');
+  await installed.goto('about:blank');
+  await installed.goto(APP);
+  await see(installed, 'Scanne ce code pour pointer');
+  await installed.getByRole('button', { name: "Ouvrir l'appli sur cet appareil" }).click();
+  await see(installed, 'Bonjour Sam');
+  await installed.goto(APP + '#/compte');
+  await see(installed, 'Afficher la borne');
+  await shot(installed, '04c-compte-borne');
+  await installed.goto('about:blank');
+  await installed.goto(APP + '#/pointeuse');      // un lien précis garde sa destination
+  await installed.getByRole('heading', { name: 'Pointeuse' }).waitFor({ timeout: 8000 });
+  step("l'appli installée se relie à la borne et s'y rouvre toujours, même avec quelqu'un de connecté");
 
   // 5. Théo s'inscrit avec l'adresse enregistrée : son compte se rattache à sa fiche.
   const theo = await open('équipier', { width: 390, height: 844 });

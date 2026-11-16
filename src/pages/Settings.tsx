@@ -160,7 +160,10 @@ function KioskLinkSheet({ link, onClose }: { link: string; onClose: () => void }
   const toast = useToast();
   const [svg, setSvg] = useState('');
   useEffect(() => {
-    void QRCode.toString(link, { type: 'svg', margin: 0, errorCorrectionLevel: 'L', color: { dark: '#161a2e', light: '#ffffff' } }).then(setSvg);
+    // Le QR code ne porte que le jeton : il se lit dans l'appli (« Cet appareil est une borne de pointage »).
+    // Lu par l'appareil photo d'un iPad, un lien s'ouvrirait dans Safari, dont l'appli installée ne partage pas la mémoire.
+    const token = link.slice(link.lastIndexOf('=') + 1);
+    void QRCode.toString(token, { type: 'svg', margin: 0, errorCorrectionLevel: 'L', color: { dark: '#161a2e', light: '#ffffff' } }).then(setSvg);
   }, [link]);
   async function copy() {
     try {
@@ -172,13 +175,14 @@ function KioskLinkSheet({ link, onClose }: { link: string; onClose: () => void }
   }
   return (
     <Sheet title="Borne créée" onClose={onClose}>
-      <p>Sur l'iPad, ouvre l'appli Nuba installée sur l'écran d'accueil, touche « Cet appareil est une borne de pointage », puis présente ce QR code devant sa caméra avant.</p>
+      <p>Sur l'iPad, ouvre l'appli Nuba depuis l'écran d'accueil. Sur l'écran de connexion, touche « Cet appareil est une borne de pointage », puis présente ce QR code devant sa caméra avant.</p>
+      <p className="note">N'utilise pas l'appareil photo de l'iPad : ce QR code se lit seulement dans l'appli Nuba.</p>
       <div className="panel">
         <div className="qr" role="img" aria-label="QR code du lien de la borne" dangerouslySetInnerHTML={{ __html: svg }} />
       </div>
       <input className="in" id="kiosk-link" readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Lien de la borne" />
       <button type="button" className="btn pri block" onClick={() => void copy()}><Icon name="copy" />Copier le lien</button>
-      <p className="note">Sans caméra, copie ce lien et colle-le sur l'iPad au même endroit. Ce QR code et ce lien ne s'afficheront plus après la fermeture de cette fenêtre. Ne les partage pas : ils suffisent à afficher le code de pointage.</p>
+      <p className="note">Autre possibilité : copie ce lien et colle-le sur l'iPad au même endroit, ou ouvre-le dans le navigateur d'un ordinateur. Ce QR code et ce lien ne s'afficheront plus après la fermeture de cette fenêtre. Ne les partage pas : ils suffisent à afficher le code de pointage.</p>
     </Sheet>
   );
 }
