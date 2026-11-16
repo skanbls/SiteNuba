@@ -296,6 +296,77 @@ export interface NubaEvent {
   event_tasks: EventTask[];
 }
 
+export interface RecipeItem {
+  id: string;
+  recipe_id: string;
+  product_id: string | null;
+  label: string;
+  quantity: number;
+  unit: string;
+  /** Nombre d'unités de la recette dans une unité du produit (70 cl dans une bouteille de 70 cl). */
+  pack_size: number;
+  manual_cost: number | null;
+  position: number;
+}
+
+export interface Recipe {
+  id: string;
+  name: string;
+  category: string;
+  portions: number;
+  /** Prix de vente TTC d'une portion. */
+  sale_price: number | null;
+  vat: number;
+  method: string;
+  allergens: string[];
+  active: boolean;
+  recipe_items: RecipeItem[];
+}
+
+export interface Issue {
+  id: string;
+  title: string;
+  place: string;
+  details: string;
+  urgent: boolean;
+  status: 'open' | 'doing' | 'done';
+  resolution: string;
+  reported_by: string | null;
+  reported_at: string;
+  closed_by: string | null;
+  closed_at: string | null;
+}
+
+export type DeadlineCategory = 'controle' | 'contrat' | 'document' | 'autre';
+
+export interface Deadline {
+  id: string;
+  title: string;
+  category: DeadlineCategory;
+  due_date: string;
+  repeat_months: number | null;
+  profile_id: string | null;
+  note: string;
+  active: boolean;
+}
+
+export interface Procedure {
+  id: string;
+  title: string;
+  category: string;
+  body: string;
+  must_read: boolean;
+  position: number;
+  active: boolean;
+  updated_at: string;
+}
+
+export interface ProcedureRead {
+  procedure_id: string;
+  profile_id: string;
+  read_at: string;
+}
+
 /** Ce que renvoie today_tasks : ce qu'il reste à faire pour le jour de service en cours. */
 export interface TodayTasks {
   day: string;
@@ -315,6 +386,12 @@ export interface TodayTasks {
   /** Présents seulement une fois la migration des événements exécutée. */
   events_today?: { id: string; kind: EventKind; title: string; start_time: string | null; guests: number | null }[];
   event_requests?: number;
+  /** Présents seulement une fois la migration du pilotage exécutée. */
+  issues_open?: number;
+  issues_urgent?: number;
+  procedures_unread?: number;
+  /** Réservé au gérant : échéances dépassées ou dans les 30 jours. */
+  deadlines_due?: number | null;
 }
 
 export interface Kiosk {
@@ -348,6 +425,9 @@ export const STATUS_PILL: Record<RequestStatus, string> = { pending: 'warn', app
 export const LEAVE_LABEL: Record<LeaveRequest['kind'], string> = { conge: 'Congé', indisponibilite: 'Indisponibilité' };
 export const FREQUENCY_LABEL: Record<Frequency, string> = { daily: 'Chaque jour', weekly: 'Chaque semaine', monthly: 'Chaque mois' };
 export const PERIOD_NOW: Record<Frequency, string> = { daily: "Aujourd'hui", weekly: 'Cette semaine', monthly: 'Ce mois-ci' };
+/** Les 14 allergènes à déclarer. */
+export const ALLERGENS = ['gluten', 'crustacés', 'œufs', 'poissons', 'arachides', 'soja', 'lait', 'fruits à coque', 'céleri', 'moutarde', 'sésame', 'sulfites', 'lupin', 'mollusques'];
+export const DEADLINE_LABEL: Record<DeadlineCategory, string> = { controle: 'Contrôle obligatoire', contrat: 'Contrat', document: "Document d'un membre de l'équipe", autre: 'Autre' };
 export const CUSTOMER_KIND: Record<CustomerKind, string> = { particulier: 'Particulier', entreprise: 'Entreprise', artiste: 'Artiste', prestataire: 'Prestataire' };
 export const EVENT_KIND: Record<EventKind, string> = { privatisation: 'Privatisation', concert: 'Concert', exposition: 'Exposition', exterieur: 'Hors les murs' };
 export const EVENT_STATUS: Record<EventStatus, string> = { demande: 'Demande', devis: 'Devis envoyé', acompte: 'Acompte reçu', confirme: 'Confirmé', termine: 'Terminé', annule: 'Annulé' };

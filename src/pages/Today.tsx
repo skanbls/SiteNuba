@@ -104,6 +104,24 @@ export default function Today() {
                 <div className="end"><span className="pill info">À voir</span><span className="chev"><Icon name="chev" size={18} /></span></div>
               </Link>
             )}
+            {(t.procedures_unread ?? 0) > 0 && (
+              <Link className="row" to="/procedures">
+                <div className="grow"><span className="t">Procédures à lire</span><span className="sub">{t.procedures_unread} procédure{(t.procedures_unread ?? 0) > 1 ? 's' : ''} attend{(t.procedures_unread ?? 0) > 1 ? 'ent' : ''} ta lecture</span></div>
+                <div className="end"><span className="pill warn">À lire</span><span className="chev"><Icon name="chev" size={18} /></span></div>
+              </Link>
+            )}
+            {(t.issues_open ?? 0) > 0 && (
+              <Link className="row" to="/maintenance">
+                <div className="grow"><span className="t">Pannes en cours</span><span className="sub">{t.issues_open} panne{(t.issues_open ?? 0) > 1 ? 's' : ''} à traiter</span></div>
+                <div className="end">{(t.issues_urgent ?? 0) > 0 && <span className="pill bad">{t.issues_urgent} urgente{(t.issues_urgent ?? 0) > 1 ? 's' : ''}</span>}<span className="chev"><Icon name="chev" size={18} /></span></div>
+              </Link>
+            )}
+            {(t.deadlines_due ?? 0) > 0 && (
+              <Link className="row" to="/maintenance">
+                <div className="grow"><span className="t">Échéances</span><span className="sub">{t.deadlines_due} échéance{(t.deadlines_due ?? 0) > 1 ? 's' : ''} dans les 30 jours ou dépassée{(t.deadlines_due ?? 0) > 1 ? 's' : ''}</span></div>
+                <div className="end"><span className="pill warn">À prévoir</span><span className="chev"><Icon name="chev" size={18} /></span></div>
+              </Link>
+            )}
             {t.bookings !== undefined && (
               <Link className="row" to="/reservations">
                 <div className="grow">

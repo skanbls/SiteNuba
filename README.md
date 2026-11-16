@@ -16,7 +16,10 @@ En ligne : https://skanbls.github.io/SiteNuba/ (mise à jour automatique à chaq
 | | Stocks, fournisseurs et commandes | **En ligne**, une fois la migration 0006 exécutée |
 | 3. Clients et événements | Réservations de tables, en ligne et par l'équipe | **En ligne**, une fois la migration 0007 exécutée |
 | | Événements (privatisations, concerts, expositions, prestations extérieures) et fichier clients | **En ligne**, une fois la migration 0008 exécutée |
-| 4. Pilotage | Fiches techniques, ventes Zelty, RH, maintenance, formation | À faire |
+| 4. Pilotage | Fiches techniques, pannes et échéances, procédures et formation | **En ligne**, une fois la migration 0009 exécutée |
+| | Ventes Zelty | En attente : accès à l'API à demander à Zelty, puis une fonction côté serveur pour garder la clé secrète |
+| | Pièces jointes (photos de preuve, documents de l'équipe) | À faire : demande le stockage de fichiers de Supabase |
+| | E-mails (invitation de l'équipe, confirmation de réservation) | En attente : service d'envoi à relier dans Supabase |
 
 ## Comment ça marche
 
@@ -61,6 +64,10 @@ Les clients réservent sur une page publique, `#/reserver`, à ouvrir par un lie
 ### Événements et fichier clients
 
 Un événement est une privatisation, un concert, une exposition ou une prestation extérieure. Il avance de la demande au devis, à l'acompte, puis à la confirmation, et porte sa liste de choses à préparer, que l'équipe coche. Les clients envoient une demande par la page publique `#/privatiser` ; l'équipe peut aussi en noter une. Le gérant chiffre, confirme et modifie ; toute l'équipe consulte. L'accueil montre les événements du jour et, au gérant, les demandes à traiter. Le fichier clients regroupe particuliers, entreprises, artistes et prestataires ; une demande en ligne crée sa fiche toute seule.
+
+### Pilotage
+
+Les fiches techniques décrivent chaque recette : ingrédients et grammages, préparation, allergènes. Un ingrédient relié à un produit du stock prend son coût tout seul ; le gérant voit le coût par portion, sa part du prix hors taxe et la marge, l'équipe voit la recette et le tableau des allergènes. Dans Maintenance, toute l'équipe signale et suit les pannes ; le gérant y tient ses échéances (contrôles, contrats, documents de l'équipe), rappelées sur son accueil 30 jours avant. Les procédures se lisent dans l'appli et chacun confirme sa lecture ; le gérant voit qui a lu quoi.
 
 ### iPad partagé
 

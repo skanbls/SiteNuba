@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
-import type { BookingSettings, Checklist, ColdUnit, Customer, Kiosk, NubaEvent, LeaveRequest, OilLog, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftSwap, Site, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
+import type { BookingSettings, Checklist, ColdUnit, Customer, Deadline, Issue, Kiosk, NubaEvent, Procedure, ProcedureRead, Recipe, LeaveRequest, OilLog, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftSwap, Site, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
 
 const ENTRY = '*, time_breaks(*), profiles(first_name, last_name), sites(name)';
 
@@ -205,6 +205,44 @@ export function useEvents(from: string, past: boolean) {
       const q = supabase.from('events').select('*, event_tasks(*)');
       return must<NubaEvent[]>(await (past ? q.lt('day', from).order('day', { ascending: false }).limit(40) : q.or(`day.gte.${from},end_day.gte.${from}`).order('day').limit(200)));
     },
+  });
+}
+
+export function useRecipes() {
+  return useQuery({
+    queryKey: ['recipes'],
+    queryFn: async () => must<Recipe[]>(await supabase.from('recipes').select('*, recipe_items(*)').order('category').order('name')),
+  });
+}
+
+export function useIssues() {
+  return useQuery({
+    queryKey: ['issues'],
+    queryFn: async () => must<Issue[]>(await supabase.from('issues').select('*').order('reported_at', { ascending: false }).limit(80)),
+  });
+}
+
+/** Échéances : réservées au gérant. */
+export function useDeadlines(enabled: boolean) {
+  return useQuery({
+    queryKey: ['deadlines'],
+    enabled,
+    queryFn: async () => must<Deadline[]>(await supabase.from('deadlines').select('*').eq('active', true).order('due_date')),
+  });
+}
+
+export function useProcedures() {
+  return useQuery({
+    queryKey: ['procedures'],
+    queryFn: async () => must<Procedure[]>(await supabase.from('procedures').select('*').order('position')),
+  });
+}
+
+/** Lectures confirmées : les miennes, ou celles de toute l'équipe pour le gérant. */
+export function useProcedureReads() {
+  return useQuery({
+    queryKey: ['procedures', 'reads'],
+    queryFn: async () => must<ProcedureRead[]>(await supabase.from('procedure_reads').select('*')),
   });
 }
 

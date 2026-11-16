@@ -10,6 +10,9 @@ const HINT: Record<string, string> = {
   '/hygiene': 'Températures, nettoyage, dates limites, huile de friture',
   '/stocks': 'Quantités, seuils d\'alerte, inventaire',
   '/commandes': 'Commandes aux fournisseurs et réception des livraisons',
+  '/fiches': 'Recettes, grammages, allergènes',
+  '/maintenance': 'Pannes à signaler, contrôles et échéances',
+  '/procedures': 'Consignes et formation de l\'équipe',
   '/equipe': "Qui a accès à l'appli, avec quel rôle",
   '/reglages': 'Bornes et lieux de pointage',
   '/compte': 'Mes informations, mon mot de passe, me déconnecter',
@@ -33,7 +36,6 @@ export default function More() {
           </Link>
         ))}
       </div>
-      <p className="note">Les prochains modules arriveront ici : fiches techniques, ventes de la caisse, documents de l'équipe, maintenance et formation.</p>
     </Layout>
   );
 }
