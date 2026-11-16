@@ -79,6 +79,8 @@ L'appli se met à jour toute seule : elle cherche une nouvelle version à chaque
 
 ## Relier l'appli à Supabase
 
+Pour une base qui a déjà les scripts 0001 à 0003, `supabase/installation/0004-a-0009.sql` regroupe les six suivants en un seul collage, tout ou rien.
+
 1. Créer un projet sur supabase.com, région Europe.
 2. Dans **SQL Editor**, coller et exécuter les fichiers de `supabase/migrations/`, dans l'ordre de leur numéro.
 3. Dans **Authentication**, laisser la confirmation des adresses e-mail activée, et indiquer l'adresse de l'appli comme adresse de redirection.
