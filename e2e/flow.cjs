@@ -563,6 +563,88 @@ async function main() {
   await boss.locator('[data-order="Cave Garonne"]').getByText('Problème signalé').waitFor();
   step("sur l'iPad, la livraison est réceptionnée et le stock mis à jour");
 
+  // 13 sexies. Réservations : un client réserve sur la page publique, l'équipe suit, le client annule, le gérant règle.
+  const client = await open('client', { width: 390, height: 844 });
+  await client.goto(APP + '#/reserver');
+  await see(client, 'Réserver une table');
+  await client.getByRole('button', { name: '10 ou plus' }).click();
+  await see(client, 'À partir de 10 personnes');
+  await client.getByRole('button', { name: '4 personnes', exact: true }).click();
+  const bookDay = await client.evaluate(() => {
+    const now = new Date();
+    let n = 1;
+    while (new Date(now.getFullYear(), now.getMonth(), now.getDate() + n).getDay() !== 2) n++;   // prochain mardi
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + n);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+  await client.fill('#book-day', bookDay);
+  const hours = client.getByRole('group', { name: 'Heure' });
+  await hours.getByRole('button', { name: '22:00' }).waitFor();
+  assert.equal(await hours.getByRole('button', { name: '22:30' }).count(), 0, 'le mardi, le dernier créneau est 22 h');
+  await hours.getByRole('button', { name: '20:00' }).click();
+  await client.fill('#book-name', 'Camille Roux');
+  await client.fill('#book-phone', '06 11 22 33 44');
+  await client.fill('#book-note', 'Anniversaire');
+  await noOverflow(client, 'page publique de réservation');
+  await shot(client, '13n-reserver');
+  await client.getByRole('button', { name: /Réserver pour 4 personnes/ }).click();
+  await see(client, "C'est réservé");
+  await shot(client, '13o-reserve');
+  const manage = await client.getByRole('link', { name: 'Voir ou annuler ma réservation' }).getAttribute('href');
+  assert.match(manage, /#\/reservation\?r=[0-9a-f-]{36}&c=[0-9a-f]{20}$/);
+  step('un client réserve en ligne, sans compte, et reçoit son lien');
+
+  await theo.goto(APP + '#/reservations');
+  await theo.fill('#res-day', bookDay);
+  const camille = theo.locator('[data-res="Camille Roux"]');
+  await camille.getByText('Camille Roux · 4 pers.').waitFor();
+  await camille.getByText(/En ligne · 0611223344/).waitFor();
+  await camille.getByText('Anniversaire').waitFor();
+  await theo.getByRole('button', { name: 'Réservation', exact: true }).click();
+  await theo.fill('#res-name', 'Table Martin');
+  await theo.fill('#res-party', '12');
+  await theo.fill('#res-slot', '21:00');
+  await theo.fill('#res-table', 'Grande table');
+  await theo.getByRole('button', { name: 'Enregistrer' }).click();
+  await see(theo, 'Réservation ajoutée');
+  await theo.locator('[data-res="Table Martin"]').getByText('Table Martin · 12 pers.').waitFor();
+  await see(theo, 'Soir · 16 couverts');
+  await noOverflow(theo, 'réservations');
+  await shot(theo, '13p-reservations');
+
+  await client.goto(manage);
+  await see(client, 'Votre réservation');
+  await client.getByRole('button', { name: 'Annuler ma réservation' }).click();
+  await client.getByRole('button', { name: 'Oui, annuler' }).click();
+  await see(client, 'Votre réservation est bien annulée');
+  await theo.reload();
+  await theo.fill('#res-day', bookDay);
+  await theo.locator('[data-res="Camille Roux"]').getByText('Annulée').waitFor();
+  await theo.locator('[data-res="Camille Roux"]').getByRole('button', { name: 'Rétablir' }).click();
+  await see(theo, 'Camille Roux : de nouveau attendu');
+  await theo.locator('[data-res="Table Martin"]').getByRole('button', { name: 'Arrivés' }).click();
+  await theo.locator('[data-res="Table Martin"]').getByText('À table').waitFor();
+  step("l'équipe voit la réservation en ligne, en saisit une, le client annule avec son lien");
+
+  await boss.goto(APP + '#/reservations');
+  await boss.getByRole('button', { name: 'Réglages et lien de réservation' }).click();
+  assert.match(await boss.inputValue('#bk-link'), /#\/reserver$/);
+  await boss.fill('#bk-phone', '05 61 00 00 00');
+  await boss.fill('#bk-cap', '14');
+  await boss.getByLabel('Mardi, dernier créneau').fill('21:00');
+  await shot(boss, '13q-reglages-reservations');
+  await boss.getByRole('button', { name: 'Enregistrer les réglages' }).click();
+  await see(boss, 'Réglages des réservations enregistrés');
+  await client.goto(APP + '#/reserver');
+  await client.getByRole('button', { name: '10 ou plus' }).click();
+  await see(client, '05 61 00 00 00');
+  await client.getByRole('button', { name: '4 personnes', exact: true }).click();
+  await client.fill('#book-day', bookDay);
+  await hours.getByRole('button', { name: '20:30' }).waitFor();
+  assert.equal(await hours.getByRole('button', { name: '21:00' }).count(), 0, 'à 21 h, 12 couverts sur 14 : plus de place pour 4');
+  assert.equal(await hours.getByRole('button', { name: '21:30' }).count(), 0, 'le gérant a ramené le dernier créneau du mardi à 21 h');
+  step('le gérant règle la capacité et les créneaux ; la page publique suit');
+
   // 14. Le gérant désactive Théo : il perd l'accès.
   await boss.goto(APP + '#/equipe');
   await boss.locator('button.row', { hasText: 'Théo Martin' }).click();

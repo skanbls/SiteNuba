@@ -199,6 +199,58 @@ export interface Order {
   order_lines: OrderLine[];
 }
 
+export type ReservationStatus = 'confirmed' | 'seated' | 'no_show' | 'cancelled';
+export type ReservationSource = 'en_ligne' | 'telephone' | 'sur_place' | 'instagram' | 'autre';
+
+export interface Reservation {
+  id: string;
+  day: string;
+  /** Heure d'arrivée, HH:MM:SS. */
+  slot: string;
+  party: number;
+  name: string;
+  phone: string;
+  email: string;
+  note: string;
+  table_label: string;
+  source: ReservationSource;
+  status: ReservationStatus;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface BookingSettings {
+  online_enabled: boolean;
+  slot_minutes: number;
+  max_party_online: number;
+  min_lead_minutes: number;
+  max_days_ahead: number;
+  capacity_per_slot: number | null;
+  phone: string;
+  notice: string;
+}
+
+export interface OpeningHour {
+  /** 1 = lundi … 7 = dimanche. */
+  weekday: number;
+  open: boolean;
+  first_slot: string;
+  last_slot: string;
+  break_from: string | null;
+  break_to: string | null;
+}
+
+/** Ce que la page publique de réservation reçoit : aucune donnée de client. */
+export interface BookingInfo {
+  online_enabled: boolean;
+  max_party_online: number;
+  max_days_ahead: number;
+  phone: string;
+  notice: string;
+  today: string;
+  open_weekdays: number[];
+}
+
 /** Ce que renvoie today_tasks : ce qu'il reste à faire pour le jour de service en cours. */
 export interface TodayTasks {
   day: string;
@@ -212,6 +264,9 @@ export interface TodayTasks {
   /** Présents seulement une fois la migration des stocks exécutée. */
   low_stock?: number;
   deliveries?: number;
+  /** Présents seulement une fois la migration des réservations exécutée. */
+  bookings?: number;
+  covers?: number;
 }
 
 export interface Kiosk {
@@ -245,6 +300,8 @@ export const STATUS_PILL: Record<RequestStatus, string> = { pending: 'warn', app
 export const LEAVE_LABEL: Record<LeaveRequest['kind'], string> = { conge: 'Congé', indisponibilite: 'Indisponibilité' };
 export const FREQUENCY_LABEL: Record<Frequency, string> = { daily: 'Chaque jour', weekly: 'Chaque semaine', monthly: 'Chaque mois' };
 export const PERIOD_NOW: Record<Frequency, string> = { daily: "Aujourd'hui", weekly: 'Cette semaine', monthly: 'Ce mois-ci' };
+export const SOURCE_LABEL: Record<ReservationSource, string> = { en_ligne: 'En ligne', telephone: 'Téléphone', sur_place: 'Sur place', instagram: 'Instagram', autre: 'Autre' };
+export const WEEKDAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 export const ORDER_LABEL: Record<OrderStatus, string> = { draft: 'Brouillon', sent: 'Envoyée', received: 'Reçue', cancelled: 'Annulée' };
 export const ORDER_PILL: Record<OrderStatus, string> = { draft: '', sent: 'info', received: 'ok', cancelled: 'bad' };
 /** Quantité à commander pour revenir au niveau voulu. */

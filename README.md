@@ -14,7 +14,8 @@ En ligne : https://skanbls.github.io/SiteNuba/ (mise à jour automatique à chaq
 | | Checklists | **En ligne**, une fois la migration 0005 exécutée |
 | 2. Marchandise et hygiène | Hygiène : températures, nettoyage, dates limites, huile de friture | **En ligne**, une fois la migration 0005 exécutée |
 | | Stocks, fournisseurs et commandes | **En ligne**, une fois la migration 0006 exécutée |
-| 3. Clients et événements | Réservations, privatisations, concerts, expositions, prestations extérieures | À faire |
+| 3. Clients et événements | Réservations de tables, en ligne et par l'équipe | **En ligne**, une fois la migration 0007 exécutée |
+| | Privatisations, concerts, expositions, prestations extérieures, fichier clients | À faire |
 | 4. Pilotage | Fiches techniques, ventes Zelty, RH, maintenance, formation | À faire |
 
 ## Comment ça marche
@@ -52,6 +53,10 @@ Hygiène regroupe les relevés de température (hors de la cible, l'action corre
 ### Stocks et commandes
 
 Chaque produit a une quantité, un seuil d'alerte, une quantité voulue et un fournisseur. La quantité ne change que par un mouvement signé : boutons − et +, inventaire, ou réception d'une commande. Sous son seuil, un produit est proposé à la commande chez son fournisseur ; la commande se prépare, s'envoie (texte à copier, e-mail ou WhatsApp) puis se réceptionne, ce qui met le stock à jour et garde le contrôle à réception. Toute l'équipe peut le faire ; le gérant tient le catalogue (produits, seuils, prix, fournisseurs) et peut annuler une commande.
+
+### Réservations
+
+Les clients réservent sur une page publique, `#/reserver`, à ouvrir par un lien (site web, Instagram, fiche Google) ou à intégrer dans une page du site avec le code donné dans les réglages. La réservation est confirmée à l'écran, avec un lien pour la consulter ou l'annuler ; aucun e-mail n'est envoyé pour l'instant. En ligne : jusqu'à 9 personnes, au moins une heure à l'avance, sur les créneaux d'ouverture ; à partir de 10, la page invite à appeler. L'équipe saisit les réservations prises par téléphone ou sur place, sans limite, et note les arrivées et les absences. Le gérant règle les créneaux jour par jour, la capacité par créneau, le téléphone affiché, et peut fermer la réservation en ligne.
 
 ### iPad partagé
 

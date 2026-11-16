@@ -8,6 +8,7 @@ const PATHS = {
   grid: (<><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></>),
   check: (<><rect x="3" y="3" width="18" height="18" rx="4" /><path d="M8 12l3 3 5-6" /></>),
   thermo: (<><path d="M10 4a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0z" /><path d="M12 10v7" /></>),
+  book: (<><path d="M5 4h13a1 1 0 0 1 1 1v15H6a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1z" /><path d="M8 9h7M8 13h5" /></>),
   box: (<><path d="M3 8l9-5 9 5v8l-9 5-9-5z" /><path d="M3 8l9 5 9-5M12 13v8" /></>),
   truck: (<><path d="M2 6h11v10H2zM13 9h5l4 4v3h-9z" /><circle cx="6.5" cy="18" r="2" /><circle cx="17.5" cy="18" r="2" /></>),
   minus: <path d="M5 12h14" />,

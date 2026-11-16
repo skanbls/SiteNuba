@@ -9,7 +9,7 @@ Appli de gestion de la Nuba (Toulouse) : restaurant, bar, soirées et concerts, 
 - Pointage par QR code tournant (pas de biométrie, pas de géolocalisation).
 - iPad partagé : chacun s'y identifie par un code PIN à 4 chiffres et peut aussi y pointer. L'équipe doit pouvoir tout faire sur l'iPad comme sur le téléphone ; seuls les écrans du gérant demandent sa connexion par e-mail.
 - Seul le gérant écrit le planning et gère les réglages ; pas de droits d'écriture pour les responsables pour l'instant.
-- Réservations de tables : en ligne par les clients et saisie par l'équipe.
+- Réservations de tables : en ligne par les clients et saisie par l'équipe. Ouverture : mardi à jeudi 12 h – 0 h, vendredi 12 h – 2 h, samedi 12 h – 3 h, dimanche 12 h – 16 h, lundi fermé. En ligne jusqu'à 9 personnes, au-delà le client appelle. Confirmation à l'écran pour commencer (pas d'e-mail). Le site web de la Nuba doit envoyer ses réservations dans l'appli : par le lien ou le code d'intégration de la page publique.
 - Événements : privatisations, soirées et concerts, expositions, traiteur hors les murs.
 - Modules retenus en plus : fiches techniques, RH et documents, maintenance et échéances, formation et procédures, fichier clients. Écartés pour l'instant : communication interne, clôture de caisse, pertes et casse, main courante.
 - Pas de documents existants à reprendre : proposer des modèles que le gérant ajuste.
@@ -19,7 +19,7 @@ L'ordre de construction et l'état d'avancement sont dans README.md. Le mettre �
 
 ## Conventions
 
-- Tout ce que voit l'utilisateur est en français, au tutoiement, avec des phrases simples. Noms de tables et de colonnes en anglais.
+- Tout ce que voit l'équipe est en français, au tutoiement, avec des phrases simples. Les pages publiques destinées aux clients (réservation) sont au vouvoiement. Noms de tables et de colonnes en anglais.
 - La sécurité vit dans la base : chaque table a ses règles RLS et ses droits explicites ; les écritures sensibles passent par des fonctions `security definer`. Ne jamais compter sur l'appli pour interdire quelque chose.
 - Une session par code PIN passe par le rôle `anon` avec l'en-tête `x-nuba-ticket` ; `my_profile_id()` la reconnaît et `is_gerant()` / `is_manager()` y sont toujours faux. Chaque nouvelle table que l'équipe utilise doit donc donner ses droits et ses règles RLS à `anon, authenticated`, et tester les deux (voir `supabase/tests/tests_pin.sql`). Utiliser `my_profile_id()`, jamais `auth.uid()` directement.
 - Une migration par module dans `supabase/migrations/`, que le gérant colle dans l'éditeur SQL de Supabase. Ne jamais modifier une migration déjà exécutée : en ajouter une nouvelle.

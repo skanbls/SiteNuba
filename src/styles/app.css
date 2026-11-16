@@ -148,8 +148,9 @@ textarea.in { padding: 10px 12px; min-height: 72px; resize: vertical; }
 .video { width: 100%; aspect-ratio: 1; border-radius: var(--r-lg); background: #000; object-fit: cover; }
 
 /* Écrans pleine page : connexion, borne */
-.full { min-height: 100dvh; display: grid; place-items: center; padding: calc(24px + env(safe-area-inset-top, 0px)) var(--gut-r) calc(24px + env(safe-area-inset-bottom, 0px)) var(--gut-l); }
-.card { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 18px; }
+/* minmax(0, 1fr) : le contenu (une rangée de jours qui défile, par exemple) ne peut pas élargir la page. */
+.full { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; padding: calc(24px + env(safe-area-inset-top, 0px)) var(--gut-r) calc(24px + env(safe-area-inset-bottom, 0px)) var(--gut-l); }
+.card { width: 100%; max-width: 400px; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
 .card h1 { font: 700 34px/1.05 var(--display); letter-spacing: -0.01em; }
 .borne { display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center; }
 .borne h1 { font: 700 clamp(26px, 5vw, 44px)/1.1 var(--display); text-wrap: balance; }
@@ -213,3 +214,10 @@ button.shift:hover { background: color-mix(in srgb, var(--c, var(--ink-3)) 28%, 
 .step button:disabled { opacity: 0.45; cursor: default; }
 .step .qty { min-width: 46px; font-weight: 600; font-variant-numeric: tabular-nums; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
 .in.qty { width: 84px; text-align: right; }
+
+/* Page publique de réservation */
+.card.wide { max-width: 520px; }
+.slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; }
+.slots .chip { justify-content: center; }
+.chip:disabled { opacity: 0.4; cursor: default; }
+.hours-row { display: grid; grid-template-columns: minmax(96px, 1fr) repeat(2, minmax(0, 1fr)); gap: 8px; align-items: center; }

@@ -3,6 +3,7 @@ import { useSession } from './lib/session';
 import { configured } from './lib/supabase';
 import Account from './pages/Account';
 import { Login, NewPassword, NoAccess, Setup, Splash } from './pages/Gate';
+import Booking, { BookingManage } from './pages/Booking';
 import Checklists from './pages/Checklists';
 import Hygiene from './pages/Hygiene';
 import Kiosk from './pages/Kiosk';
@@ -10,6 +11,7 @@ import More from './pages/More';
 import Orders from './pages/Orders';
 import Planning from './pages/Planning';
 import Pointeuse, { PunchFromLink } from './pages/Pointeuse';
+import Reservations from './pages/Reservations';
 import Settings from './pages/Settings';
 import Stocks from './pages/Stocks';
 import Team from './pages/Team';
@@ -22,6 +24,9 @@ export default function App({ linkError }: { linkError: string }) {
   if (!configured) return <Setup />;
   // La borne s'affiche sans compte : elle n'a que le jeton de son lien.
   if (pathname === '/borne') return <Kiosk />;
+  // Pages publiques des clients : réserver une table, voir ou annuler sa réservation.
+  if (pathname === '/reserver') return <Booking />;
+  if (pathname === '/reservation') return <BookingManage />;
   if (loading) return <Splash />;
   // Pas de redirection : après la connexion, on reste sur la page demandée (par exemple le lien d'un QR code).
   if (!session && !pin) return <Login linkError={linkError} />;
@@ -37,6 +42,7 @@ export default function App({ linkError }: { linkError: string }) {
       <Route path="/pointeuse" element={<Pointeuse />} />
       <Route path="/pointer" element={<PunchFromLink />} />
       <Route path="/checklists" element={<Checklists />} />
+      <Route path="/reservations" element={<Reservations />} />
       <Route path="/hygiene" element={<Hygiene />} />
       <Route path="/stocks" element={<Stocks />} />
       <Route path="/commandes" element={<Orders />} />

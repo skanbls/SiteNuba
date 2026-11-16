@@ -4,6 +4,7 @@ import { Layout, navFor } from '../components/ui';
 import { useMe } from '../lib/session';
 
 const HINT: Record<string, string> = {
+  '/reservations': 'Tables réservées en ligne, par téléphone ou sur place',
   '/hygiene': 'Températures, nettoyage, dates limites, huile de friture',
   '/stocks': 'Quantités, seuils d\'alerte, inventaire',
   '/commandes': 'Commandes aux fournisseurs et réception des livraisons',
@@ -30,7 +31,7 @@ export default function More() {
           </Link>
         ))}
       </div>
-      <p className="note">Les prochains modules arriveront ici : réservations et événements, puis les outils de pilotage.</p>
+      <p className="note">Les prochains modules arriveront ici : événements et fichier clients, puis les outils de pilotage.</p>
     </Layout>
   );
 }

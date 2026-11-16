@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
-import type { Checklist, ColdUnit, Kiosk, LeaveRequest, OilLog, Order, Product, Profile, Shift, ShiftSwap, Site, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
+import type { BookingSettings, Checklist, ColdUnit, Kiosk, LeaveRequest, OilLog, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftSwap, Site, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
 
 const ENTRY = '*, time_breaks(*), profiles(first_name, last_name), sites(name)';
 
@@ -162,6 +162,31 @@ export function useOrders() {
     queryKey: ['orders'],
     queryFn: async () =>
       must<Order[]>(await supabase.from('orders').select('*, suppliers(name, phone, email), order_lines(*, products(name, unit))').order('created_at', { ascending: false }).limit(60)),
+  });
+}
+
+/** Réservations d'un jour (AAAA-MM-JJ), dans l'ordre d'arrivée. */
+export function useReservations(day: string) {
+  return useQuery({
+    queryKey: ['reservations', day],
+    queryFn: async () => must<Reservation[]>(await supabase.from('reservations').select('*').eq('day', day).order('slot').order('created_at')),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useBookingSettings(enabled: boolean) {
+  return useQuery({
+    queryKey: ['booking', 'settings'],
+    enabled,
+    queryFn: async () => must<BookingSettings>(await supabase.from('booking_settings').select('*').single()),
+  });
+}
+
+export function useOpeningHours(enabled: boolean) {
+  return useQuery({
+    queryKey: ['booking', 'hours'],
+    enabled,
+    queryFn: async () => must<OpeningHour[]>(await supabase.from('opening_hours').select('*').order('weekday')),
   });
 }
 

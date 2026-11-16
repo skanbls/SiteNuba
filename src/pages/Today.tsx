@@ -85,6 +85,15 @@ export default function Today() {
                 <span className="chev"><Icon name="chev" size={18} /></span>
               </div>
             </Link>
+            {t.bookings !== undefined && (
+              <Link className="row" to="/reservations">
+                <div className="grow">
+                  <span className="t">Réservations du jour</span>
+                  <span className="sub num">{t.bookings === 0 ? 'Aucune pour l\'instant' : `${t.bookings} réservation${t.bookings > 1 ? 's' : ''} · ${t.covers} couvert${(t.covers ?? 0) > 1 ? 's' : ''}`}</span>
+                </div>
+                <span className="chev"><Icon name="chev" size={18} /></span>
+              </Link>
+            )}
             {t.low_stock !== undefined && (t.low_stock > 0 || (t.deliveries ?? 0) > 0) && (
               <Link className="row wrap" to={t.low_stock > 0 ? '/stocks' : '/commandes'}>
                 <div className="grow">

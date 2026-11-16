@@ -34,6 +34,7 @@ export const NAV: NavItem[] = [
   { to: '/pointeuse', label: 'Pointeuse', icon: 'qr', tab: true },
   { to: '/checklists', label: 'Checklists', icon: 'check', tab: true },
   { to: '/planning', label: 'Planning', icon: 'cal', tab: true },
+  { to: '/reservations', label: 'Réservations', icon: 'book' },
   { to: '/hygiene', label: 'Hygiène', icon: 'thermo' },
   { to: '/stocks', label: 'Stocks', icon: 'box' },
   { to: '/commandes', label: 'Commandes', icon: 'truck' },
