@@ -1,0 +1,30 @@
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+
+const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const key = import.meta.env.VITE_SUPABASE_KEY as string | undefined;
+
+/** Faux tant que l'adresse et la clé publique du projet Supabase ne sont pas renseignées. */
+export const configured = Boolean(url && key);
+
+export const supabase: SupabaseClient = createClient(url || 'http://localhost', key || 'missing', {
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+});
+
+/** Adresse de l'appli sans la partie après le # : sert aux liens des e-mails et des QR codes. */
+export const appUrl = () => window.location.origin + window.location.pathname;
+
+/** Messages de Supabase traduits pour l'équipe. */
+export function frError(e: unknown): string {
+  const m = (e as { message?: string } | null)?.message || String(e);
+  if (/Invalid login credentials/i.test(m)) return 'E-mail ou mot de passe incorrect.';
+  if (/Email not confirmed/i.test(m)) return "Confirme d'abord ton adresse avec le lien reçu par e-mail.";
+  if (/already registered|already been registered|user_already_exists/i.test(m)) return 'Un compte existe déjà avec cette adresse. Connecte-toi, ou utilise « Mot de passe oublié ».';
+  if (/Password should be at least|weak_password/i.test(m)) return 'Mot de passe trop court : 8 caractères au minimum.';
+  if (/rate limit|too many requests/i.test(m)) return 'Trop de tentatives. Réessaie dans quelques minutes.';
+  if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Connexion impossible. Vérifie ton réseau puis réessaie.';
+  if (/duplicate key.*profiles_email_key/i.test(m)) return 'Une personne de l\'équipe a déjà cette adresse e-mail.';
+  if (/time_entries_one_open/i.test(m)) return 'Cette personne a déjà une présence en cours.';
+  if (/violates foreign key constraint.*time_entries/i.test(m)) return 'Cette personne a des pointages : désactive-la plutôt que de la supprimer.';
+  if (/row-level security|permission denied|42501/i.test(m)) return "Tu n'as pas le droit de faire cette action.";
+  return m;
+}
