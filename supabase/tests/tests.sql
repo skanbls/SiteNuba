@@ -123,10 +123,8 @@ begin
   assert r ->> 'site_name' = 'La Nuba' and (r ->> 'code') ~ '^[0-9]{6}$', 'la borne doit recevoir un code à 6 chiffres';
   assert (r ->> 'seconds_left')::int between 1 and 30, 'durée restante incohérente';
   assert public.kiosk_code('mauvais-jeton') is null, 'un mauvais jeton ne doit rien donner';
-  begin
-    perform * from public.profiles;
-    raise exception 'TEST: un visiteur anonyme a pu lire l''équipe';
-  exception when insufficient_privilege then null; end;
+  assert (select count(*) from public.profiles) = 0, 'un visiteur anonyme ne doit pas lire l''équipe';
+  assert (select count(*) from public.time_entries) = 0, 'un visiteur anonyme ne doit pas lire les pointages';
   begin
     perform public.punch(gen_random_uuid(), '000000', 'in');
     raise exception 'TEST: un visiteur anonyme a pu appeler punch';

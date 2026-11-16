@@ -11,13 +11,30 @@ import { hasKiosk, unlinkKiosk } from './Kiosk';
 /** Mon compte : mes informations, mon mot de passe, installer l'appli, me déconnecter. */
 export default function Account() {
   const me = useMe();
-  const { signOut } = useSession();
+  const { signOut, pin, reload } = useSession();
   const toast = useToast();
   const [pw, setPw] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [kiosk, setKiosk] = useState(hasKiosk);
   const [checking, setChecking] = useState(false);
+  const [code, setCode] = useState('');
+  const [codeErr, setCodeErr] = useState('');
+
+  async function savePin(e: FormEvent) {
+    e.preventDefault();
+    if (!/^\d{4}$/.test(code)) return setCodeErr('Le code PIN a 4 chiffres.');
+    setBusy(true);
+    setCodeErr('');
+    const { error } = await supabase.rpc('set_my_pin', { p_pin: code });
+    setBusy(false);
+    if (error) return setCodeErr(frError(error));
+    setCode('');
+    toast(pin ? 'Code PIN changé. Identifie-toi avec le nouveau.' : 'Code PIN enregistré');
+    // Changer de code ferme les sessions ouvertes avec l'ancien, donc celle-ci sur la borne.
+    if (pin) await signOut();
+    else await reload();
+  }
 
   async function update() {
     setChecking(true);
@@ -45,7 +62,7 @@ export default function Account() {
           <Section>
             <div className="list">
               <div className="row"><div className="grow"><span className="sub">Nom</span><span className="t">{fullName(me)}</span></div></div>
-              <div className="row"><div className="grow"><span className="sub">Adresse e-mail</span><span className="t">{me.email}</span></div></div>
+              <div className="row"><div className="grow"><span className="sub">Adresse e-mail</span><span className="t">{me.email || 'Aucune : accès par l\'iPad seulement'}</span></div></div>
               <div className="row"><div className="grow"><span className="sub">Rôle et poste</span><span className="t">{[ROLE_LABEL[me.role], me.job].filter(Boolean).join(' · ')}</span></div></div>
               <div className="row"><div className="grow"><span className="sub">Contrat</span><span className="t">{CONTRACT_LABEL[me.contract]}{me.contract !== 'extra' ? ` · ${String(me.weekly_hours).replace('.', ',')} h par semaine` : ''}</span></div></div>
               {me.role === 'gerant' && (
@@ -55,7 +72,17 @@ export default function Account() {
             <p className="note">Une erreur dans ces informations ? Seul le gérant peut les modifier.</p>
           </Section>
 
-          <Section title="Changer mon mot de passe">
+          <Section title="Mon code PIN pour l'iPad">
+            <form className="form" onSubmit={savePin}>
+              <Field label={me.has_pin ? 'Nouveau code PIN' : 'Choisir mon code PIN'} hint="4 chiffres. Il sert à ouvrir l'appli à ton nom sur l'iPad de la Nuba, et à y pointer.">
+                <input className="in" id="acc-pin" type="password" inputMode="numeric" autoComplete="off" maxLength={4} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))} required />
+              </Field>
+              {codeErr && <p className="err" role="alert">{codeErr}</p>}
+              <button className="btn" disabled={busy}>{busy ? <Spinner /> : me.has_pin ? 'Changer mon code PIN' : 'Enregistrer mon code PIN'}</button>
+            </form>
+          </Section>
+
+          {!pin && <Section title="Changer mon mot de passe">
             <form className="form" onSubmit={changePw}>
               <Field label="Nouveau mot de passe" hint="8 caractères au minimum.">
                 <input className="in" id="acc-pw" type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" required />
@@ -63,7 +90,7 @@ export default function Account() {
               {err && <p className="err" role="alert">{err}</p>}
               <button className="btn" disabled={busy}>{busy ? <Spinner /> : 'Changer le mot de passe'}</button>
             </form>
-          </Section>
+          </Section>}
         </div>
 
         <div className="stack">
@@ -91,7 +118,7 @@ export default function Account() {
               </div>
             </div>
           </Section>
-          <button type="button" className="btn no" onClick={() => void signOut()}>Se déconnecter</button>
+          <button type="button" className="btn no" onClick={() => void signOut()}>{pin ? 'Terminer et revenir à la borne' : 'Se déconnecter'}</button>
         </div>
       </div>
     </Layout>

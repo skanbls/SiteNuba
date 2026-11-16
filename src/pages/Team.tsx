@@ -34,7 +34,11 @@ export default function Team() {
         <span className="sub">{[p.job, ROLE_LABEL[p.role], p.contract === 'extra' ? 'Extra' : `${String(p.weekly_hours).replace('.', ',')} h par semaine`].filter(Boolean).join(' · ')}</span>
       </div>
       <div className="end">
-        {!p.active ? <span className="pill">Désactivé</span> : p.user_id ? <span className="pill ok">Compte actif</span> : <span className="pill warn">En attente d'inscription</span>}
+        {!p.active ? <span className="pill">Désactivé</span>
+          : p.user_id ? <span className="pill ok">Compte actif</span>
+          : p.email ? <span className="pill warn">En attente d'inscription</span>
+          : p.has_pin ? <span className="pill ok">iPad, avec code PIN</span>
+          : <span className="pill bad">Aucun accès</span>}
         <span className="chev"><Icon name="chev" size={18} /></span>
       </div>
     </button>
@@ -70,6 +74,8 @@ function MemberSheet({ member, self, onClose }: { member: Profile | 'new'; self:
   const [job, setJob] = useState(old?.job ?? '');
   const [contract, setContract] = useState<Contract>(old?.contract ?? 'cdi');
   const [hours, setHours] = useState(String(old?.weekly_hours ?? 35));
+  const [pin, setPin] = useState('');
+  const [id, setId] = useState(old?.id ?? '');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -84,14 +90,32 @@ function MemberSheet({ member, self, onClose }: { member: Profile | 'new'; self:
     onClose();
   }
 
-  function save(e: FormEvent) {
+  async function save(e: FormEvent) {
     e.preventDefault();
     const h = Number(hours.replace(',', '.'));
     if (!(h >= 0 && h <= 60)) return setErr('Heures par semaine : entre 0 et 60.');
-    const row = { first_name: first, last_name: last, email, role, job, contract, weekly_hours: h };
-    void (old
-      ? run(() => supabase.from('profiles').update(row).eq('id', old.id), 'Fiche enregistrée')
-      : run(() => supabase.from('profiles').insert(row), `${first.trim()} peut maintenant créer son compte avec cette adresse`));
+    if (pin && !/^\d{4}$/.test(pin)) return setErr('Le code PIN a 4 chiffres.');
+    if (!old && !email.trim() && !pin) return setErr("Indique une adresse e-mail, ou donne un code PIN pour l'iPad.");
+    const row = { first_name: first, last_name: last, email: email.trim() || null, role, job, contract, weekly_hours: h };
+    setBusy(true);
+    setErr('');
+    const saved = id
+      ? await supabase.from('profiles').update(row).eq('id', id).select('id').single()
+      : await supabase.from('profiles').insert(row).select('id').single();
+    let error = saved.error;
+    if (!error) {
+      const savedId = (saved.data as { id: string }).id;
+      setId(savedId);
+      if (pin) error = (await supabase.rpc('set_member_pin', { p_profile: savedId, p_pin: pin })).error;
+    }
+    setBusy(false);
+    if (error) {
+      await refresh('team');
+      return setErr(frError(error));
+    }
+    await refresh('team');
+    toast(old ? 'Fiche enregistrée' : email.trim() ? `${first.trim()} peut maintenant créer son compte avec cette adresse` : `${first.trim()} peut utiliser l'iPad avec son code PIN`);
+    onClose();
   }
 
   return (
@@ -105,8 +129,11 @@ function MemberSheet({ member, self, onClose }: { member: Profile | 'new'; self:
             <input className="in" id="m-last" value={last} onChange={(e) => setLast(e.target.value)} />
           </Field>
         </div>
-        <Field label="Adresse e-mail" hint={old?.user_id ? "Le compte est déjà créé avec cette adresse : elle ne se change plus ici." : "C'est avec cette adresse que la personne créera son compte."}>
-          <input className="in" id="m-email" type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={!!old?.user_id} required />
+        <Field label="Adresse e-mail" hint={old?.user_id ? "Le compte est déjà créé avec cette adresse : elle ne se change plus ici." : "Pour créer son compte sur son téléphone. Facultative : sans adresse, la personne utilise seulement l'iPad, avec son code PIN."}>
+          <input className="in" id="m-email" type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={!!old?.user_id} />
+        </Field>
+        <Field label="Code PIN pour l'iPad" hint={old?.has_pin ? 'Un code existe déjà. Remplis ce champ seulement pour le remplacer.' : "4 chiffres. Facultatif : chacun peut aussi le choisir dans Mon compte."}>
+          <input className="in" id="m-pin" inputMode="numeric" autoComplete="off" maxLength={4} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder={old?.has_pin ? '••••' : ''} />
         </Field>
         <div className="two">
           <Field label="Rôle" hint={role === 'gerant' ? 'Accès à tout, y compris les réglages.' : role === 'responsable' ? "Voit les pointages de l'équipe et peut afficher le QR code." : 'Voit ses propres pointages.'}>

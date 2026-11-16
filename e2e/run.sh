@@ -28,7 +28,7 @@ DB_URL="$SUPER/nuba_e2e" PORT=54321 node e2e/gateway.mjs >"$OUT/gateway.log" 2>&
 PIDS+=($!)
 
 ANON=$(node e2e/gateway.mjs --anon-key)
-VITE_SUPABASE_URL=http://127.0.0.1:54321 VITE_SUPABASE_KEY="$ANON" npx vite build --outDir "$OUT/dist" --emptyOutDir >"$OUT/build.log" 2>&1
+VITE_PIN_IDLE_MS=8000 VITE_SUPABASE_URL=http://127.0.0.1:54321 VITE_SUPABASE_KEY="$ANON" npx vite build --outDir "$OUT/dist" --emptyOutDir >"$OUT/build.log" 2>&1
 npx vite preview --outDir "$OUT/dist" --port 4173 --strictPort --host 127.0.0.1 >"$OUT/preview.log" 2>&1 &
 PIDS+=($!)
 

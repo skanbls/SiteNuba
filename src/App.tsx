@@ -12,7 +12,7 @@ import Team from './pages/Team';
 import Today from './pages/Today';
 
 export default function App({ linkError }: { linkError: string }) {
-  const { session, profile, loading, problem, recovery } = useSession();
+  const { session, pin, profile, loading, problem, recovery } = useSession();
   const { pathname } = useLocation();
 
   if (!configured) return <Setup />;
@@ -20,8 +20,8 @@ export default function App({ linkError }: { linkError: string }) {
   if (pathname === '/borne') return <Kiosk />;
   if (loading) return <Splash />;
   // Pas de redirection : après la connexion, on reste sur la page demandée (par exemple le lien d'un QR code).
-  if (!session) return <Login linkError={linkError} />;
-  if (recovery) return <NewPassword />;
+  if (!session && !pin) return <Login linkError={linkError} />;
+  if (recovery && !pin) return <NewPassword />;
   if (problem) return <NoAccess reason="problem" />;
   if (!profile) return <NoAccess reason="unlinked" />;
   if (!profile.active) return <NoAccess reason="inactive" />;

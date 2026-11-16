@@ -5,8 +5,8 @@ import { PunchSheet } from '../components/PunchSheet';
 import { CodeView, useRollingCode } from '../components/RollingCode';
 import { Avatar, Chips, Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
 import { useEntries, useMyOpenEntry, useOpenEntries, useRefresh, useSites, useTeam } from '../lib/data';
-import { PUNCH_ERROR, parsePunchLink, punch, punchBreak } from '../lib/punch';
-import { useMe } from '../lib/session';
+import { PUNCH_ERROR, parsePunchLink, punch, punchBreak, punchKiosk } from '../lib/punch';
+import { useMe, useSession } from '../lib/session';
 import { frError, supabase } from '../lib/supabase';
 import { PERIOD_LABEL, breakMs, dayKey, fmtDate, fmtDayLong, fmtDur, fmtTime, fromLocalInput, periodRange, toCsv, toLocalInput, workedMs, type Period } from '../lib/time';
 import { fullName, type CodeInfo, type Profile, type Site, type TimeEntry } from '../lib/types';
@@ -57,6 +57,22 @@ function Mine({ me }: { me: Profile }) {
   const pause = e?.time_breaks.find((b) => !b.ended_at);
   const total = (entries.data ?? []).reduce((s, x) => s + workedMs(x, now), 0);
   const close = useCallback(() => setSheet(null), []);
+  const { pin } = useSession();
+
+  /** Sur son téléphone : scanner le QR code. Sur la borne, déjà identifié par son code PIN : pointer directement. */
+  async function start(action: 'in' | 'out') {
+    if (!pin) return setSheet(action);
+    setBusy(true);
+    try {
+      const r = await punchKiosk(action);
+      if (!r.ok) toast(PUNCH_ERROR[r.error] ?? r.error, 'bad');
+      else toast(`${action === 'in' ? 'Arrivée pointée' : 'Départ pointé'} à ${fmtTime(new Date())}`);
+      await refresh('entries');
+    } catch (x) {
+      toast(frError(x), 'bad');
+    }
+    setBusy(false);
+  }
 
   async function brk(action: 'start' | 'end') {
     setBusy(true);
@@ -79,9 +95,9 @@ function Mine({ me }: { me: Profile }) {
             <>
               <span className="pill">Hors service</span>
               <p className="big">Pas pointé</p>
-              <p className="sub">Scanne le QR code de la borne pour pointer ton arrivée.</p>
+              <p className="sub">{pin ? 'Tu es identifié sur la borne : un appui suffit.' : 'Scanne le QR code de la borne pour pointer ton arrivée.'}</p>
               <div className="acts">
-                <button type="button" className="btn pri" onClick={() => setSheet('in')}><Icon name="qr" />Pointer mon arrivée</button>
+                <button type="button" className="btn pri" disabled={busy} onClick={() => void start('in')}><Icon name="qr" />Pointer mon arrivée</button>
               </div>
             </>
           ) : pause ? (
@@ -100,7 +116,7 @@ function Mine({ me }: { me: Profile }) {
               <p className="sub">Arrivée à {fmtTime(e.clock_in)}{e.sites ? ` · ${e.sites.name}` : ''}{breakMs(e, now) > 0 ? ` · pause ${Math.round(breakMs(e, now) / 60000)} min` : ''}</p>
               <div className="acts">
                 <button type="button" className="btn" disabled={busy} onClick={() => void brk('start')}>Commencer ma pause</button>
-                <button type="button" className="btn pri" onClick={() => setSheet('out')}><Icon name="qr" />Pointer mon départ</button>
+                <button type="button" className="btn pri" disabled={busy} onClick={() => void start('out')}><Icon name="qr" />Pointer mon départ</button>
               </div>
             </>
           )}
@@ -143,7 +159,7 @@ function EntryRow({ e, now, withName, onClick }: { e: TimeEntry; now: number; wi
         {e.note && <span className="sub">{e.note}</span>}
       </div>
       <div className="end">
-        {e.needs_review ? <span className="pill bad">À corriger</span> : e.source === 'manuel' ? <span className="pill">Saisie manuelle</span> : null}
+        {e.needs_review ? <span className="pill bad">À corriger</span> : e.source === 'manuel' ? <span className="pill">Saisie manuelle</span> : e.source === 'borne' ? <span className="pill">Sur la borne</span> : null}
         <span className="t num">{fmtDur(workedMs(e, now))}</span>
       </div>
     </>
@@ -199,7 +215,7 @@ function TeamView({ me }: { me: Profile }) {
       rows.push([
         fullName(e.profiles), fmtDate(e.clock_in), fmtTime(e.clock_in), done ? fmtTime(e.clock_out!) : 'en cours',
         Math.round(breakMs(e, now) / 60000), done ? fmtDur(workedMs(e)) : '', done ? Math.round(workedMs(e) / 36000) / 100 : '',
-        e.sites?.name ?? '', e.source === 'qr' ? 'QR code' : 'Manuelle', (e.needs_review ? 'À corriger. ' : '') + e.note,
+        e.sites?.name ?? '', e.source === 'qr' ? 'QR code' : e.source === 'borne' ? 'Borne, code PIN' : 'Manuelle', (e.needs_review ? 'À corriger. ' : '') + e.note,
       ]);
     }
     rows.push([], ['Total par personne', '', '', '', '', 'Temps travaillé', 'Heures (décimal)']);

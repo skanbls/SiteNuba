@@ -7,6 +7,8 @@ Appli de gestion de la Nuba (Toulouse) : restaurant, bar, soirées et concerts, 
 - Appli web installable (PWA), pas d'appli sur les stores. Utilisée sur un iPad fixe à la Nuba, les téléphones personnels de l'équipe et l'ordinateur du gérant. Le réseau passe partout : pas de mode hors connexion.
 - Caisse : Zelty. L'appli ne remplace pas la caisse ; elle pourra en lire les ventes (accès API à demander à Zelty).
 - Pointage par QR code tournant (pas de biométrie, pas de géolocalisation).
+- iPad partagé : chacun s'y identifie par un code PIN à 4 chiffres et peut aussi y pointer. L'équipe doit pouvoir tout faire sur l'iPad comme sur le téléphone ; seuls les écrans du gérant demandent sa connexion par e-mail.
+- Seul le gérant écrit le planning et gère les réglages ; pas de droits d'écriture pour les responsables pour l'instant.
 - Réservations de tables : en ligne par les clients et saisie par l'équipe.
 - Événements : privatisations, soirées et concerts, expositions, traiteur hors les murs.
 - Modules retenus en plus : fiches techniques, RH et documents, maintenance et échéances, formation et procédures, fichier clients. Écartés pour l'instant : communication interne, clôture de caisse, pertes et casse, main courante.
@@ -19,6 +21,7 @@ L'ordre de construction et l'état d'avancement sont dans README.md. Le mettre �
 
 - Tout ce que voit l'utilisateur est en français, au tutoiement, avec des phrases simples. Noms de tables et de colonnes en anglais.
 - La sécurité vit dans la base : chaque table a ses règles RLS et ses droits explicites ; les écritures sensibles passent par des fonctions `security definer`. Ne jamais compter sur l'appli pour interdire quelque chose.
+- Une session par code PIN passe par le rôle `anon` avec l'en-tête `x-nuba-ticket` ; `my_profile_id()` la reconnaît et `is_gerant()` / `is_manager()` y sont toujours faux. Chaque nouvelle table que l'équipe utilise doit donc donner ses droits et ses règles RLS à `anon, authenticated`, et tester les deux (voir `supabase/tests/tests_pin.sql`). Utiliser `my_profile_id()`, jamais `auth.uid()` directement.
 - Une migration par module dans `supabase/migrations/`, que le gérant colle dans l'éditeur SQL de Supabase. Ne jamais modifier une migration déjà exécutée : en ajouter une nouvelle.
 - Le système visuel est dans `src/styles/app.css` (jetons de couleur, thème clair et sombre). Réutiliser ses classes avant d'en créer.
 - Ne jamais demander au gérant de coller une clé secrète dans la conversation. Seules l'adresse du projet Supabase et sa clé publique vont dans le dépôt.

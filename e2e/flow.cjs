@@ -117,12 +117,12 @@ async function main() {
   await installed.goto('about:blank');
   await installed.goto(APP);                      // relance de l'appli : directement la borne
   await see(installed, 'Scanne ce code pour pointer');
-  await installed.getByRole('button', { name: "Ouvrir l'appli sur cet appareil" }).click();
+  await installed.getByRole('button', { name: 'Connexion du gérant, avec e-mail' }).click();
   await see(installed, "Connecte-toi pour accéder à l'appli");
   await installed.getByRole('link', { name: 'Revenir à la borne de pointage' }).click();
   await see(installed, 'Scanne ce code pour pointer');
   // Le gérant se connecte sur cet appareil, ferme l'appli, la rouvre : c'est encore la borne.
-  await installed.getByRole('button', { name: "Ouvrir l'appli sur cet appareil" }).click();
+  await installed.getByRole('button', { name: 'Connexion du gérant, avec e-mail' }).click();
   await installed.fill('#login-email', 'boss@nuba.test');
   await installed.fill('#login-pw', PW);
   await installed.getByRole('button', { name: 'Se connecter' }).click();
@@ -130,7 +130,7 @@ async function main() {
   await installed.goto('about:blank');
   await installed.goto(APP);
   await see(installed, 'Scanne ce code pour pointer');
-  await installed.getByRole('button', { name: "Ouvrir l'appli sur cet appareil" }).click();
+  await installed.getByRole('button', { name: 'Connexion du gérant, avec e-mail' }).click();
   await see(installed, 'Bonjour Sam');
   await installed.goto(APP + '#/compte');
   await see(installed, 'Afficher la borne');
@@ -349,6 +349,57 @@ async function main() {
   await see(boss, 'Équipe du jour');
   await see(boss, 'Mes prochains services');
   step('le gérant décide : un échange impossible est refusé, puis accepté ; la semaine se recopie');
+
+  // 13 ter. iPad partagé : un extra sans e-mail reçoit un code PIN, ouvre l'appli sur la borne et y pointe.
+  await boss.goto(APP + '#/equipe');
+  await boss.getByRole('button', { name: 'Ajouter' }).click();
+  await boss.fill('#m-first', 'Hugo');
+  await boss.fill('#m-job', 'Extra bar');
+  await boss.selectOption('#m-contract', 'extra');
+  await boss.getByRole('button', { name: 'Enregistrer' }).click();
+  await see(boss, 'Indique une adresse e-mail, ou donne un code PIN');
+  await boss.fill('#m-pin', '0000');
+  await boss.getByRole('button', { name: 'Enregistrer' }).click();
+  await see(boss, 'trop facile à deviner');
+  await boss.fill('#m-pin', '2580');
+  await boss.getByRole('button', { name: 'Enregistrer' }).click();
+  await see(boss, "Hugo peut utiliser l'iPad avec son code PIN");
+  await see(boss, 'iPad, avec code PIN');
+  assert.equal(await boss.locator('button.row', { hasText: 'Hugo' }).count(), 1, 'une seule fiche Hugo, même après un code refusé');
+
+  await theo.goto(APP + '#/compte');
+  await theo.fill('#acc-pin', '2468');
+  await theo.getByRole('button', { name: 'Enregistrer mon code PIN' }).click();
+  await see(theo, 'Code PIN enregistré');
+
+  await ipad.getByRole('button', { name: "Utiliser l'appli sur cet appareil" }).click();
+  await see(ipad, 'Qui es-tu ?');
+  await ipad.getByRole('dialog').getByRole('button', { name: /Hugo/ }).click();
+  await ipad.fill('#pin-code', '9999');
+  await see(ipad, 'Code incorrect');
+  await ipad.fill('#pin-code', '2580');
+  await see(ipad, 'Bonjour Hugo');
+  assert.equal(await ipad.getByRole('link', { name: 'Équipe' }).count(), 0, 'une session à code PIN ne doit pas voir les écrans du gérant');
+  await ipad.evaluate(() => { window.location.hash = '#/reglages'; });
+  await see(ipad, 'Bonjour Hugo');
+  await ipad.getByRole('link', { name: 'Pointeuse' }).first().click();
+  await ipad.getByRole('button', { name: 'Pointer mon arrivée' }).click();
+  await see(ipad, 'Arrivée pointée');
+  await see(ipad, 'En service');
+  await shot(ipad, '13e-ipad-code-pin');
+  await ipad.getByRole('button', { name: /Terminer/ }).click();
+  await see(ipad, 'Scanne ce code pour pointer');
+  await boss.goto(APP + '#/');
+  await see(boss, 'Présent sans service prévu');
+  step("sur l'iPad, un extra sans e-mail s'identifie par code PIN et pointe");
+
+  // Verrouillage automatique : Théo ouvre sa session sur la borne, puis ne touche plus à rien.
+  await ipad.getByRole('button', { name: "Utiliser l'appli sur cet appareil" }).click();
+  await ipad.getByRole('dialog').getByRole('button', { name: /Théo/ }).click();
+  await ipad.fill('#pin-code', '2468');
+  await see(ipad, 'Bonjour Théo');
+  await ipad.getByText('Scanne ce code pour pointer').waitFor({ timeout: 20_000 });
+  step("la session à code PIN se referme seule sans activité");
 
   // 14. Le gérant désactive Théo : il perd l'accès.
   await boss.goto(APP + '#/equipe');

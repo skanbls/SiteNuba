@@ -38,3 +38,10 @@ export async function punchBreak(action: 'start' | 'end'): Promise<PunchResult> 
   if (error) throw error;
   return data as PunchResult;
 }
+
+/** Pointer sur la borne, dans une session ouverte par code PIN : la présence sur place est déjà prouvée. */
+export async function punchKiosk(action: 'in' | 'out'): Promise<PunchResult> {
+  const { data, error } = await supabase.rpc('punch_kiosk', { p_action: action });
+  if (error) throw error;
+  return data as PunchResult;
+}

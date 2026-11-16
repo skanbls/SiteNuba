@@ -42,7 +42,7 @@ export const NAV: NavItem[] = [
 export const navFor = (role: string | undefined) => NAV.filter((n) => !n.gerant || role === 'gerant');
 
 export function Layout({ title, right, children }: { title: string; right?: ReactNode; children: ReactNode }) {
-  const { profile } = useSession();
+  const { profile, pin, signOut } = useSession();
   const { pathname } = useLocation();
   const items = navFor(profile?.role);
   // Sur téléphone : les écrans principaux en onglets. Les autres vont sous « Plus », sauf s'il n'y en a qu'un.
@@ -71,6 +71,11 @@ export function Layout({ title, right, children }: { title: string; right?: Reac
           <div className="top-in">
             <h1 className="grow">{title}</h1>
             {right}
+            {pin && (
+              <button type="button" className="btn sm pri" onClick={() => void signOut()} aria-label={`Terminer la session de ${profile?.first_name ?? ''}`}>
+                Terminer ({profile?.first_name})
+              </button>
+            )}
           </div>
         </header>
         <main className="main">{children}</main>

@@ -49,7 +49,7 @@ const userById = async (id) => (await db.query('select * from auth.users where i
 
 const CORS = {
   'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
-  'access-control-allow-headers': 'authorization,apikey,content-type,prefer,range,accept,accept-profile,content-profile,x-client-info,x-supabase-api-version',
+  'access-control-allow-headers': 'authorization,apikey,content-type,prefer,range,accept,accept-profile,content-profile,x-client-info,x-supabase-api-version,x-nuba-ticket',
   'access-control-expose-headers': 'content-range,content-profile',
   'access-control-max-age': '600',
 };
@@ -101,7 +101,7 @@ http.createServer(async (req, res) => {
     }
     if (url.pathname.startsWith('/rest/v1')) {
       const headers = {};
-      for (const k of ['authorization', 'content-type', 'prefer', 'range', 'accept', 'accept-profile', 'content-profile']) if (req.headers[k]) headers[k] = req.headers[k];
+      for (const k of ['authorization', 'content-type', 'prefer', 'range', 'accept', 'accept-profile', 'content-profile', 'x-nuba-ticket']) if (req.headers[k]) headers[k] = req.headers[k];
       const r = await fetch(PGRST + url.pathname.replace('/rest/v1', '') + url.search, { method: req.method, headers, body: body.length ? body : undefined });
       const out = { ...cors };
       for (const k of ['content-type', 'content-range', 'content-profile']) if (r.headers.get(k)) out[k] = r.headers.get(k);

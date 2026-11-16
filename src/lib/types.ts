@@ -4,7 +4,8 @@ export type Contract = 'cdi' | 'cdd' | 'extra' | 'autre';
 export interface Profile {
   id: string;
   user_id: string | null;
-  email: string;
+  /** Vide pour une personne qui n'utilise que l'iPad, avec son code PIN. */
+  email: string | null;
   first_name: string;
   last_name: string;
   role: Role;
@@ -12,6 +13,8 @@ export interface Profile {
   contract: Contract;
   weekly_hours: number;
   active: boolean;
+  /** A choisi (ou reçu) un code PIN pour l'iPad partagé. */
+  has_pin: boolean;
   created_at: string;
 }
 
@@ -35,7 +38,7 @@ export interface TimeEntry {
   site_id: string | null;
   clock_in: string;
   clock_out: string | null;
-  source: 'qr' | 'manuel';
+  source: 'qr' | 'manuel' | 'borne';
   note: string;
   needs_review: boolean;
   time_breaks: TimeBreak[];

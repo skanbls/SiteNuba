@@ -6,8 +6,27 @@ const key = import.meta.env.VITE_SUPABASE_KEY as string | undefined;
 /** Faux tant que l'adresse et la clé publique du projet Supabase ne sont pas renseignées. */
 export const configured = Boolean(url && key);
 
+let ticket = '';
+/**
+ * Session ouverte par code PIN sur une borne : son ticket accompagne chaque demande à la base,
+ * à la place du compte éventuellement connecté sur l'appareil. Chaîne vide pour la fermer.
+ */
+export const setTicket = (t: string) => {
+  ticket = t;
+};
+
+const ticketFetch: typeof fetch = (input, init) => {
+  const target = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+  if (!ticket || !target.includes('/rest/v1/')) return fetch(input, init);
+  const headers = new Headers(init?.headers);
+  headers.set('x-nuba-ticket', ticket);
+  headers.set('Authorization', `Bearer ${key}`);
+  return fetch(input, { ...init, headers });
+};
+
 export const supabase: SupabaseClient = createClient(url || 'http://localhost', key || 'missing', {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+  global: { fetch: ticketFetch },
 });
 
 /** Adresse de l'appli sans la partie après le # : sert aux liens des e-mails et des QR codes. */
