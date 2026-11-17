@@ -6,21 +6,23 @@ import { useMe } from '../lib/session';
 import { frError, supabase } from '../lib/supabase';
 import { fmtDateShort } from '../lib/time';
 import { fullName, type Procedure } from '../lib/types';
+import { useCan } from '../lib/rights';
 
 /** Procédures et formation : consignes à lire, lecture confirmée par chacun. */
 export default function Procedures() {
   const me = useMe();
-  const gerant = me.role === 'gerant';
+  const can = useCan();
+  const editor = can('procedures');
   const procedures = useProcedures();
   const reads = useProcedureReads();
   const [open, setOpen] = useState<Procedure | 'new' | null>(null);
   const close = useCallback(() => setOpen(null), []);
-  const all = (procedures.data ?? []).filter((p) => p.active || gerant);
+  const all = (procedures.data ?? []).filter((p) => p.active || editor);
   const mine = new Map((reads.data ?? []).filter((r) => r.profile_id === me.id).map((r) => [r.procedure_id, r.read_at]));
   const cats = Array.from(new Set(all.map((p) => p.category)));
 
   return (
-    <Layout title="Procédures" right={gerant && <button type="button" className="btn sm pri" onClick={() => setOpen('new')}><Icon name="plus" size={16} />Procédure</button>}>
+    <Layout title="Procédures" right={editor && <button type="button" className="btn sm pri" onClick={() => setOpen('new')}><Icon name="plus" size={16} />Procédure</button>}>
       {procedures.isLoading ? <Loading /> : procedures.error ? <div className="list"><p className="empty err">{frError(procedures.error)}</p></div> : (
         <>
           {all.length === 0 && <div className="list"><p className="empty">Aucune procédure pour l'instant.</p></div>}
@@ -39,15 +41,15 @@ export default function Procedures() {
               </div>
             </Section>
           ))}
-          <p className="note">Lis chaque procédure, puis confirme ta lecture. {gerant ? 'Tu vois qui a lu quoi en ouvrant une procédure.' : 'Le gérant voit ce que chacun a lu.'}</p>
+          <p className="note">Lis chaque procédure, puis confirme ta lecture. {editor ? 'Tu vois qui a lu quoi en ouvrant une procédure.' : 'Le gérant voit ce que chacun a lu.'}</p>
         </>
       )}
-      {open && <ProcedureSheet key={open === 'new' ? 'new' : open.id} procedure={open} gerant={gerant} readAt={open === 'new' ? undefined : mine.get(open.id)} onClose={close} />}
+      {open && <ProcedureSheet key={open === 'new' ? 'new' : open.id} procedure={open} editor={editor} readAt={open === 'new' ? undefined : mine.get(open.id)} onClose={close} />}
     </Layout>
   );
 }
 
-function ProcedureSheet({ procedure, gerant, readAt, onClose }: { procedure: Procedure | 'new'; gerant: boolean; readAt: string | undefined; onClose: () => void }) {
+function ProcedureSheet({ procedure, editor, readAt, onClose }: { procedure: Procedure | 'new'; editor: boolean; readAt: string | undefined; onClose: () => void }) {
   const toast = useToast();
   const refresh = useRefresh();
   const team = useTeam();
@@ -109,7 +111,7 @@ function ProcedureSheet({ procedure, gerant, readAt, onClose }: { procedure: Pro
       {readAt
         ? <p className="okmsg">Tu as confirmé ta lecture le {fmtDateShort(new Date(readAt))}.</p>
         : p.active && <button type="button" className="btn pri block" disabled={busy} onClick={() => void run(() => supabase.rpc('ack_procedure', { p_id: p.id }), 'Lecture confirmée')}>J'ai lu et compris</button>}
-      {gerant && (
+      {editor && (
         <>
           <Section title="Qui l'a lue">
             <div className="list">

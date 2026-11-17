@@ -7,6 +7,7 @@ import { useMe } from '../lib/session';
 import { frError, supabase } from '../lib/supabase';
 import { addDays, dayKey, fmtDate, fmtDateShort, fmtTime, fromDayKey, toCsv } from '../lib/time';
 import { fullName, type ColdUnit, type OilLog, type Profile, type TempReading, type TraceItem } from '../lib/types';
+import { useCan } from '../lib/rights';
 
 type Tab = 'temp' | 'net' | 'tra' | 'oil';
 const TABS: [Tab, string][] = [['temp', 'Températures'], ['net', 'Nettoyage'], ['tra', 'Dates limites'], ['oil', 'Friteuse']];
@@ -21,7 +22,8 @@ const num = (s: string) => Number(s.replace(',', '.').replace('−', '-'));
 /** Hygiène : températures, plan de nettoyage, dates limites, huile de friture. */
 export default function Hygiene() {
   const me = useMe();
-  const gerant = me.role === 'gerant';
+  const can = useCan();
+  const editor = can('hygiene');
   const [tab, setTab] = useState<Tab>('temp');
   const tasks = useTodayTasks();
   const day = tasks.data?.day ?? dayKey(new Date());
@@ -33,7 +35,7 @@ export default function Hygiene() {
       <Chips value={tab} options={TABS} onChange={setTab} label="Rubrique" />
       {tasks.error ? <div className="list"><p className="empty err">{frError(tasks.error)}</p></div> : (
         <>
-          {tab === 'temp' && <Temps gerant={gerant} day={day} slot={tasks.data?.slot ?? 'matin'} who={who} />}
+          {tab === 'temp' && <Temps editor={editor} day={day} slot={tasks.data?.slot ?? 'matin'} who={who} />}
           {tab === 'net' && (
             <>
               <ChecklistBoard kind="nettoyage" />
@@ -49,7 +51,7 @@ export default function Hygiene() {
 }
 
 /* ---------- Températures ---------- */
-function Temps({ gerant, day, slot, who }: { gerant: boolean; day: string; slot: 'matin' | 'soir'; who: Map<string, Profile> }) {
+function Temps({ editor, day, slot, who }: { editor: boolean; day: string; slot: 'matin' | 'soir'; who: Map<string, Profile> }) {
   const toast = useToast();
   const refresh = useRefresh();
   const units = useColdUnits();
@@ -59,7 +61,7 @@ function Temps({ gerant, day, slot, who }: { gerant: boolean; day: string; slot:
   const [busy, setBusy] = useState('');
   const [edit, setEdit] = useState<ColdUnit | 'new' | null>(null);
   const closeEdit = useCallback(() => setEdit(null), []);
-  const shown = (units.data ?? []).filter((u) => u.active || gerant);
+  const shown = (units.data ?? []).filter((u) => u.active || editor);
 
   async function record(u: ColdUnit) {
     const v = num(values[u.id] ?? '');
@@ -93,7 +95,7 @@ function Temps({ gerant, day, slot, who }: { gerant: boolean; day: string; slot:
   return (
     <Section title={`Relevés du ${fmtDateShort(day)}`}>
       <div className="list">
-        {shown.length === 0 && <p className="empty">Aucune enceinte froide.{gerant ? ' Ajoute la première ci-dessous.' : ''}</p>}
+        {shown.length === 0 && <p className="empty">Aucune enceinte froide.{editor ? ' Ajoute la première ci-dessous.' : ''}</p>}
         {shown.map((u) => {
           const mine = (readings.data ?? []).filter((r) => r.unit_id === u.id);
           const done = mine.some((r) => u.readings_per_day === 1 || r.slot === slot);
@@ -116,10 +118,10 @@ function Temps({ gerant, day, slot, who }: { gerant: boolean; day: string; slot:
                   <input className="in temp num" inputMode="decimal" placeholder="°C" aria-label={`Température de ${u.name}`} value={values[u.id] ?? ''}
                     onChange={(e) => setValues((s) => ({ ...s, [u.id]: e.target.value }))} />
                   <button type="button" className="btn sm pri" disabled={busy === u.id} onClick={() => void record(u)}>Relever</button>
-                  {gerant && <button type="button" className="btn sm" onClick={() => setEdit(u)} aria-label={`Modifier ${u.name}`}><Icon name="cog" size={16} /></button>}
+                  {editor && <button type="button" className="btn sm" onClick={() => setEdit(u)} aria-label={`Modifier ${u.name}`}><Icon name="cog" size={16} /></button>}
                 </div>
               )}
-              {!u.active && gerant && <div className="end"><button type="button" className="btn sm" onClick={() => setEdit(u)}>Modifier</button></div>}
+              {!u.active && editor && <div className="end"><button type="button" className="btn sm" onClick={() => setEdit(u)}>Modifier</button></div>}
               {mine.filter((r) => r.out_of_range && !r.corrective).map((r) => (
                 <div className="end" style={{ flex: '1 1 100%' }} key={r.id}>
                   <input className="in grow" placeholder="Action corrective (ex. porte refermée, recontrôle dans 30 min)" aria-label={`Action corrective pour ${u.name}`} value={notes[r.id] ?? ''}
@@ -132,7 +134,7 @@ function Temps({ gerant, day, slot, who }: { gerant: boolean; day: string; slot:
         })}
       </div>
       <p className="note">Un relevé le matin et un le soir par enceinte, sauf indication contraire. Hors de la cible, l'appli demande l'action corrective et le signale sur l'accueil.</p>
-      {gerant && (
+      {editor && (
         <div className="acts">
           <button type="button" className="btn" onClick={() => setEdit('new')}><Icon name="plus" />Ajouter une enceinte</button>
           <ExportButton who={who} />

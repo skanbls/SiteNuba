@@ -13,8 +13,8 @@ const HINT: Record<string, string> = {
   '/fiches': 'Recettes, grammages, allergènes',
   '/maintenance': 'Pannes à signaler, contrôles et échéances',
   '/procedures': 'Consignes et formation de l\'équipe',
-  '/equipe': "Qui a accès à l'appli, avec quel rôle",
-  '/reglages': 'Bornes et lieux de pointage',
+  '/equipe': "Qui a accès à l'appli, avec quel rôle et quels droits",
+  '/reglages': 'Accès des responsables, e-mails, liens du site, bornes',
   '/compte': 'Mes informations, mon mot de passe, me déconnecter',
 };
 

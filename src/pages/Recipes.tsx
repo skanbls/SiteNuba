@@ -2,9 +2,9 @@ import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { Icon } from '../components/Icon';
 import { Chips, Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
 import { useProducts, useRecipes, useRefresh } from '../lib/data';
-import { useMe } from '../lib/session';
 import { frError, supabase } from '../lib/supabase';
 import { ALLERGENS, type Product, type Recipe } from '../lib/types';
+import { useCan } from '../lib/rights';
 
 const CATEGORIES = ['Cuisine', 'Cocktails', 'Boissons', 'Desserts'];
 const num = (s: string) => Number(s.replace(',', '.'));
@@ -21,8 +21,8 @@ function lineCost(l: { product_id: string | null; quantity: number; pack_size: n
 
 /** Fiches techniques : recettes, grammages, allergènes ; coûts et marges pour le gérant. */
 export default function Recipes() {
-  const me = useMe();
-  const gerant = me.role === 'gerant';
+  const can = useCan();
+  const editor = can('fiches');
   const recipes = useRecipes();
   const products = useProducts();
   const price = useMemo(() => new Map((products.data ?? []).map((p) => [p.id, p.unit_price])), [products.data]);
@@ -33,14 +33,14 @@ export default function Recipes() {
   const close = useCallback(() => setOpen(null), []);
   const closeTable = useCallback(() => setTable(false), []);
 
-  const all = (recipes.data ?? []).filter((r) => r.active || gerant);
+  const all = (recipes.data ?? []).filter((r) => r.active || editor);
   const cats = ['Toutes', ...Array.from(new Set(all.map((r) => r.category))).sort((a, b) => a.localeCompare(b, 'fr'))];
   const needle = search.trim().toLowerCase();
   const shown = all.filter((r) => cat === 'Toutes' || r.category === cat).filter((r) => !needle || r.name.toLowerCase().includes(needle));
   const costOf = (r: Recipe) => r.recipe_items.reduce((t, i) => t + lineCost(i, price), 0) / (r.portions || 1);
 
   return (
-    <Layout title="Fiches techniques" right={gerant && <button type="button" className="btn sm pri" onClick={() => setOpen('new')}><Icon name="plus" size={16} />Fiche</button>}>
+    <Layout title="Fiches techniques" right={editor && <button type="button" className="btn sm pri" onClick={() => setOpen('new')}><Icon name="plus" size={16} />Fiche</button>}>
       <div className="acts">
         <input className="in" id="recipe-search" style={{ flex: '2 1 180px' }} type="search" placeholder="Chercher une recette" aria-label="Chercher une recette" value={search} onChange={(e) => setSearch(e.target.value)} />
         <button type="button" className="btn" onClick={() => setTable(true)}>Tableau des allergènes</button>
@@ -48,7 +48,7 @@ export default function Recipes() {
       {cats.length > 2 && <Chips value={cat} options={cats.map((c) => [c, c] as [string, string])} onChange={setCat} label="Catégorie" />}
       {recipes.isLoading ? <Loading /> : recipes.error ? <div className="list"><p className="empty err">{frError(recipes.error)}</p></div> : (
         <div className="list">
-          {shown.length === 0 && <p className="empty">{all.length === 0 ? (gerant ? 'Aucune fiche pour l\'instant. Crée la première avec le bouton « Fiche ».' : 'Aucune fiche pour l\'instant.') : 'Aucune fiche ne correspond.'}</p>}
+          {shown.length === 0 && <p className="empty">{all.length === 0 ? (editor ? 'Aucune fiche pour l\'instant. Crée la première avec le bouton « Fiche ».' : 'Aucune fiche pour l\'instant.') : 'Aucune fiche ne correspond.'}</p>}
           {shown.map((r) => {
             const cost = costOf(r);
             const ht = r.sale_price != null ? r.sale_price / (1 + r.vat / 100) : null;
@@ -59,7 +59,7 @@ export default function Recipes() {
                   <span className="sub">{[r.category, `${r.recipe_items.length} ingrédient${r.recipe_items.length > 1 ? 's' : ''}`, r.allergens.length ? `allergènes : ${r.allergens.join(', ')}` : 'aucun allergène déclaré'].join(' · ')}</span>
                 </span>
                 <span className="end">
-                  {gerant && ht != null && ht > 0 && cost > 0 && <span className={`pill ${cost / ht > 0.35 ? 'warn' : 'ok'}`}>{fr((cost / ht) * 100, 0)} % de coût</span>}
+                  {editor && ht != null && ht > 0 && cost > 0 && <span className={`pill ${cost / ht > 0.35 ? 'warn' : 'ok'}`}>{fr((cost / ht) * 100, 0)} % de coût</span>}
                   <span className="chev"><Icon name="chev" size={18} /></span>
                 </span>
               </button>
@@ -67,7 +67,7 @@ export default function Recipes() {
           })}
         </div>
       )}
-      {open && (gerant
+      {open && (editor
         ? <RecipeForm key={open === 'new' ? 'new' : open.id} recipe={open} products={(products.data ?? []).filter((p) => p.active)} price={price} onClose={close} />
         : open !== 'new' && <RecipeView recipe={open} onClose={close} />)}
       {table && (

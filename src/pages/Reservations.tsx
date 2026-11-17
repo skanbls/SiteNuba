@@ -2,10 +2,10 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Icon } from '../components/Icon';
 import { Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
 import { useBookingSettings, useOpeningHours, useRefresh, useReservations, useTodayTasks } from '../lib/data';
-import { useMe } from '../lib/session';
 import { appUrl, frError, supabase } from '../lib/supabase';
 import { addDays, dayKey, fmtDayLong, fromDayKey } from '../lib/time';
 import { SOURCE_LABEL, WEEKDAYS, type BookingSettings, type OpeningHour, type Reservation, type ReservationSource, type ReservationStatus } from '../lib/types';
+import { useCan } from '../lib/rights';
 
 const hhmm = (t: string | null) => (t ?? '').slice(0, 5);
 const active = (r: Reservation) => r.status === 'confirmed' || r.status === 'seated';
@@ -13,8 +13,8 @@ const STATUS: Record<ReservationStatus, [string, string]> = { confirmed: ['info'
 
 /** Réservations de tables : celles des clients en ligne et celles saisies par l'équipe. */
 export default function Reservations() {
-  const me = useMe();
-  const gerant = me.role === 'gerant';
+  const can = useCan();
+  const editor = can('reservations');
   const toast = useToast();
   const refresh = useRefresh();
   const tasks = useTodayTasks();
@@ -53,7 +53,7 @@ export default function Reservations() {
       <div className="acts">
         <input className="in" id="res-day" type="date" style={{ flex: '1 1 150px' }} value={shown} onChange={(e) => setDay(e.target.value)} aria-label="Choisir un jour" />
         {shown !== today && <button type="button" className="btn" onClick={() => setDay('')}>Revenir à aujourd'hui</button>}
-        {gerant && <button type="button" className="btn" onClick={() => setSettings(true)}><Icon name="cog" />Réglages et lien de réservation</button>}
+        {editor && <button type="button" className="btn" onClick={() => setSettings(true)}><Icon name="cog" />Réglages et lien de réservation</button>}
       </div>
 
       {list.isLoading ? <Loading /> : list.error ? <div className="list"><p className="empty err">{frError(list.error)}</p></div> : (

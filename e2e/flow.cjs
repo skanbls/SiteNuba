@@ -581,6 +581,9 @@ async function main() {
   const hours = client.getByRole('group', { name: 'Heure' });
   await hours.getByRole('button', { name: '22:00' }).waitFor();
   assert.equal(await hours.getByRole('button', { name: '22:30' }).count(), 0, 'le mardi, le dernier créneau est 22 h');
+  assert.equal(await hours.getByRole('button', { name: '14:30' }).count(), 0, 'le mardi, la cuisine ferme à 14 h 30 : dernier créneau du midi à 14 h');
+  assert.equal(await hours.getByRole('button', { name: '17:00' }).count(), 0, "pas de créneau l'après-midi");
+  await hours.getByRole('button', { name: '19:00' }).waitFor();
   await hours.getByRole('button', { name: '20:00' }).click();
   await client.fill('#book-name', 'Camille Roux');
   await client.fill('#book-phone', '06 11 22 33 44');
@@ -811,6 +814,71 @@ async function main() {
   await see(boss, 'Procédure créée');
   await boss.locator('[data-procedure="Fermeture de la caisse"]').waitFor();
   step('procédures : lecture confirmée par chacun, suivie par le gérant');
+
+  // 13 nonies. Administration : le gérant confie des accès à Inès, range le lien Drive de Théo, règle les e-mails.
+  await ines.goto(APP + '#/checklists');
+  await ines.locator('button.row', { hasText: 'Machine à glaçons' }).waitFor();
+  assert.equal(await ines.getByRole('button', { name: 'Nouvelle liste' }).count(), 0, 'sans accès, une responsable ne compose pas de liste');
+  await boss.goto(APP + '#/reglages');
+  await see(boss, 'Accès des responsables');
+  await boss.locator('[data-lead="Inès Durand"]').getByText("Ne modifie rien pour l'instant").waitFor();
+  await boss.locator('[data-lead="Inès Durand"]').click();
+  await boss.locator('input[data-area="checklists"]').check();
+  await boss.locator('input[data-area="stocks"]').check();
+  await shot(boss, '13x-acces-responsable');
+  await boss.getByRole('button', { name: 'Enregistrer' }).click();
+  await see(boss, 'Accès de Inès enregistrés');
+  await boss.locator('[data-lead="Inès Durand"]').getByText('Checklists, Stocks et commandes').waitFor();
+  await ines.reload();
+  await ines.getByRole('button', { name: 'Nouvelle liste' }).click();
+  await ines.fill('#cl-name', 'Terrasse');
+  await ines.getByLabel('Case 1').fill('Sortir les parasols');
+  await ines.getByRole('button', { name: 'Enregistrer' }).click();
+  await see(ines, 'Liste créée');
+  await ines.goto(APP + '#/stocks');
+  await ines.getByRole('button', { name: 'Produit', exact: true }).waitFor();
+  await ines.goto(APP + '#/fiches');
+  await ines.getByRole('heading', { name: 'Fiches techniques' }).waitFor();
+  assert.equal(await ines.getByRole('button', { name: 'Fiche', exact: true }).count(), 0, 'pas de fiche technique sans cet accès');
+  assert.equal(await ines.getByRole('link', { name: 'Administration' }).count(), 0, "une responsable ne voit pas l'administration");
+  step('le gérant confie checklists et stocks à une responsable, qui les tient, et rien de plus');
+
+  await boss.goto(APP + '#/equipe');
+  await boss.locator('button.row', { hasText: 'Inès Durand' }).getByText('Gère : Checklists, Stocks et commandes').waitFor();
+  await boss.locator('button.row', { hasText: 'Théo Martin' }).click();
+  await boss.fill('#m-folder', 'https://drive.google.com/drive/folders/exemple');
+  await boss.getByRole('button', { name: 'Enregistrer' }).click();
+  await see(boss, 'Fiche enregistrée');
+  await boss.locator('button.row', { hasText: 'Théo Martin' }).click();
+  assert.equal(await boss.getByRole('link', { name: 'Ouvrir son dossier' }).getAttribute('href'), 'https://drive.google.com/drive/folders/exemple');
+  await boss.getByRole('button', { name: 'Fermer' }).click();
+  step("le lien du dossier Drive de chacun est rangé dans sa fiche");
+
+  await boss.goto(APP + '#/reglages');
+  await see(boss, 'Envoi coupé');
+  await boss.getByRole('button', { name: 'Régler' }).click();
+  await boss.locator('#mail-enabled').check();
+  await boss.fill('#mail-from', 'reservations@nuba.test');
+  await boss.fill('#mail-notify', 'boss@nuba.test');
+  await shot(boss, '13y-emails');
+  await boss.getByRole('button', { name: 'Enregistrer' }).click();
+  await see(boss, 'Réglages des e-mails enregistrés');
+  await see(boss, 'De La Nuba <reservations@nuba.test>');
+  await boss.getByRole('button', { name: 'Envoyer un essai' }).click();
+  await see(boss, 'nom attendu : brevo_api_key');
+  await boss.locator('.pill.bad', { hasText: 'Échec' }).first().waitFor();
+  await shot(boss, '13z-administration');
+  const bossPhone = await open('gérant téléphone', { width: 390, height: 844 });
+  await bossPhone.goto(APP);
+  await bossPhone.fill('#login-email', 'boss@nuba.test');
+  await bossPhone.fill('#login-pw', PW);
+  await bossPhone.getByRole('button', { name: 'Se connecter' }).click();
+  await see(bossPhone, 'Bonjour Sam');
+  await bossPhone.goto(APP + '#/reglages');
+  await see(bossPhone, 'Accès des responsables');
+  await noOverflow(bossPhone, 'administration');
+  await shot(bossPhone, '13z-administration-telephone');
+  step("e-mails : sans la clé dans le coffre de Supabase, l'essai dit ce qui manque");
 
   // 14. Le gérant désactive Théo : il perd l'accès.
   await boss.goto(APP + '#/equipe');

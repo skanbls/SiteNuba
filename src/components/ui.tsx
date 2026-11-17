@@ -44,7 +44,7 @@ export const NAV: NavItem[] = [
   { to: '/maintenance', label: 'Maintenance', icon: 'tool' },
   { to: '/procedures', label: 'Procédures', icon: 'doc' },
   { to: '/equipe', label: 'Équipe', icon: 'team', gerant: true },
-  { to: '/reglages', label: 'Réglages', icon: 'cog', gerant: true },
+  { to: '/reglages', label: 'Administration', icon: 'cog', gerant: true },
   { to: '/compte', label: 'Mon compte', icon: 'user' },
 ];
 

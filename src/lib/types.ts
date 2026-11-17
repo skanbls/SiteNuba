@@ -442,3 +442,25 @@ export const ROLE_LABEL: Record<Role, string> = { gerant: 'Gérant', responsable
 export const CONTRACT_LABEL: Record<Contract, string> = { cdi: 'CDI', cdd: 'CDD', extra: 'Extra', autre: 'Autre' };
 export const fullName = (p: Pick<Profile, 'first_name' | 'last_name'> | null | undefined) =>
   p ? [p.first_name, p.last_name].filter(Boolean).join(' ') : 'Inconnu';
+
+export interface EmailSettings {
+  enabled: boolean;
+  sender_name: string;
+  sender_email: string;
+  notify_email: string;
+  app_url: string;
+  signature: string;
+  confirm_booking: boolean;
+  notify_booking: boolean;
+  notify_event: boolean;
+}
+
+export interface EmailLogEntry {
+  id: number;
+  kind: string;
+  to: string;
+  subject: string;
+  status: 'queued' | 'sent' | 'accepted' | 'failed';
+  error: string;
+  at: string;
+}

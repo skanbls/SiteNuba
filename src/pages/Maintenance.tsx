@@ -2,32 +2,35 @@ import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { Icon } from '../components/Icon';
 import { Chips, Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
 import { useDeadlines, useIssues, useRefresh, useTeam, useTodayTasks } from '../lib/data';
-import { useMe } from '../lib/session';
 import { frError, supabase } from '../lib/supabase';
 import { dayKey, fmtDateShort, fmtTime, fromDayKey } from '../lib/time';
 import { DEADLINE_LABEL, fullName, type Deadline, type DeadlineCategory, type Issue, type Profile } from '../lib/types';
+import { useCan } from '../lib/rights';
+import { useSession } from '../lib/session';
 
 type Tab = 'pannes' | 'echeances';
 const REPEATS: [string, string][] = [['', 'Une seule fois'], ['1', 'Tous les mois'], ['3', 'Tous les 3 mois'], ['6', 'Tous les 6 mois'], ['12', 'Tous les ans'], ['24', 'Tous les 2 ans'], ['36', 'Tous les 3 ans'], ['60', 'Tous les 5 ans'], ['120', 'Tous les 10 ans']];
 const IDEAS: [string, DeadlineCategory, string][] = [['Extincteurs : vérification', 'controle', '12'], ['Hotte : dégraissage', 'controle', '12'], ['Installation électrique : contrôle', 'controle', '12'], ['Installation de gaz : contrôle', 'controle', '12'], ['Dératisation', 'contrat', '3'], ['Assurance : échéance', 'contrat', '12']];
 
-/** Maintenance : pannes signalées par l'équipe, et échéances suivies par le gérant. */
+/** Maintenance : pannes signalées par l'équipe, et échéances suivies par le gérant (ou un responsable qui a l'accès). */
 export default function Maintenance() {
-  const me = useMe();
-  const gerant = me.role === 'gerant';
+  const can = useCan();
+  const editor = can('maintenance');
+  const { profile } = useSession();
+  const boss = profile?.role === 'gerant';
   const [tab, setTab] = useState<Tab>('pannes');
   const team = useTeam();
   const who = useMemo(() => new Map((team.data ?? []).map((p) => [p.id, p])), [team.data]);
   return (
     <Layout title="Maintenance">
-      {gerant && <Chips value={tab} options={[['pannes', 'Pannes'], ['echeances', 'Échéances']]} onChange={setTab} label="Rubrique" />}
-      {tab === 'pannes' || !gerant ? <Issues gerant={gerant} who={who} /> : <Deadlines who={who} team={(team.data ?? []).filter((p) => p.active)} />}
+      {editor && <Chips value={tab} options={[['pannes', 'Pannes'], ['echeances', 'Échéances']]} onChange={setTab} label="Rubrique" />}
+      {tab === 'pannes' || !editor ? <Issues editor={editor} who={who} /> : <Deadlines who={who} team={(team.data ?? []).filter((p) => p.active)} boss={boss} />}
     </Layout>
   );
 }
 
 /* ---------- Pannes ---------- */
-function Issues({ gerant, who }: { gerant: boolean; who: Map<string, Profile> }) {
+function Issues({ editor, who }: { editor: boolean; who: Map<string, Profile> }) {
   const issues = useIssues();
   const [open, setOpen] = useState<Issue | 'new' | null>(null);
   const close = useCallback(() => setOpen(null), []);
@@ -66,12 +69,12 @@ function Issues({ gerant, who }: { gerant: boolean; who: Map<string, Profile> })
         </div>
       </Section>
       {fixed.length > 0 && <Section title="Réparées récemment"><div className="list">{fixed.map(row)}</div></Section>}
-      {open && <IssueSheet issue={open} gerant={gerant} onClose={close} />}
+      {open && <IssueSheet issue={open} editor={editor} onClose={close} />}
     </>
   );
 }
 
-function IssueSheet({ issue, gerant, onClose }: { issue: Issue | 'new'; gerant: boolean; onClose: () => void }) {
+function IssueSheet({ issue, editor, onClose }: { issue: Issue | 'new'; editor: boolean; onClose: () => void }) {
   const toast = useToast();
   const refresh = useRefresh();
   const old = issue === 'new' ? null : issue;
@@ -129,13 +132,13 @@ function IssueSheet({ issue, gerant, onClose }: { issue: Issue | 'new'; gerant: 
         {old.status !== 'done' && <button type="button" className="btn pri" disabled={busy} onClick={() => void setStatus('done', 'Panne réparée')}>Réparée</button>}
         {old.status === 'done' && <button type="button" className="btn" disabled={busy} onClick={() => void setStatus('open', 'Panne rouverte')}>Rouvrir</button>}
       </div>
-      {gerant && <button type="button" className="btn no block" disabled={busy} onClick={() => void run(() => supabase.from('issues').delete().eq('id', old.id), 'Panne supprimée')}>Supprimer</button>}
+      {editor && <button type="button" className="btn no block" disabled={busy} onClick={() => void run(() => supabase.from('issues').delete().eq('id', old.id), 'Panne supprimée')}>Supprimer</button>}
     </Sheet>
   );
 }
 
 /* ---------- Échéances (gérant) ---------- */
-function Deadlines({ who, team }: { who: Map<string, Profile>; team: Profile[] }) {
+function Deadlines({ who, team, boss }: { who: Map<string, Profile>; team: Profile[]; boss: boolean }) {
   const toast = useToast();
   const refresh = useRefresh();
   const tasks = useTodayTasks();
@@ -168,7 +171,7 @@ function Deadlines({ who, team }: { who: Map<string, Profile>; team: Profile[] }
     <>
       <Section title="Échéances à venir" right={<button type="button" className="link" onClick={() => setEdit({ title: '', category: 'controle', repeat: '12' })}>Ajouter une échéance</button>}>
         <div className="list">
-          {all.length === 0 && <p className="empty">Aucune échéance suivie. Ajoute les contrôles, les contrats et les documents à renouveler : l'appli te préviendra 30 jours avant.</p>}
+          {all.length === 0 && <p className="empty">Aucune échéance suivie. Ajoute les contrôles, les contrats{boss ? ' et les documents' : ''} à renouveler : l'appli te préviendra 30 jours avant.</p>}
           {all.map((d) => {
             const [cls, label] = state(d);
             return (
@@ -193,12 +196,12 @@ function Deadlines({ who, team }: { who: Map<string, Profile>; team: Profile[] }
         </div>
         <p className="note">Les fréquences proposées sont des usages courants. Vérifie les tiennes avec ton assureur, ton bailleur ou ton organisme de contrôle.</p>
       </Section>
-      {edit && <DeadlineSheet deadline={edit} team={team} today={today} onClose={close} />}
+      {edit && <DeadlineSheet deadline={edit} team={team} today={today} boss={boss} onClose={close} />}
     </>
   );
 }
 
-function DeadlineSheet({ deadline, team, today, onClose }: { deadline: Deadline | { title: string; category: DeadlineCategory; repeat: string }; team: Profile[]; today: string; onClose: () => void }) {
+function DeadlineSheet({ deadline, team, today, boss, onClose }: { deadline: Deadline | { title: string; category: DeadlineCategory; repeat: string }; team: Profile[]; today: string; boss: boolean; onClose: () => void }) {
   const toast = useToast();
   const refresh = useRefresh();
   const old = 'id' in deadline ? deadline : null;
@@ -234,7 +237,7 @@ function DeadlineSheet({ deadline, team, today, onClose }: { deadline: Deadline 
         <Field label="Quoi"><input className="in" id="dl-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Extincteurs, bail, visite médicale…" required maxLength={100} /></Field>
         <div className="two">
           <Field label="Type">
-            <select className="in" id="dl-category" value={category} onChange={(e) => setCategory(e.target.value as DeadlineCategory)}>{(Object.keys(DEADLINE_LABEL) as DeadlineCategory[]).map((c) => (<option key={c} value={c}>{DEADLINE_LABEL[c]}</option>))}</select>
+            <select className="in" id="dl-category" value={category} onChange={(e) => setCategory(e.target.value as DeadlineCategory)}>{(Object.keys(DEADLINE_LABEL) as DeadlineCategory[]).filter((c) => boss || c !== 'document').map((c) => (<option key={c} value={c}>{DEADLINE_LABEL[c]}</option>))}</select>
           </Field>
           <Field label="Prochaine échéance"><input className="in" id="dl-due" type="date" value={due} min={old ? undefined : today} onChange={(e) => setDue(e.target.value)} required /></Field>
         </div>
@@ -248,7 +251,7 @@ function DeadlineSheet({ deadline, team, today, onClose }: { deadline: Deadline 
         {err && <p className="err" role="alert">{err}</p>}
         <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : 'Enregistrer'}</button>
         {old && <button type="button" className="btn no block" disabled={busy} onClick={() => void run(() => supabase.from('deadlines').delete().eq('id', old.id), 'Échéance supprimée')}>Supprimer cette échéance</button>}
-        <p className="note">Seul le gérant voit les échéances. Elles apparaissent sur ton accueil 30 jours avant.</p>
+        <p className="note">{boss ? 'Les échéances apparaissent sur ton accueil 30 jours avant. Les documents de l\'équipe ne sont visibles que par toi.' : 'Les échéances apparaissent sur ton accueil 30 jours avant. Les documents de l\'équipe restent réservés au gérant.'}</p>
       </form>
     </Sheet>
   );

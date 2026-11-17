@@ -41,7 +41,7 @@ export default function Booking() {
   const [trap, setTrap] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<{ id: string; code: string } | null>(null);
+  const [done, setDone] = useState<{ id: string; code: string; emailed: boolean } | null>(null);
 
   useEffect(() => {
     document.title = 'Réserver une table · La Nuba';
@@ -78,8 +78,8 @@ export default function Booking() {
     const { data, error } = await supabase.rpc('book_table', { p_day: day, p_slot: slot, p_party: party, p_name: name, p_phone: phone, p_email: email, p_note: note, p_trap: trap });
     setBusy(false);
     if (error) return setErr(unreachable);
-    const r = data as { ok: boolean; id?: string; code?: string; error?: string };
-    if (r.ok && r.id && r.code) return setDone({ id: r.id, code: r.code });
+    const r = data as { ok: boolean; id?: string; code?: string; emailed?: boolean; error?: string };
+    if (r.ok && r.id && r.code) return setDone({ id: r.id, code: r.code, emailed: !!r.emailed });
     setErr(BOOK_ERROR[r.error ?? ''] ?? 'La réservation n\'a pas pu être enregistrée.');
     if (r.error === 'slot') {
       setSlot('');
@@ -106,7 +106,7 @@ export default function Booking() {
           </div>
           <p>Un empêchement ? Annulez en un geste avec ce lien, à garder précieusement :</p>
           <a className="btn" href={link}>Voir ou annuler ma réservation</a>
-          <p className="note">Aucun e-mail de confirmation n'est envoyé : faites une capture d'écran de cette page ou enregistrez le lien. Pour toute question, joignez-nous <Phone phone={info.phone} />.</p>
+          <p className="note">{done.emailed ? 'Une confirmation part à votre adresse e-mail, avec ce lien.' : 'Faites une capture d\'écran de cette page ou enregistrez le lien.'} Pour toute question, joignez-nous <Phone phone={info.phone} />.</p>
         </div>
       </div>
     );

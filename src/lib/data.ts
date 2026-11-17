@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
-import type { BookingSettings, Checklist, ColdUnit, Customer, Deadline, Issue, Kiosk, NubaEvent, Procedure, ProcedureRead, Recipe, LeaveRequest, OilLog, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftSwap, Site, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
+import type { BookingSettings, Checklist, ColdUnit, Customer, Deadline, EmailLogEntry, EmailSettings, Issue, Kiosk, NubaEvent, Procedure, ProcedureRead, Recipe, LeaveRequest, OilLog, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftSwap, Site, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
 
 const ENTRY = '*, time_breaks(*), profiles(first_name, last_name), sites(name)';
 
@@ -247,6 +247,40 @@ export function useProcedureReads() {
 }
 
 /** À appeler après toute écriture pour rafraîchir les écrans concernés. */
+/** Accès confiés aux responsables (le gérant les voit tous). */
+export function useAllRights(enabled: boolean) {
+  return useQuery({
+    queryKey: ['rights', 'all'],
+    enabled,
+    queryFn: async () => must<{ profile_id: string; area: string }[]>(await supabase.from('profile_rights').select('profile_id, area')),
+  });
+}
+
+/** Liens vers le dossier Drive de chaque personne (gérant). */
+export function useFolders(enabled: boolean) {
+  return useQuery({
+    queryKey: ['folders'],
+    enabled,
+    queryFn: async () => must<{ profile_id: string; url: string }[]>(await supabase.from('profile_folders').select('profile_id, url')),
+  });
+}
+
+/** Réglages des e-mails (gérant). */
+export function useEmailSettings() {
+  return useQuery({
+    queryKey: ['emails', 'settings'],
+    queryFn: async () => must<EmailSettings>(await supabase.from('email_settings').select('*').single()),
+  });
+}
+
+/** Derniers e-mails et leur sort (gérant). */
+export function useEmailLog() {
+  return useQuery({
+    queryKey: ['emails', 'log'],
+    queryFn: async () => must<EmailLogEntry[]>(await supabase.rpc('email_log')),
+  });
+}
+
 export function useRefresh() {
   const qc = useQueryClient();
   return (...keys: string[]) => Promise.all(keys.map((k) => qc.invalidateQueries({ queryKey: [k] })));

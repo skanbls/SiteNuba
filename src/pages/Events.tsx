@@ -2,10 +2,10 @@ import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { Icon } from '../components/Icon';
 import { Chips, Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
 import { useCustomers, useEvents, useRefresh, useSites, useTeam, useTodayTasks } from '../lib/data';
-import { useMe } from '../lib/session';
 import { appUrl, frError, supabase } from '../lib/supabase';
 import { dayKey, fmtDateShort, fmtTime, fromDayKey } from '../lib/time';
 import { EVENT_KIND, EVENT_PILL, EVENT_STATUS, type Customer, type EventKind, type EventStatus, type NubaEvent, type Site } from '../lib/types';
+import { useCan } from '../lib/rights';
 
 type Filter = 'tous' | EventKind;
 const KINDS = Object.keys(EVENT_KIND) as EventKind[];
@@ -15,8 +15,8 @@ const live = (e: NubaEvent) => e.status !== 'annule' && e.status !== 'termine';
 
 /** Événements : privatisations, concerts, expositions, prestations extérieures. */
 export default function Events() {
-  const me = useMe();
-  const gerant = me.role === 'gerant';
+  const can = useCan();
+  const editor = can('evenements');
   const toast = useToast();
   const tasks = useTodayTasks();
   const today = tasks.data?.day ?? dayKey(new Date());
@@ -48,7 +48,7 @@ export default function Events() {
   }
 
   return (
-    <Layout title="Événements" right={<button type="button" className="btn sm pri" onClick={() => setCreating(true)}><Icon name="plus" size={16} />{gerant ? 'Événement' : 'Demande'}</button>}>
+    <Layout title="Événements" right={<button type="button" className="btn sm pri" onClick={() => setCreating(true)}><Icon name="plus" size={16} />{editor ? 'Événement' : 'Demande'}</button>}>
       {events.isLoading ? <Loading /> : events.error ? <div className="list"><p className="empty err">{frError(events.error)}</p></div> : (
         <>
           {!past && (
@@ -85,7 +85,7 @@ export default function Events() {
               })}
             </div>
           </Section>
-          {gerant && (
+          {editor && (
             <>
               <button type="button" className="btn" onClick={() => void copyLink()}><Icon name="copy" />Copier le lien du formulaire de demande</button>
               <p className="note">Ce lien se place sur le site web ou s'envoie à un client : sa demande de privatisation ou de prestation extérieure arrive ici, comme « demande ».</p>
@@ -93,16 +93,16 @@ export default function Events() {
           )}
         </>
       )}
-      {open && <EventSheet key={open.id} event={open} gerant={gerant} customers={customers.data ?? []} sites={(sites.data ?? []).filter((s) => s.active)} who={who} onClose={closeOpen} />}
-      {creating && (gerant
-        ? <EventSheet event="new" gerant customers={customers.data ?? []} sites={(sites.data ?? []).filter((s) => s.active)} who={who} onClose={closeCreate} />
+      {open && <EventSheet key={open.id} event={open} editor={editor} customers={customers.data ?? []} sites={(sites.data ?? []).filter((s) => s.active)} who={who} onClose={closeOpen} />}
+      {creating && (editor
+        ? <EventSheet event="new" editor customers={customers.data ?? []} sites={(sites.data ?? []).filter((s) => s.active)} who={who} onClose={closeCreate} />
         : <RequestSheet customers={(customers.data ?? []).filter((c) => c.active)} today={today} onClose={closeCreate} />)}
     </Layout>
   );
 }
 
 /* ---------- Un événement : détails, préparation, et pour le gérant tout le reste ---------- */
-function EventSheet({ event, gerant, customers, sites, who, onClose }: { event: NubaEvent | 'new'; gerant: boolean; customers: Customer[]; sites: Site[]; who: Map<string, string>; onClose: () => void }) {
+function EventSheet({ event, editor, customers, sites, who, onClose }: { event: NubaEvent | 'new'; editor: boolean; customers: Customer[]; sites: Site[]; who: Map<string, string>; onClose: () => void }) {
   const toast = useToast();
   const refresh = useRefresh();
   const old = event === 'new' ? null : event;
@@ -151,11 +151,11 @@ function EventSheet({ event, gerant, customers, sites, who, onClose }: { event: 
                   <span className="chk"><Icon name="tick" size={16} /></span>
                   <span className="grow"><span className="t">{t.label}</span>{t.done_at && <span className="sub">Fait par {who.get(t.done_by ?? '') ?? 'un ancien membre'}, le {fmtDateShort(new Date(t.done_at))} à {fmtTime(t.done_at)}</span>}</span>
                 </button>
-                {gerant && <button type="button" className="btn sm no" style={{ marginRight: 10 }} disabled={busy} aria-label={`Retirer « ${t.label} »`} onClick={() => void run(() => supabase.from('event_tasks').delete().eq('id', t.id), '', false)}><Icon name="x" size={16} /></button>}
+                {editor && <button type="button" className="btn sm no" style={{ marginRight: 10 }} disabled={busy} aria-label={`Retirer « ${t.label} »`} onClick={() => void run(() => supabase.from('event_tasks').delete().eq('id', t.id), '', false)}><Icon name="x" size={16} /></button>}
               </div>
             ))}
           </div>
-          {gerant && (
+          {editor && (
             <div className="edit-row">
               <input className="in" id="evt-task" value={task} onChange={(e) => setTask(e.target.value)} placeholder="Ajouter une chose à préparer" aria-label="Chose à préparer" maxLength={120} />
               <button type="button" className="btn sm" disabled={busy || !task.trim()}
@@ -165,7 +165,7 @@ function EventSheet({ event, gerant, customers, sites, who, onClose }: { event: 
         </Section>
       )}
 
-      {!gerant && old ? (
+      {!editor && old ? (
         <div className="list">
           <div className="row"><div className="grow"><span className="sub">Quand</span><span className="t">{fromDayKey(old.day).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}{old.end_day ? ` au ${fmtDateShort(old.end_day)}` : ''}{old.start_time ? ` à ${hhmm(old.start_time)}` : ''}</span></div><span className={`pill ${EVENT_PILL[old.status]}`}>{EVENT_STATUS[old.status]}</span></div>
           {old.guests != null && <div className="row"><div className="grow"><span className="sub">Personnes</span><span className="t">{old.guests}</span></div></div>}
@@ -226,7 +226,7 @@ function EventSheet({ event, gerant, customers, sites, who, onClose }: { event: 
           ) : <button type="button" className="btn no block" onClick={() => setConfirm(true)}>Supprimer cet événement</button>)}
         </form>
       )}
-      {!gerant && err && <p className="err" role="alert">{err}</p>}
+      {!editor && err && <p className="err" role="alert">{err}</p>}
     </Sheet>
   );
 }

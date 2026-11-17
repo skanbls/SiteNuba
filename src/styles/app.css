@@ -228,3 +228,9 @@ button.shift:hover { background: color-mix(in srgb, var(--c, var(--ink-3)) 28%, 
 .date span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-2); }
 .k-privatisation { --c: var(--cat-b); } .k-concert { --c: var(--cat-a); } .k-exposition { --c: var(--cat-d); } .k-exterieur { --c: var(--cat-c); }
 .stats.four { grid-template-columns: repeat(4, 1fr); }
+
+/* Mode d'emploi repliable (mise en route des e-mails…) */
+.guide { background: var(--sunken); border-radius: var(--r-lg); padding: 12px 14px; }
+.guide summary { cursor: pointer; font-weight: 600; }
+.guide ol { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; color: var(--ink-2); }
+.guide p { margin: 8px 0 0; font-size: 13px; color: var(--ink-2); }

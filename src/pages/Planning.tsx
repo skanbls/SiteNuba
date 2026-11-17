@@ -6,6 +6,7 @@ import { useMe } from '../lib/session';
 import { frError, supabase } from '../lib/supabase';
 import { addDays, dayKey, fmtDateShort, fmtDur, fmtTime, shiftRange, timeInput, weekStart } from '../lib/time';
 import { LEAVE_LABEL, STATUS_LABEL, STATUS_PILL, fullName, type LeaveRequest, type Profile, type Shift, type ShiftSwap, type Site } from '../lib/types';
+import { useCan } from '../lib/rights';
 
 const AREAS = ['Salle', 'Bar', 'Cuisine'];
 const DAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
@@ -22,7 +23,8 @@ type Editing = { shift: Shift } | { profileId: string; day: string } | null;
 
 export default function Planning() {
   const me = useMe();
-  const gerant = me.role === 'gerant';
+  const can = useCan();
+  const editor = can('planning');
   const manager = me.role !== 'equipier';
   const toast = useToast();
   const refresh = useRefresh();
@@ -113,8 +115,8 @@ export default function Planning() {
           ) : (
             <>
               <span className={`pill ${STATUS_PILL[l.status]}`}>{STATUS_LABEL[l.status]}</span>
-              {(gerant || (l.profile_id === me.id && l.status === 'pending')) && (
-                <button type="button" className="btn sm" disabled={busy} onClick={() => void act(() => supabase.from('leave_requests').delete().eq('id', l.id), gerant ? 'Absence supprimée' : 'Demande annulée', 'leaves')}>{gerant ? 'Supprimer' : 'Annuler'}</button>
+              {(editor || (l.profile_id === me.id && l.status === 'pending')) && (
+                <button type="button" className="btn sm" disabled={busy} onClick={() => void act(() => supabase.from('leave_requests').delete().eq('id', l.id), editor ? 'Absence supprimée' : 'Demande annulée', 'leaves')}>{editor ? 'Supprimer' : 'Annuler'}</button>
               )}
             </>
           )}
@@ -149,7 +151,7 @@ export default function Planning() {
   );
 
   return (
-    <Layout title="Planning" right={gerant && <button type="button" className="btn sm pri" onClick={() => setEditing({ profileId: '', day })}><Icon name="plus" size={16} />Service</button>}>
+    <Layout title="Planning" right={editor && <button type="button" className="btn sm pri" onClick={() => setEditing({ profileId: '', day })}><Icon name="plus" size={16} />Service</button>}>
       <div className="weeknav">
         <button type="button" className="btn sm" aria-label="Semaine précédente" onClick={() => go(addDays(week, -7))}><Icon name="back" size={16} /></button>
         <p className="lead">Semaine du {week.getDate()} au {fmtDateShort(addDays(week, 6))}</p>
@@ -191,13 +193,13 @@ export default function Planning() {
                   </div>
                 </>
               );
-              return gerant
+              return editor
                 ? <button type="button" className="row wrap" key={s.id} onClick={() => setEditing({ shift: s })}>{body}</button>
                 : <div className="row wrap" key={s.id}>{body}</div>;
             })}
           </div>
         )}
-        {gerant && !shifts.isLoading && list.length === 0 && (
+        {editor && !shifts.isLoading && list.length === 0 && (
           <button type="button" className="btn" disabled={busy} onClick={() => void copyPrevious()}><Icon name="copy" />Recopier la semaine précédente</button>
         )}
       </Section>
@@ -221,14 +223,14 @@ export default function Planning() {
                     const away = onLeave(allLeaves, p.id, k);
                     return (
                       <td key={k}>
-                        {mine.map((s) => gerant ? (
+                        {mine.map((s) => editor ? (
                           <button type="button" key={s.id} className={`shift ${areaClass(s.area)}`} onClick={() => setEditing({ shift: s })} aria-label={`${p.first_name}, ${shiftLine(s)}`}>
                             {fmtTime(s.starts_at)}–{fmtTime(s.ends_at)}<small>{s.area || 'Poste non précisé'}</small>
                           </button>
                         ) : (
                           <span key={s.id} className={`shift ${areaClass(s.area)}`}>{fmtTime(s.starts_at)}–{fmtTime(s.ends_at)}<small>{s.area || 'Poste non précisé'}</small></span>
                         ))}
-                        {mine.length === 0 && (away ? <span className="off">Absent</span> : gerant ? (
+                        {mine.length === 0 && (away ? <span className="off">Absent</span> : editor ? (
                           <button type="button" className="add" onClick={() => setEditing({ profileId: p.id, day: k })} aria-label={`Ajouter un service pour ${p.first_name} le ${fmtDateShort(d)}`}>+</button>
                         ) : <span className="off">Repos</span>)}
                       </td>
@@ -239,7 +241,7 @@ export default function Planning() {
             </tbody>
           </table>
         </div>
-        {gerant && <p className="note">Touche une case vide pour ajouter un service, ou un service pour le modifier.</p>}
+        {editor && <p className="note">Touche une case vide pour ajouter un service, ou un service pour le modifier.</p>}
       </Section>
 
       <div className="cols">
@@ -247,8 +249,8 @@ export default function Planning() {
           {manager && (pendingLeaves.length > 0 || pendingSwaps.length > 0) && (
             <Section title="Demandes à traiter">
               <div className="list">
-                {pendingLeaves.map((l) => leaveRow(l, gerant))}
-                {pendingSwaps.map((w) => swapRow(w, gerant))}
+                {pendingLeaves.map((l) => leaveRow(l, editor))}
+                {pendingSwaps.map((w) => swapRow(w, editor))}
               </div>
             </Section>
           )}
@@ -260,7 +262,7 @@ export default function Planning() {
               {mySwaps.map((w) => swapRow(w, false))}
             </div>
             <div className="acts">
-              <button type="button" className="btn" onClick={() => setLeaveSheet(true)}>{gerant ? 'Saisir une absence' : 'Demander un congé'}</button>
+              <button type="button" className="btn" onClick={() => setLeaveSheet(true)}>{editor ? 'Saisir une absence' : 'Demander un congé'}</button>
               <button type="button" className="btn" onClick={() => setSwapSheet(true)}>Céder un service</button>
             </div>
           </Section>
@@ -406,7 +408,8 @@ function ShiftSheet({ editing, team, sites, leaves, onClose }: { editing: Exclud
 function LeaveSheet({ me, team, onClose }: { me: Profile; team: Profile[]; onClose: () => void }) {
   const toast = useToast();
   const refresh = useRefresh();
-  const gerant = me.role === 'gerant';
+  const can = useCan();
+  const editor = can('planning');
   const [who, setWho] = useState(me.id);
   const [kind, setKind] = useState<LeaveRequest['kind']>('conge');
   const [from, setFrom] = useState('');
@@ -424,19 +427,19 @@ function LeaveSheet({ me, team, onClose }: { me: Profile; team: Profile[]; onClo
     setErr('');
     const row = { profile_id: who, kind, start_date: from, end_date: end, note: note.trim() };
     // Le gérant enregistre directement une absence acceptée ; les autres font une demande.
-    const payload: Record<string, unknown> = gerant ? { ...row, status: 'approved', decided_by: me.id, decided_at: new Date().toISOString() } : row;
+    const payload: Record<string, unknown> = editor ? { ...row, status: 'approved', decided_by: me.id, decided_at: new Date().toISOString() } : row;
     const { error } = await supabase.from('leave_requests').insert(payload);
     setBusy(false);
     if (error) return setErr(/leave_requests_length/.test(error.message) ? 'Trois mois au maximum par demande.' : frError(error));
     await refresh('leaves');
-    toast(gerant ? 'Absence enregistrée' : 'Demande envoyée au gérant');
+    toast(editor ? 'Absence enregistrée' : 'Demande envoyée au gérant');
     onClose();
   }
 
   return (
-    <Sheet title={gerant ? 'Saisir une absence' : 'Demander un congé'} onClose={onClose}>
+    <Sheet title={editor ? 'Saisir une absence' : 'Demander un congé'} onClose={onClose}>
       <form className="form" onSubmit={save}>
-        {gerant && (
+        {editor && (
           <Field label="Personne">
             <select className="in" id="leave-who" value={who} onChange={(e) => setWho(e.target.value)}>
               {team.map((p) => (<option key={p.id} value={p.id}>{fullName(p)}</option>))}
@@ -461,7 +464,7 @@ function LeaveSheet({ me, team, onClose }: { me: Profile; team: Profile[]; onClo
           <input className="in" id="leave-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} placeholder="Facultatif" />
         </Field>
         {err && <p className="err" role="alert">{err}</p>}
-        <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : gerant ? 'Enregistrer' : 'Envoyer la demande'}</button>
+        <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : editor ? 'Enregistrer' : 'Envoyer la demande'}</button>
       </form>
     </Sheet>
   );

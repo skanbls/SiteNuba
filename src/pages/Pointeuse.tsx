@@ -10,6 +10,7 @@ import { useMe, useSession } from '../lib/session';
 import { frError, supabase } from '../lib/supabase';
 import { PERIOD_LABEL, breakMs, dayKey, fmtDate, fmtDayLong, fmtDur, fmtTime, fromLocalInput, periodRange, toCsv, toLocalInput, workedMs, type Period } from '../lib/time';
 import { fullName, type CodeInfo, type Profile, type Site, type TimeEntry } from '../lib/types';
+import { useCan } from '../lib/rights';
 
 const PERIODS: [Period, string][] = [['week', PERIOD_LABEL.week], ['month', PERIOD_LABEL.month], ['lastMonth', PERIOD_LABEL.lastMonth]];
 
@@ -37,7 +38,7 @@ export default function Pointeuse() {
         </div>
       )}
     >
-      {tab === 'moi' ? <Mine me={me} /> : <TeamView me={me} />}
+      {tab === 'moi' ? <Mine me={me} /> : <TeamView />}
     </Layout>
   );
 }
@@ -168,8 +169,9 @@ function EntryRow({ e, now, withName, onClick }: { e: TimeEntry; now: number; wi
 }
 
 /* ---------- Pointages de l'équipe (gérant et responsables) ---------- */
-function TeamView({ me }: { me: Profile }) {
-  const gerant = me.role === 'gerant';
+function TeamView() {
+  const can = useCan();
+  const editor = can('pointages');
   const now = useNow(30_000);
   const team = useTeam();
   const sites = useSites();
@@ -233,8 +235,8 @@ function TeamView({ me }: { me: Profile }) {
     <>
       <div className="acts">
         <button type="button" className="btn" onClick={() => setShowCode(true)}><Icon name="qr" />Afficher le QR code</button>
-        {gerant && <button type="button" className="btn" onClick={() => setEdit('new')}><Icon name="plus" />Ajouter un pointage</button>}
-        {gerant && <button type="button" className="btn" onClick={exportCsv} disabled={!list.length}><Icon name="down" />Exporter pour le comptable</button>}
+        {editor && <button type="button" className="btn" onClick={() => setEdit('new')}><Icon name="plus" />Ajouter un pointage</button>}
+        {editor && <button type="button" className="btn" onClick={exportCsv} disabled={!list.length}><Icon name="down" />Exporter pour le comptable</button>}
       </div>
 
       <div className="cols">
@@ -244,7 +246,7 @@ function TeamView({ me }: { me: Profile }) {
               <div className="list">
                 {(present.data ?? []).length === 0 && <p className="empty">Personne n'a pointé pour l'instant.</p>}
                 {(present.data ?? []).map((x) => (
-                  <EntryRow key={x.id} e={x} now={now} withName onClick={gerant ? () => setEdit(x) : undefined} />
+                  <EntryRow key={x.id} e={x} now={now} withName onClick={editor ? () => setEdit(x) : undefined} />
                 ))}
               </div>
             )}
@@ -286,13 +288,13 @@ function TeamView({ me }: { me: Profile }) {
                 <div key={d.key}>
                   <p className="day-h">{d.label}</p>
                   {d.items.map((x) => (
-                    <EntryRow key={x.id} e={x} now={now} withName onClick={gerant ? () => setEdit(x) : undefined} />
+                    <EntryRow key={x.id} e={x} now={now} withName onClick={editor ? () => setEdit(x) : undefined} />
                   ))}
                 </div>
               ))}
             </div>
           )}
-          {gerant && <p className="note">Touche un pointage pour le corriger. Chaque correction est enregistrée avec ton nom, la date et les anciennes valeurs.</p>}
+          {editor && <p className="note">Touche un pointage pour le corriger. Chaque correction est enregistrée avec ton nom, la date et les anciennes valeurs.</p>}
         </Section>
       </div>
 

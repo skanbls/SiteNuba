@@ -2,17 +2,17 @@ import { useCallback, useState, type FormEvent } from 'react';
 import { Icon } from '../components/Icon';
 import { Chips, Field, Layout, Loading, Sheet, Spinner, useToast } from '../components/ui';
 import { useCustomers, useRefresh } from '../lib/data';
-import { useMe } from '../lib/session';
 import { frError, supabase } from '../lib/supabase';
 import { CUSTOMER_KIND, type Customer, type CustomerKind } from '../lib/types';
+import { useCan } from '../lib/rights';
 
 type Filter = 'tous' | CustomerKind;
 const KINDS = Object.keys(CUSTOMER_KIND) as CustomerKind[];
 
 /** Fichier clients : particuliers, entreprises, artistes, prestataires. */
 export default function Customers() {
-  const me = useMe();
-  const gerant = me.role === 'gerant';
+  const can = useCan();
+  const editor = can('evenements');
   const customers = useCustomers();
   const [filter, setFilter] = useState<Filter>('tous');
   const [search, setSearch] = useState('');
@@ -20,7 +20,7 @@ export default function Customers() {
   const close = useCallback(() => setEdit(null), []);
   const needle = search.trim().toLowerCase();
   const shown = (customers.data ?? [])
-    .filter((c) => c.active || gerant)
+    .filter((c) => c.active || editor)
     .filter((c) => filter === 'tous' || c.kind === filter)
     .filter((c) => !needle || [c.name, c.company, c.phone, c.email].some((v) => v.toLowerCase().includes(needle)));
 
@@ -46,12 +46,12 @@ export default function Customers() {
         </div>
       )}
       <p className="note">Ces coordonnées servent à l'équipe pour les réservations de groupe et les événements. Elles ne sont visibles que par l'équipe.</p>
-      {edit && <CustomerSheet customer={edit} gerant={gerant} onClose={close} />}
+      {edit && <CustomerSheet customer={edit} editor={editor} onClose={close} />}
     </Layout>
   );
 }
 
-function CustomerSheet({ customer, gerant, onClose }: { customer: Customer | 'new'; gerant: boolean; onClose: () => void }) {
+function CustomerSheet({ customer, editor, onClose }: { customer: Customer | 'new'; editor: boolean; onClose: () => void }) {
   const toast = useToast();
   const refresh = useRefresh();
   const old = customer === 'new' ? null : customer;
@@ -91,7 +91,7 @@ function CustomerSheet({ customer, gerant, onClose }: { customer: Customer | 'ne
         <Field label="Note"><textarea className="in" id="cust-note" value={f.note} onChange={set('note')} maxLength={1000} placeholder="Habitudes, allergies, tarif convenu…" /></Field>
         {err && <p className="err" role="alert">{err}</p>}
         <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : 'Enregistrer'}</button>
-        {old && gerant && (
+        {old && editor && (
           <button type="button" className="btn block" disabled={busy}
             onClick={() => void run(() => supabase.from('customers').update({ active: !old.active }).eq('id', old.id), old.active ? 'Fiche retirée' : 'Fiche rétablie')}>
             {old.active ? 'Retirer cette fiche' : 'Rétablir cette fiche'}

@@ -66,7 +66,7 @@ export default function Account() {
               <div className="row"><div className="grow"><span className="sub">Rôle et poste</span><span className="t">{[ROLE_LABEL[me.role], me.job].filter(Boolean).join(' · ')}</span></div></div>
               <div className="row"><div className="grow"><span className="sub">Contrat</span><span className="t">{CONTRACT_LABEL[me.contract]}{me.contract !== 'extra' ? ` · ${String(me.weekly_hours).replace('.', ',')} h par semaine` : ''}</span></div></div>
               {me.role === 'gerant' && (
-                <Link className="row" to="/reglages"><Icon name="cog" /><div className="grow"><span className="t">Réglages</span><span className="sub">Bornes et lieux de pointage</span></div><span className="chev"><Icon name="chev" size={18} /></span></Link>
+                <Link className="row" to="/reglages"><Icon name="cog" /><div className="grow"><span className="t">Administration</span><span className="sub">Accès des responsables, e-mails, bornes</span></div><span className="chev"><Icon name="chev" size={18} /></span></Link>
               )}
             </div>
             <p className="note">Une erreur dans ces informations ? Seul le gérant peut les modifier.</p>

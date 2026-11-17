@@ -1,24 +1,58 @@
-import { useCallback, useState, type FormEvent } from 'react';
-import { Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
-import { useKiosks, useRefresh, useSites } from '../lib/data';
-import { frError, supabase } from '../lib/supabase';
+import { useCallback, useState, type ChangeEvent, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
+import { Icon, type IconName } from '../components/Icon';
+import { RightsPicker } from '../components/Rights';
+import { Avatar, Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
+import { useAllRights, useEmailLog, useEmailSettings, useKiosks, useRefresh, useSites, useTeam } from '../lib/data';
+import { AREAS, type Area } from '../lib/rights';
+import { appUrl, frError, supabase } from '../lib/supabase';
 import { fmtDay, fmtTime } from '../lib/time';
-import type { Site } from '../lib/types';
+import { fullName, type EmailLogEntry, type EmailSettings, type Profile, type Site } from '../lib/types';
 
-/** Réglages du gérant : lieux où l'on pointe, et bornes qui affichent le QR code. */
+const ADMIN_LINKS: [string, IconName, string, string][] = [
+  ['/equipe', 'team', 'Équipe', 'Fiches, rôles, codes PIN, accès et dossiers Drive'],
+  ['/checklists', 'check', 'Checklists', 'Nouvelle liste, ou « Modifier cette liste »'],
+  ['/hygiene', 'thermo', 'Hygiène', 'Enceintes froides, plan de nettoyage'],
+  ['/stocks', 'box', 'Stocks', 'Produits, seuils d\'alerte, quantités voulues, prix'],
+  ['/commandes', 'truck', 'Fournisseurs', 'Coordonnées, jours de livraison, minimum de commande'],
+  ['/fiches', 'list', 'Fiches techniques', 'Recettes, grammages, prix de vente'],
+  ['/procedures', 'doc', 'Procédures', 'Consignes de l\'équipe, lecture à confirmer'],
+  ['/planning', 'cal', 'Planning', 'Services de la semaine, congés'],
+  ['/reservations', 'book', 'Réservations', 'Horaires, créneaux, lien et code pour le site'],
+  ['/maintenance', 'tool', 'Échéances', 'Contrôles, contrats, documents de l\'équipe'],
+];
+
+const MAIL_STATUS: Record<EmailLogEntry['status'], [string, string]> = {
+  queued: ['', 'En attente'],
+  sent: ['info', 'Parti'],
+  accepted: ['ok', 'Accepté par Brevo'],
+  failed: ['bad', 'Échec'],
+};
+
+/** Administration : ce que le gérant règle, et ce qu'il confie aux responsables. */
 export default function Settings() {
   const toast = useToast();
   const refresh = useRefresh();
   const sites = useSites();
   const kiosks = useKiosks();
+  const team = useTeam();
+  const rights = useAllRights(true);
+  const mail = useEmailSettings();
+  const log = useEmailLog();
   const [addSite, setAddSite] = useState(false);
   const [addKiosk, setAddKiosk] = useState(false);
   const [pair, setPair] = useState<{ label: string; code: string } | null>(null);
+  const [rightsFor, setRightsFor] = useState<Profile | null>(null);
+  const [mailSheet, setMailSheet] = useState(false);
   const [busy, setBusy] = useState(false);
   const closeSite = useCallback(() => setAddSite(false), []);
   const closeKiosk = useCallback(() => setAddKiosk(false), []);
   const closePair = useCallback(() => setPair(null), []);
+  const closeRights = useCallback(() => setRightsFor(null), []);
+  const closeMail = useCallback(() => setMailSheet(false), []);
   const live = (kiosks.data ?? []).filter((k) => !k.revoked_at);
+  const leads = (team.data ?? []).filter((p) => p.active && p.role === 'responsable');
+  const areasOf = (id: string) => (rights.data ?? []).filter((r) => r.profile_id === id).map((r) => r.area as Area);
 
   async function toggleSite(s: Site) {
     const { error } = await supabase.from('sites').update({ active: !s.active }).eq('id', s.id);
@@ -42,55 +76,270 @@ export default function Settings() {
     setPair({ label, code: data as string });
   }
 
-  return (
-    <Layout title="Réglages">
-      <div className="cols">
-        <Section title="Bornes de pointage" right={<button type="button" className="link" onClick={() => setAddKiosk(true)}>Ajouter une borne</button>}>
-          {kiosks.isLoading ? <Loading /> : (
-            <div className="list">
-              {live.length === 0 && <p className="empty">Aucune borne. Ajoute-en une, puis relie-la à l'iPad qui restera à la Nuba.</p>}
-              {live.map((k) => (
-                <div className="row wrap" key={k.id}>
-                  <div className="grow">
-                    <span className="t">{k.label}</span>
-                    <span className="sub">{k.sites?.name} · {k.last_seen_at ? `vue ${fmtDay(k.last_seen_at)} à ${fmtTime(k.last_seen_at)}` : 'aucun appareil relié pour l\'instant'}</span>
-                  </div>
-                  <div className="end">
-                    <button type="button" className="btn sm" disabled={busy} onClick={() => void relink(k.id, k.label)}>Relier un appareil</button>
-                    <button type="button" className="btn sm no" onClick={() => void revoke(k.id)}>Désactiver</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          <p className="note">Une borne est un appareil qui affiche le QR code de pointage : en général un iPad fixe. Pour changer d'appareil, touche « Relier un appareil » : le nouveau remplace l'ancien.</p>
-        </Section>
+  async function testMail() {
+    setBusy(true);
+    const { data, error } = await supabase.rpc('send_test_email');
+    setBusy(false);
+    await refresh('emails');
+    if (error) return toast(frError(error), 'bad');
+    const r = data as { ok: boolean; to: string; error: string };
+    toast(r.ok ? `Essai envoyé à ${r.to}. Regarde ta boîte dans une minute.` : r.error || "L'essai n'est pas parti.", r.ok ? 'ok' : 'bad');
+  }
 
-        <Section title="Lieux de pointage" right={<button type="button" className="link" onClick={() => setAddSite(true)}>Ajouter un lieu</button>}>
-          {sites.isLoading ? <Loading /> : (
+  async function copy(text: string, done: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(done);
+    } catch {
+      toast(text);
+    }
+  }
+
+  const bookingLink = `${appUrl()}#/reserver`;
+  const eventLink = `${appUrl()}#/privatiser`;
+
+  return (
+    <Layout title="Administration">
+      <div className="cols">
+        <div className="stack">
+          <Section title="Accès des responsables">
+            {team.isLoading || rights.isLoading ? <Loading /> : rights.error ? <div className="list"><p className="empty err">{frError(rights.error)}</p></div> : (
+              <div className="list">
+                {leads.length === 0 && <p className="empty">Aucun responsable. Dans Équipe, donne le rôle « Responsable » à une personne pour lui confier une partie de l'appli.</p>}
+                {leads.map((p) => {
+                  const a = areasOf(p.id);
+                  return (
+                    <button type="button" className="row" key={p.id} onClick={() => setRightsFor(p)} data-lead={fullName(p)}>
+                      <Avatar p={p} />
+                      <div className="grow">
+                        <span className="t">{fullName(p)}</span>
+                        <span className="sub">{a.length ? AREAS.filter(([x]) => a.includes(x)).map(([, l]) => l).join(', ') : 'Ne modifie rien pour l\'instant'}</span>
+                      </div>
+                      <span className="chev"><Icon name="chev" size={18} /></span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <p className="note">Un responsable modifie ce que tu lui confies, avec son compte. L'équipe, les accès, les bornes et les e-mails restent à toi.</p>
+          </Section>
+
+          <Section title="Où modifier quoi">
             <div className="list">
-              {(sites.data ?? []).map((s) => (
-                <div className="row wrap" key={s.id}>
-                  <div className="grow">
-                    <span className="t">{s.name}</span>
-                    <span className="sub">{s.kind === 'evenement' ? 'Prestation extérieure' : 'Établissement'}</span>
-                  </div>
-                  <div className="end">
-                    {!s.active && <span className="pill">Désactivé</span>}
-                    <button type="button" className="btn sm" onClick={() => void toggleSite(s)}>{s.active ? 'Désactiver' : 'Réactiver'}</button>
-                  </div>
-                </div>
+              {ADMIN_LINKS.map(([to, icon, label, hint]) => (
+                <Link className="row" to={to} key={to}>
+                  <Icon name={icon} />
+                  <div className="grow"><span className="t">{label}</span><span className="sub">{hint}</span></div>
+                  <span className="chev"><Icon name="chev" size={18} /></span>
+                </Link>
               ))}
             </div>
-          )}
-          <p className="note">Ajoute un lieu pour chaque prestation extérieure : les heures faites là-bas apparaîtront séparément dans l'export.</p>
-        </Section>
+          </Section>
+
+          <Section title="Site web et liens publics">
+            <div className="list">
+              <div className="row wrap">
+                <div className="grow"><span className="t">Réserver une table</span><span className="sub">Jusqu'à 9 personnes, sur les créneaux d'ouverture</span></div>
+                <div className="end"><button type="button" className="btn sm" onClick={() => void copy(bookingLink, 'Lien de réservation copié')}><Icon name="copy" size={16} />Copier</button></div>
+              </div>
+              <div className="row wrap">
+                <div className="grow"><span className="t">Demander une privatisation</span><span className="sub">Groupes, soirées privées, prestations extérieures</span></div>
+                <div className="end"><button type="button" className="btn sm" onClick={() => void copy(eventLink, 'Lien de privatisation copié')}><Icon name="copy" size={16} />Copier</button></div>
+              </div>
+            </div>
+            <p className="note">Le formulaire du site de la Nuba enregistre ses réservations directement ici. Ces liens servent aussi pour Instagram ou la fiche Google.</p>
+          </Section>
+        </div>
+
+        <div className="stack">
+          <Section title="E-mails" right={<button type="button" className="link" onClick={() => setMailSheet(true)}>Régler</button>}>
+            {mail.isLoading ? <Loading /> : mail.error ? <div className="list"><p className="empty err">{frError(mail.error)}</p></div> : (
+              <div className="list">
+                <div className="row wrap">
+                  <div className="grow">
+                    <span className="t">{mail.data?.enabled ? 'Envoi activé' : 'Envoi coupé'}</span>
+                    <span className="sub">{mail.data?.enabled ? `De ${mail.data.sender_name} <${mail.data.sender_email}>` : 'Aucun e-mail ne part. Touche « Régler » pour la mise en route.'}</span>
+                  </div>
+                  <div className="end">
+                    <span className={`pill ${mail.data?.enabled ? 'ok' : ''}`}>{mail.data?.enabled ? 'Activé' : 'Coupé'}</span>
+                    {mail.data?.enabled && <button type="button" className="btn sm" disabled={busy} onClick={() => void testMail()}>Envoyer un essai</button>}
+                  </div>
+                </div>
+                {(log.data ?? []).slice(0, 6).map((m) => (
+                  <div className="row wrap" key={m.id}>
+                    <div className="grow">
+                      <span className="t">{m.subject}</span>
+                      <span className="sub">À {m.to} · {fmtDay(m.at)} à {fmtTime(m.at)}</span>
+                      {m.error && <span className="sub err">{m.error}</span>}
+                    </div>
+                    <div className="end"><span className={`pill ${MAIL_STATUS[m.status][0]}`}>{MAIL_STATUS[m.status][1]}</span></div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="note">Confirmation au client à chaque réservation en ligne, et alerte pour toi à chaque réservation ou demande de privatisation.</p>
+          </Section>
+
+          <Section title="Bornes de pointage" right={<button type="button" className="link" onClick={() => setAddKiosk(true)}>Ajouter une borne</button>}>
+            {kiosks.isLoading ? <Loading /> : (
+              <div className="list">
+                {live.length === 0 && <p className="empty">Aucune borne. Ajoute-en une, puis relie-la à l'iPad qui restera à la Nuba.</p>}
+                {live.map((k) => (
+                  <div className="row wrap" key={k.id}>
+                    <div className="grow">
+                      <span className="t">{k.label}</span>
+                      <span className="sub">{k.sites?.name} · {k.last_seen_at ? `vue ${fmtDay(k.last_seen_at)} à ${fmtTime(k.last_seen_at)}` : 'aucun appareil relié pour l\'instant'}</span>
+                    </div>
+                    <div className="end">
+                      <button type="button" className="btn sm" disabled={busy} onClick={() => void relink(k.id, k.label)}>Relier un appareil</button>
+                      <button type="button" className="btn sm no" onClick={() => void revoke(k.id)}>Désactiver</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="note">Une borne est un appareil qui affiche le QR code de pointage : en général un iPad fixe. Pour changer d'appareil, touche « Relier un appareil » : le nouveau remplace l'ancien.</p>
+          </Section>
+
+          <Section title="Lieux de pointage" right={<button type="button" className="link" onClick={() => setAddSite(true)}>Ajouter un lieu</button>}>
+            {sites.isLoading ? <Loading /> : (
+              <div className="list">
+                {(sites.data ?? []).map((s) => (
+                  <div className="row wrap" key={s.id}>
+                    <div className="grow">
+                      <span className="t">{s.name}</span>
+                      <span className="sub">{s.kind === 'evenement' ? 'Prestation extérieure' : 'Établissement'}</span>
+                    </div>
+                    <div className="end">
+                      {!s.active && <span className="pill">Désactivé</span>}
+                      <button type="button" className="btn sm" onClick={() => void toggleSite(s)}>{s.active ? 'Désactiver' : 'Réactiver'}</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="note">Ajoute un lieu pour chaque prestation extérieure : les heures faites là-bas apparaîtront séparément dans l'export.</p>
+          </Section>
+        </div>
       </div>
 
       {addSite && <SiteSheet onClose={closeSite} />}
       {addKiosk && <KioskSheet sites={(sites.data ?? []).filter((s) => s.active)} onClose={closeKiosk} onCreated={setPair} />}
       {pair && <PairCodeSheet label={pair.label} code={pair.code} onClose={closePair} />}
+      {rightsFor && <RightsSheet key={rightsFor.id} person={rightsFor} areas={areasOf(rightsFor.id)} onClose={closeRights} />}
+      {mailSheet && mail.data && <MailSheet settings={mail.data} onClose={closeMail} />}
     </Layout>
+  );
+}
+
+/** Ce qu'un responsable peut modifier. */
+function RightsSheet({ person, areas: old, onClose }: { person: Profile; areas: Area[]; onClose: () => void }) {
+  const toast = useToast();
+  const refresh = useRefresh();
+  const [areas, setAreas] = useState<Area[]>(old);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr('');
+    const { error } = await supabase.rpc('set_rights', { p_profile: person.id, p_areas: areas });
+    setBusy(false);
+    if (error) return setErr(frError(error));
+    await refresh('rights');
+    toast(`Accès de ${person.first_name} enregistrés`);
+    onClose();
+  }
+  return (
+    <Sheet title={`Accès de ${fullName(person)}`} onClose={onClose}>
+      <form className="form" onSubmit={save}>
+        <p className="note">Coche ce que {person.first_name} peut modifier. Tout le reste, {person.first_name} le consulte comme le reste de l'équipe.</p>
+        <RightsPicker value={areas} onChange={setAreas} />
+        <p className="note">Valable avec son compte (sur son téléphone, ou sur l'iPad après connexion par e-mail). Avec le code PIN de l'iPad, ce sont les droits d'un équipier.</p>
+        {err && <p className="err" role="alert">{err}</p>}
+        <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : 'Enregistrer'}</button>
+      </form>
+    </Sheet>
+  );
+}
+
+/** Réglages des e-mails, avec la mise en route pas à pas. */
+function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: () => void }) {
+  const toast = useToast();
+  const refresh = useRefresh();
+  const [f, setF] = useState<EmailSettings>({ ...settings, app_url: settings.app_url || appUrl() });
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const text = (k: 'sender_name' | 'sender_email' | 'notify_email' | 'app_url' | 'signature') =>
+    (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF((s) => ({ ...s, [k]: e.target.value }));
+  const flag = (k: 'enabled' | 'confirm_booking' | 'notify_booking' | 'notify_event') =>
+    (e: ChangeEvent<HTMLInputElement>) => setF((s) => ({ ...s, [k]: e.target.checked }));
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    const mailOk = (v: string) => !v || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v);
+    if (!mailOk(f.sender_email.trim()) || !mailOk(f.notify_email.trim())) return setErr('Vérifie les adresses e-mail.');
+    if (f.enabled && !f.sender_email.trim()) return setErr("Indique l'adresse d'expédition, validée dans Brevo.");
+    const url = f.app_url.trim().replace(/#.*$/, '');
+    if (!/^https?:\/\/\S+\/$/.test(url)) return setErr("L'adresse de l'appli commence par https:// et finit par /.");
+    setBusy(true);
+    setErr('');
+    const { error } = await supabase.from('email_settings').update({
+      enabled: f.enabled, sender_name: f.sender_name.trim() || 'La Nuba', sender_email: f.sender_email.trim().toLowerCase(),
+      notify_email: f.notify_email.trim().toLowerCase(), app_url: url, signature: f.signature.trim(),
+      confirm_booking: f.confirm_booking, notify_booking: f.notify_booking, notify_event: f.notify_event,
+    }).eq('id', true);
+    setBusy(false);
+    if (error) return setErr(frError(error));
+    await refresh('emails');
+    toast('Réglages des e-mails enregistrés');
+    onClose();
+  }
+
+  const box = { width: 22, height: 22, flex: 'none' } as const;
+  return (
+    <Sheet title="E-mails" onClose={onClose}>
+      <form className="form" onSubmit={save}>
+        <details className="guide">
+          <summary>Mise en route (une seule fois, 15 minutes)</summary>
+          <ol>
+            <li>Crée un compte gratuit sur brevo.com (300 e-mails par jour).</li>
+            <li>Dans Brevo, ajoute l'adresse qui enverra les e-mails (menu Expéditeurs) et valide-la. Pour éviter les courriers indésirables, authentifie aussi ton nom de domaine : Brevo donne les lignes à ajouter chez ton hébergeur.</li>
+            <li>Dans Brevo, crée une clé API (menu « SMTP et API », onglet « Clés API »). Copie-la.</li>
+            <li>Dans Supabase, ouvre Vault (dans Integrations, ou dans Project Settings). Ajoute un secret nommé exactement <b>brevo_api_key</b> et colle la clé comme valeur. Ne la colle nulle part ailleurs : ni ici, ni dans une conversation.</li>
+            <li>Ici, coche « Envoyer les e-mails », remplis les adresses, enregistre, puis touche « Envoyer un essai ».</li>
+          </ol>
+          <p>
+            Pour les e-mails des comptes de l'équipe (inscription, mot de passe oublié) : dans Supabase, Authentication, Emails, SMTP Settings, active le SMTP personnalisé avec l'hôte smtp-relay.brevo.com, le port 587, ton identifiant SMTP Brevo et une clé SMTP (menu « SMTP et API », onglet SMTP). Puis, dans Authentication, Rate Limits, monte la limite d'e-mails par heure.
+          </p>
+        </details>
+        <label className="row" style={{ padding: 0, gap: 10 }}>
+          <input id="mail-enabled" type="checkbox" checked={f.enabled} onChange={flag('enabled')} style={box} />
+          <span className="t">Envoyer les e-mails</span>
+        </label>
+        <div className="two">
+          <Field label="Nom de l'expéditeur"><input className="in" id="mail-name" value={f.sender_name} onChange={text('sender_name')} maxLength={60} /></Field>
+          <Field label="Adresse d'expédition" hint="Validée dans Brevo."><input className="in" id="mail-from" type="email" inputMode="email" value={f.sender_email} onChange={text('sender_email')} placeholder="contact@ton-domaine.fr" /></Field>
+        </div>
+        <Field label="Adresse qui reçoit les alertes" hint="Réservations et demandes en ligne. Vide : pas d'alerte."><input className="in" id="mail-notify" type="email" inputMode="email" value={f.notify_email} onChange={text('notify_email')} /></Field>
+        <label className="row" style={{ padding: 0, gap: 10 }}>
+          <input id="mail-confirm" type="checkbox" checked={f.confirm_booking} onChange={flag('confirm_booking')} style={box} />
+          <span className="grow"><span className="t">Confirmer au client</span><span className="sub">Chaque réservation en ligne et chaque annulation, s'il a donné son adresse</span></span>
+        </label>
+        <label className="row" style={{ padding: 0, gap: 10 }}>
+          <input id="mail-booking" type="checkbox" checked={f.notify_booking} onChange={flag('notify_booking')} style={box} />
+          <span className="grow"><span className="t">M'alerter des réservations en ligne</span><span className="sub">Nouvelle réservation, annulation par le client</span></span>
+        </label>
+        <label className="row" style={{ padding: 0, gap: 10 }}>
+          <input id="mail-event" type="checkbox" checked={f.notify_event} onChange={flag('notify_event')} style={box} />
+          <span className="grow"><span className="t">M'alerter des demandes de privatisation</span><span className="sub">Envoyées depuis la page publique ou le site</span></span>
+        </label>
+        <Field label="Signature"><textarea className="in" id="mail-signature" value={f.signature} onChange={text('signature')} maxLength={300} rows={2} /></Field>
+        <Field label="Adresse de l'appli" hint="Sert aux liens dans les e-mails (consulter ou annuler une réservation)."><input className="in" id="mail-app" value={f.app_url} onChange={text('app_url')} /></Field>
+        {err && <p className="err" role="alert">{err}</p>}
+        <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : 'Enregistrer'}</button>
+      </form>
+    </Sheet>
   );
 }
 

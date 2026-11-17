@@ -1,7 +1,9 @@
-import { useCallback, useState, type FormEvent } from 'react';
+import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { Icon } from '../components/Icon';
+import { RightsPicker } from '../components/Rights';
 import { Avatar, Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
-import { useRefresh, useTeam } from '../lib/data';
+import { useAllRights, useFolders, useRefresh, useTeam } from '../lib/data';
+import { AREAS, type Area } from '../lib/rights';
 import { useMe } from '../lib/session';
 import { appUrl, frError, supabase } from '../lib/supabase';
 import { CONTRACT_LABEL, ROLE_LABEL, fullName, type Contract, type Profile, type Role } from '../lib/types';
@@ -11,6 +13,14 @@ export default function Team() {
   const me = useMe();
   const toast = useToast();
   const team = useTeam();
+  const rights = useAllRights(true);
+  const folders = useFolders(true);
+  const byProfile = useMemo(() => {
+    const m = new Map<string, Area[]>();
+    for (const r of rights.data ?? []) m.set(r.profile_id, [...(m.get(r.profile_id) ?? []), r.area as Area]);
+    return m;
+  }, [rights.data]);
+  const folderOf = useMemo(() => new Map((folders.data ?? []).map((f) => [f.profile_id, f.url])), [folders.data]);
   const [edit, setEdit] = useState<Profile | 'new' | null>(null);
   const close = useCallback(() => setEdit(null), []);
   const list = team.data ?? [];
@@ -32,6 +42,9 @@ export default function Team() {
       <div className="grow">
         <span className="t">{fullName(p)}{p.id === me.id ? ' (toi)' : ''}</span>
         <span className="sub">{[p.job, ROLE_LABEL[p.role], p.contract === 'extra' ? 'Extra' : `${String(p.weekly_hours).replace('.', ',')} h par semaine`].filter(Boolean).join(' · ')}</span>
+        {p.role === 'responsable' && (
+          <span className="sub">{byProfile.get(p.id)?.length ? `Gère : ${AREAS.filter(([a]) => byProfile.get(p.id)?.includes(a)).map(([, l]) => l).join(', ')}` : 'Ne modifie rien pour l\'instant'}</span>
+        )}
       </div>
       <div className="end">
         {!p.active ? <span className="pill">Désactivé</span>
@@ -58,12 +71,12 @@ export default function Team() {
           <div className="list">{inactive.map(row)}</div>
         </Section>
       )}
-      {edit && <MemberSheet member={edit} self={edit !== 'new' && edit.id === me.id} onClose={close} />}
+      {edit && <MemberSheet member={edit} self={edit !== 'new' && edit.id === me.id} areas={edit === 'new' ? [] : byProfile.get(edit.id) ?? []} folder={edit === 'new' ? '' : folderOf.get(edit.id) ?? ''} onClose={close} />}
     </Layout>
   );
 }
 
-function MemberSheet({ member, self, onClose }: { member: Profile | 'new'; self: boolean; onClose: () => void }) {
+function MemberSheet({ member, self, areas: oldAreas, folder: oldFolder, onClose }: { member: Profile | 'new'; self: boolean; areas: Area[]; folder: string; onClose: () => void }) {
   const toast = useToast();
   const refresh = useRefresh();
   const old = member === 'new' ? null : member;
@@ -75,6 +88,8 @@ function MemberSheet({ member, self, onClose }: { member: Profile | 'new'; self:
   const [contract, setContract] = useState<Contract>(old?.contract ?? 'cdi');
   const [hours, setHours] = useState(String(old?.weekly_hours ?? 35));
   const [pin, setPin] = useState('');
+  const [areas, setAreas] = useState<Area[]>(oldAreas);
+  const [folder, setFolder] = useState(oldFolder);
   const [id, setId] = useState(old?.id ?? '');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -96,6 +111,9 @@ function MemberSheet({ member, self, onClose }: { member: Profile | 'new'; self:
     if (!(h >= 0 && h <= 60)) return setErr('Heures par semaine : entre 0 et 60.');
     if (pin && !/^\d{4}$/.test(pin)) return setErr('Le code PIN a 4 chiffres.');
     if (!old && !email.trim() && !pin) return setErr("Indique une adresse e-mail, ou donne un code PIN pour l'iPad.");
+    const url = folder.trim();
+    if (url && !/^https:\/\/\S+$/.test(url)) return setErr('Le lien du dossier doit commencer par https://');
+    const rightsChanged = role === 'responsable' && [...areas].sort().join() !== [...oldAreas].sort().join();
     const row = { first_name: first, last_name: last, email: email.trim() || null, role, job, contract, weekly_hours: h };
     setBusy(true);
     setErr('');
@@ -107,13 +125,19 @@ function MemberSheet({ member, self, onClose }: { member: Profile | 'new'; self:
       const savedId = (saved.data as { id: string }).id;
       setId(savedId);
       if (pin) error = (await supabase.rpc('set_member_pin', { p_profile: savedId, p_pin: pin })).error;
+      if (!error && rightsChanged) error = (await supabase.rpc('set_rights', { p_profile: savedId, p_areas: areas })).error;
+      if (!error && url !== oldFolder) {
+        error = url
+          ? (await supabase.from('profile_folders').upsert({ profile_id: savedId, url, updated_at: new Date().toISOString() })).error
+          : (await supabase.from('profile_folders').delete().eq('profile_id', savedId)).error;
+      }
     }
     setBusy(false);
     if (error) {
-      await refresh('team');
+      await refresh('team', 'rights', 'folders');
       return setErr(frError(error));
     }
-    await refresh('team');
+    await refresh('team', 'rights', 'folders');
     toast(old ? 'Fiche enregistrée' : email.trim() ? `${first.trim()} peut maintenant créer son compte avec cette adresse` : `${first.trim()} peut utiliser l'iPad avec son code PIN`);
     onClose();
   }
@@ -136,7 +160,7 @@ function MemberSheet({ member, self, onClose }: { member: Profile | 'new'; self:
           <input className="in" id="m-pin" inputMode="numeric" autoComplete="off" maxLength={4} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder={old?.has_pin ? '••••' : ''} />
         </Field>
         <div className="two">
-          <Field label="Rôle" hint={role === 'gerant' ? 'Accès à tout, y compris les réglages.' : role === 'responsable' ? "Voit les pointages de l'équipe et peut afficher le QR code." : 'Voit ses propres pointages.'}>
+          <Field label="Rôle" hint={role === 'gerant' ? "Accès à tout, y compris l'administration." : role === 'responsable' ? "Voit les pointages de l'équipe, affiche le QR code, et modifie ce que tu lui confies ci-dessous." : 'Voit ses propres pointages.'}>
             <select className="in" id="m-role" value={role} onChange={(e) => setRole(e.target.value as Role)} disabled={self}>
               {(Object.keys(ROLE_LABEL) as Role[]).map((r) => (<option key={r} value={r}>{ROLE_LABEL[r]}</option>))}
             </select>
@@ -155,6 +179,17 @@ function MemberSheet({ member, self, onClose }: { member: Profile | 'new'; self:
             <input className="in" id="m-hours" inputMode="decimal" value={hours} onChange={(e) => setHours(e.target.value)} />
           </Field>
         </div>
+        {role === 'responsable' && (
+          <div className="field">
+            <span>Ce que cette personne peut modifier</span>
+            <RightsPicker value={areas} onChange={setAreas} />
+            <p className="note">Valable avec son compte, sur son téléphone ou sur l'iPad après connexion par e-mail. Avec le code PIN de l'iPad, elle a les droits d'un équipier.</p>
+          </div>
+        )}
+        <Field label="Dossier Drive" hint="Lien du dossier où tu ranges ses documents (contrat, pièces, visites médicales). Toi seul le vois.">
+          <input className="in" id="m-folder" type="url" inputMode="url" value={folder} onChange={(e) => setFolder(e.target.value)} placeholder="https://drive.google.com/…" />
+        </Field>
+        {oldFolder && <a className="btn" href={oldFolder} target="_blank" rel="noopener noreferrer"><Icon name="doc" />Ouvrir son dossier</a>}
         {err && <p className="err" role="alert">{err}</p>}
         <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : 'Enregistrer'}</button>
         {old && !self && (

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useChecklists, useRefresh } from '../lib/data';
-import { useMe } from '../lib/session';
 import { frError, supabase } from '../lib/supabase';
 import { fmtTime } from '../lib/time';
 import { FREQUENCY_LABEL, PERIOD_NOW, type Checklist, type Frequency } from '../lib/types';
 import { Icon } from './Icon';
 import { Field, Loading, Sheet, Spinner, useToast } from './ui';
+import { useCan } from '../lib/rights';
 
 const TICK_ERROR: Record<string, string> = {
   not_yours: "Cette case a été cochée par quelqu'un d'autre : seule cette personne, ou le gérant, peut la décocher.",
@@ -18,8 +18,8 @@ const TICK_ERROR: Record<string, string> = {
  * Le gérant peut créer et modifier les listes.
  */
 export function ChecklistBoard({ kind }: { kind: Checklist['kind'] }) {
-  const me = useMe();
-  const gerant = me.role === 'gerant';
+  const can = useCan();
+  const editor = can('checklists');
   const toast = useToast();
   const refresh = useRefresh();
   const all = useChecklists();
@@ -61,10 +61,10 @@ export function ChecklistBoard({ kind }: { kind: Checklist['kind'] }) {
             </button>
           );
         })}
-        {gerant && <button type="button" className="chip" onClick={() => setEdit('new')}><Icon name="plus" size={16} />Nouvelle liste</button>}
+        {editor && <button type="button" className="chip" onClick={() => setEdit('new')}><Icon name="plus" size={16} />Nouvelle liste</button>}
       </div>
 
-      {!cur ? <div className="list"><p className="empty">Aucune liste pour l'instant.{gerant ? ' Crée la première avec « Nouvelle liste ».' : ''}</p></div> : (
+      {!cur ? <div className="list"><p className="empty">Aucune liste pour l'instant.{editor ? ' Crée la première avec « Nouvelle liste ».' : ''}</p></div> : (
         <section className="sec">
           <div className="sec-h">
             <span className="t">{cur.name} · {PERIOD_NOW[cur.frequency].toLowerCase()}</span>
@@ -84,7 +84,7 @@ export function ChecklistBoard({ kind }: { kind: Checklist['kind'] }) {
             ))}
           </div>
           {n > 0 && d === n && <p className="note"><span className="pill ok">Terminée</span> Tout est coché pour {PERIOD_NOW[cur.frequency].toLowerCase()}.</p>}
-          {gerant && <button type="button" className="btn" onClick={() => setEdit(cur)}>Modifier cette liste</button>}
+          {editor && <button type="button" className="btn" onClick={() => setEdit(cur)}>Modifier cette liste</button>}
         </section>
       )}
 

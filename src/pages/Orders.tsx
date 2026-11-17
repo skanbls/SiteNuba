@@ -2,11 +2,11 @@ import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { Icon } from '../components/Icon';
 import { Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
 import { useOrders, useProducts, useRefresh, useSuppliers, useTeam } from '../lib/data';
-import { useMe } from '../lib/session';
 import { frError, supabase } from '../lib/supabase';
 import { fmtDateShort, fmtTime } from '../lib/time';
 import { ORDER_LABEL, ORDER_PILL, toOrder, type Order, type Product, type Supplier } from '../lib/types';
 import { qty } from './Stocks';
+import { useCan } from '../lib/rights';
 
 const euro = (v: number) => v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 const num = (s: string) => Number(s.replace(',', '.'));
@@ -26,8 +26,8 @@ const waNumber = (phone: string) => {
 
 /** Commandes aux fournisseurs : préparation à partir des seuils, envoi, réception. */
 export default function Orders() {
-  const me = useMe();
-  const gerant = me.role === 'gerant';
+  const can = useCan();
+  const editor = can('stocks');
   const toast = useToast();
   const refresh = useRefresh();
   const products = useProducts();
@@ -108,7 +108,7 @@ export default function Orders() {
         ))}
         {orphans.length > 0 && (
           <div className="list">
-            <div className="row"><div className="grow"><span className="t">Sans fournisseur</span><span className="sub">{gerant ? 'Attribue un fournisseur à ces produits dans Stocks pour pouvoir les commander.' : 'Le gérant doit attribuer un fournisseur à ces produits.'}</span></div></div>
+            <div className="row"><div className="grow"><span className="t">Sans fournisseur</span><span className="sub">{editor ? 'Attribue un fournisseur à ces produits dans Stocks pour pouvoir les commander.' : 'Le gérant doit attribuer un fournisseur à ces produits.'}</span></div></div>
             {orphans.map((p) => (<div className="row" key={p.id}><div className="grow"><span className="t" style={{ fontWeight: 500 }}>{p.name}</span><span className="sub">en stock {qty(p.quantity)} · seuil {qty(p.threshold)}</span></div></div>))}
           </div>
         )}
@@ -129,10 +129,10 @@ export default function Orders() {
           )}
         </div>
 
-        <Section title="Fournisseurs" right={gerant && <button type="button" className="link" onClick={() => setEditSupplier('new')}>Ajouter un fournisseur</button>}>
+        <Section title="Fournisseurs" right={editor && <button type="button" className="link" onClick={() => setEditSupplier('new')}>Ajouter un fournisseur</button>}>
           <div className="list">
-            {(suppliers.data ?? []).length === 0 && <p className="empty">{gerant ? 'Aucun fournisseur. Ajoute le premier pour pouvoir commander.' : 'Aucun fournisseur pour l\'instant.'}</p>}
-            {(suppliers.data ?? []).filter((s) => s.active || gerant).map((s) => {
+            {(suppliers.data ?? []).length === 0 && <p className="empty">{editor ? 'Aucun fournisseur. Ajoute le premier pour pouvoir commander.' : 'Aucun fournisseur pour l\'instant.'}</p>}
+            {(suppliers.data ?? []).filter((s) => s.active || editor).map((s) => {
               const body = (
                 <>
                   <div className="grow">
@@ -140,16 +140,16 @@ export default function Orders() {
                     <span className="sub">{[s.contact, s.phone, s.email].filter(Boolean).join(' · ') || 'Aucun contact noté'}</span>
                     {(s.delivery_days || s.order_cutoff || s.minimum) && <span className="sub">{[s.delivery_days, s.order_cutoff, s.minimum].filter(Boolean).join(' · ')}</span>}
                   </div>
-                  {gerant && <span className="chev"><Icon name="chev" size={18} /></span>}
+                  {editor && <span className="chev"><Icon name="chev" size={18} /></span>}
                 </>
               );
-              return gerant ? <button type="button" className="row" key={s.id} onClick={() => setEditSupplier(s)}>{body}</button> : <div className="row" key={s.id}>{body}</div>;
+              return editor ? <button type="button" className="row" key={s.id} onClick={() => setEditSupplier(s)}>{body}</button> : <div className="row" key={s.id}>{body}</div>;
             })}
           </div>
         </Section>
       </div>
 
-      {open && <OrderSheet key={`${open.id}-${open.status}`} order={open} products={activeProducts} gerant={gerant} who={who} onClose={closeOrder} />}
+      {open && <OrderSheet key={`${open.id}-${open.status}`} order={open} products={activeProducts} editor={editor} who={who} onClose={closeOrder} />}
       {picking && (
         <Sheet title="Nouvelle commande" onClose={closePick}>
           <p className="note">Choisis le fournisseur. Tu ajoutes ensuite les produits.</p>
@@ -169,7 +169,7 @@ export default function Orders() {
 }
 
 /* ---------- Une commande : brouillon, envoyée, reçue ---------- */
-function OrderSheet({ order, products, gerant, who, onClose }: { order: Order; products: Product[]; gerant: boolean; who: Map<string, string>; onClose: () => void }) {
+function OrderSheet({ order, products, editor, who, onClose }: { order: Order; products: Product[]; editor: boolean; who: Map<string, string>; onClose: () => void }) {
   const toast = useToast();
   const refresh = useRefresh();
   const supplier = order.suppliers?.name ?? 'Fournisseur';
@@ -328,7 +328,7 @@ function OrderSheet({ order, products, gerant, who, onClose }: { order: Order; p
             <>
               {share}
               <button type="button" className="btn pri block" onClick={() => setReceiving(true)}><Icon name="truck" />Réceptionner la livraison</button>
-              {gerant && (confirm ? (
+              {editor && (confirm ? (
                 <div className="acts">
                   <button type="button" className="btn" onClick={() => setConfirm(false)}>Garder</button>
                   <button type="button" className="btn no" disabled={busy} onClick={() => void call(() => supabase.rpc('cancel_order', { p_id: order.id }), 'Commande annulée')}>Annuler la commande</button>

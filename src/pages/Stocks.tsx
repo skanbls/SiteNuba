@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Chips, Field, Layout, Loading, Sheet, Spinner, useToast } from '../components/ui';
 import { useOrders, useProducts, useRefresh, useSuppliers } from '../lib/data';
-import { useMe } from '../lib/session';
 import { frError, supabase } from '../lib/supabase';
 import type { Product, Supplier } from '../lib/types';
+import { useCan } from '../lib/rights';
 
 const CATEGORIES = ['Bar', 'Cave', 'Cuisine', 'Consommables'];
 export const qty = (v: number) => v.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
@@ -14,8 +14,8 @@ const num = (s: string) => Number(s.replace(',', '.'));
 
 /** Stocks : quantités, seuils d'alerte, inventaire. */
 export default function Stocks() {
-  const me = useMe();
-  const gerant = me.role === 'gerant';
+  const can = useCan();
+  const editor = can('stocks');
   const toast = useToast();
   const refresh = useRefresh();
   const products = useProducts();
@@ -40,7 +40,7 @@ export default function Stocks() {
   const low = active.filter((p) => p.threshold > 0 && p.quantity < p.threshold);
   const cats = ['Tous', ...Array.from(new Set(active.map((p) => p.category))).sort((a, b) => a.localeCompare(b, 'fr'))];
   const needle = search.trim().toLowerCase();
-  const shown = (gerant ? all : active)
+  const shown = (editor ? all : active)
     .filter((p) => cat === 'Tous' || p.category === cat)
     .filter((p) => !needle || p.name.toLowerCase().includes(needle));
   const changed = Object.entries(counts).filter(([id, v]) => {
@@ -69,13 +69,13 @@ export default function Stocks() {
   }
 
   return (
-    <Layout title="Stocks" right={gerant && <button type="button" className="btn sm pri" onClick={() => setEdit('new')}><Icon name="plus" size={16} />Produit</button>}>
+    <Layout title="Stocks" right={editor && <button type="button" className="btn sm pri" onClick={() => setEdit('new')}><Icon name="plus" size={16} />Produit</button>}>
       {products.isLoading ? <Loading /> : products.error ? <div className="list"><p className="empty err">{frError(products.error)}</p></div> : (
         <>
           <div className="stats">
             <div className="stat"><div className="v">{active.length}</div><div className="k">produits suivis</div></div>
             <div className="stat"><div className="v">{low.length}</div><div className="k">sous le seuil</div></div>
-            {gerant
+            {editor
               ? <div className="stat"><div className="v">{euro(active.reduce((t, p) => t + p.quantity * p.unit_price, 0))}</div><div className="k">valeur du stock</div></div>
               : <div className="stat"><div className="v">{active.filter((p) => onOrder.has(p.id)).length}</div><div className="k">en commande</div></div>}
           </div>
@@ -93,7 +93,7 @@ export default function Stocks() {
             {counting && <p className="note">Saisis la quantité comptée pour chaque produit, puis enregistre. Les lignes laissées vides ne changent pas.</p>}
 
             <div className="list">
-              {shown.length === 0 && <p className="empty">{all.length === 0 ? (gerant ? 'Aucun produit pour l\'instant. Ajoute le premier avec le bouton « Produit ».' : 'Aucun produit pour l\'instant : le gérant doit créer le catalogue.') : 'Aucun produit ne correspond.'}</p>}
+              {shown.length === 0 && <p className="empty">{all.length === 0 ? (editor ? 'Aucun produit pour l\'instant. Ajoute le premier avec le bouton « Produit ».' : 'Aucun produit pour l\'instant : le gérant doit créer le catalogue.') : 'Aucun produit ne correspond.'}</p>}
               {shown.map((p) => {
                 const state: [string, string] | null = !p.active ? ['', 'Retiré'] : p.threshold > 0 && p.quantity === 0 ? ['bad', 'Rupture'] : p.threshold > 0 && p.quantity < p.threshold ? ['warn', 'Bas'] : null;
                 return (
@@ -117,7 +117,7 @@ export default function Stocks() {
                           <button type="button" disabled={busy === p.id} onClick={() => void adjust(p, 1)} aria-label={`Ajouter 1 ${p.name}`}><Icon name="plus" size={16} /></button>
                         </div>
                       )}
-                      {gerant && !counting && <button type="button" className="btn sm" onClick={() => setEdit(p)} aria-label={`Modifier ${p.name}`}><Icon name="cog" size={16} /></button>}
+                      {editor && !counting && <button type="button" className="btn sm" onClick={() => setEdit(p)} aria-label={`Modifier ${p.name}`}><Icon name="cog" size={16} /></button>}
                     </div>
                   </div>
                 );
