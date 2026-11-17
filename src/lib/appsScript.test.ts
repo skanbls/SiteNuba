@@ -1,0 +1,148 @@
+import { createHash } from 'node:crypto';
+import { describe, expect, it } from 'vitest';
+import { buildAppsScript, sheetId } from './appsScript';
+
+/* Un faux Google : feuilles en mémoire, envois notés, déclencheurs comptés. */
+type Cell = string | number | Date;
+function fakeGoogle(files: Record<string, { name: string; tabs: Record<string, Cell[][]> }>, answer = '{"ok":true,"counts":{}}') {
+  const sent: { url: string; body: { p_key: string; p_payload: Record<string, unknown> }; headers: Record<string, string> }[] = [];
+  const props = new Map<string, string>();
+  const triggers: { fn: string }[] = [{ fn: 'envoyerSiChangement' }, { fn: 'autreChose' }];
+  const g = {
+    SpreadsheetApp: {
+      openById: (id: string) => {
+        const f = files[id];
+        if (!f) throw new Error('fichier introuvable ' + id);
+        return {
+          getName: () => f.name,
+          getSheetByName: (n: string) => (f.tabs[n] ? { getDataRange: () => ({ getValues: () => f.tabs[n] }) } : null),
+        };
+      },
+    },
+    PropertiesService: {
+      getScriptProperties: () => ({ getProperty: (k: string) => props.get(k) ?? null, setProperty: (k: string, v: string) => props.set(k, v) }),
+    },
+    UrlFetchApp: {
+      fetch: (url: string, o: { payload: string; headers: Record<string, string> }) => {
+        sent.push({ url, body: JSON.parse(o.payload), headers: o.headers });
+        return { getResponseCode: () => 200, getContentText: () => answer };
+      },
+    },
+    Utilities: {
+      formatDate: (d: Date) => d.toISOString().slice(0, 10),
+      computeDigest: (_a: string, s: string) => [...createHash('sha256').update(s).digest()],
+      base64Encode: (b: number[]) => Buffer.from(b).toString('base64'),
+      DigestAlgorithm: { SHA_256: 'SHA_256' },
+      Charset: { UTF_8: 'UTF_8' },
+    },
+    ScriptApp: {
+      getProjectTriggers: () => triggers.map((t) => ({ getHandlerFunction: () => t.fn, t })),
+      deleteTrigger: (x: { t: { fn: string } }) => triggers.splice(triggers.indexOf(x.t), 1),
+      newTrigger: (fn: string) => ({ timeBased: () => ({ everyMinutes: (m: number) => ({ create: () => triggers.push({ fn: `${fn}/${m}` }) }) }) }),
+    },
+    console: { log: () => {} },
+  };
+  return { g, sent, props, triggers };
+}
+
+function run(script: string, g: Record<string, unknown>) {
+  const f = new Function(...Object.keys(g), `${script}\nreturn { installer, envoyerMaintenant, envoyerSiChangement };`);
+  return f(...Object.values(g)) as Record<'installer' | 'envoyerMaintenant' | 'envoyerSiChangement', () => void>;
+}
+
+const SN: Record<string, Cell[][]> = {
+  RECETTES: [
+    ['Recette', 'Catégorie', 'Portions produites par la fiche', "Poids d'une portion (g)", 'Coût matière / portion (€)', 'Coût / portion avec pertes (€)', 'Prix de vente spécifique HT (€)', 'Prix de vente HT (€)', 'Coût matière %', 'État de la fiche', 'Portions pour la liste de courses', 'Ingrédients (étiquette, par poids décroissant)', 'Allergènes', 'Ingrédients dont les allergènes sont à vérifier'],
+    ['Purée de patate douce', 'BASE', 1, 250.5, 0.6, 0.7, '', '', '', 'OK', 0, 'Patate douce, Beurre, Sel', 'Lait', ''],
+    ['', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+  ],
+  'COMPOSITION CALCUL': [
+    ['Recette', 'Ingrédient', 'Quantité', 'Unité', 'Prix unitaire (€)', 'Coût (€)', 'Fournisseur', 'Quantité pour la liste de courses', "Nom sur l'étiquette", 'Allergènes', 'Allergènes à vérifier', 'Poids (g)', 'Coefficient de pertes', 'Coût avec pertes (€)', 'Quantité brute pour la fiche'],
+    ['Purée de patate douce', 'Patate douce', 200, 'g', 0.002, 0.4, 'Primeur', 1000, 'Patate douce', '', '', 200, 0.25, 0.5, 250],
+    ['', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+  ],
+  PRESTATIONS: [
+    ['Date de livraison', 'Type de formule', 'Plat', 'Portions', 'Prix de vente HT / portion (€)', 'Coût matière / portion avec pertes (€)', 'Contrôle des fiches', 'Facteur base', 'Facteur protéine', 'Facteur légume', 'Facteur sauce'],
+    [new Date(Date.UTC(2026, 10, 18)), 'Sur mesure', 'Purée de patate douce + Poulet Moutarde Miel (Mariné)', 100, 5, 1.5, 'OK', 0.833333333, 0.75, 0, 0],
+    ['', '', '', '', '', '', '', '', '', '', ''],
+  ],
+  'GRAMMAGES SUR MESURE': [
+    ['Grammages du plat sur mesure'],
+    ['Le plat sur mesure pèse toujours…'],
+    [],
+    ['Recette', 'Rôle', 'Type'],
+    ['Purée de patate douce', 'BASE', 'Purée / crémeux'],
+  ],
+  'PRIX INGREDIENTS': [
+    ['Catégorie', 'Ingrédient', 'Fournisseur retenu (le moins cher, automatique)', "Prix d'achat HT retenu (€, automatique)", "Unité d'achat", "Poids d'une pièce (g)", 'Prix unitaire recette (€)', 'Unité en recette', 'Date de la facture retenue', 'Source du prix retenu', "Prix de l'ancienne mercuriale (€)", 'Écart', 'Allergènes', "Nom sur l'étiquette", 'Allergènes à vérifier', "Poids moyen d'une pièce (g) – pour l'étiquette", "Fournisseur de l'ancienne mercuriale"],
+    ['FRUITS / LEGUMES', 'Patate douce', 'Primeur', 2, 'kg', '', 0.002, 'g', '', '', 2, 0, '', '', '', 30, 'Grossiste'],
+  ],
+};
+// Le Comptoir n'a ni GRAMMAGES ni PRIX INGREDIENTS lisible, et ses titres diffèrent un peu.
+const CM: Record<string, Cell[][]> = {
+  RECETTES: [['Recette', 'Catégorie', 'Portions produites par la fiche'], ['Brownie', 'Dessert', 10]],
+  'COMPOSITION CALCUL': [['Recette', 'Ingrédient', 'Quantité pour la fiche', 'Unité', 'Prix unitaire (€)', 'Coût (€)', 'Fournisseur', 'Quantité pour la liste de courses'], ['Brownie', 'Oeufs', 5, 'pièce', 0.3, 1.5, 'Grossiste', 40]],
+  PRESTATIONS: [['Date de livraison', 'Catégorie', 'Plat', 'Portions'], [new Date(Date.UTC(2026, 10, 25)), 'Dessert', 'Brownie', 60]],
+};
+
+const opts = { url: 'https://projet.supabase.co/', publicKey: 'sb_publishable_x', syncKey: 'nuba_cle', saveursNomades: 'ID_SN', comptoir: 'ID_CM', date: '17/11/2026' };
+
+describe('script Google des mercuriales', () => {
+  it("retrouve l'identifiant d'une feuille dans son lien", () => {
+    expect(sheetId('https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz_0123456789-ab/edit?usp=drivesdk')).toBe('1AbCdEfGhIjKlMnOpQrStUvWxYz_0123456789-ab');
+    expect(sheetId('https://exemple.fr/d/abc')).toBe('');
+  });
+
+  it('installe un seul déclencheur et envoie les deux mercuriales, colonnes retrouvées par leur titre', () => {
+    const { g, sent, triggers } = fakeGoogle({ ID_SN: { name: 'MERCURIALE SAVEURS NOMADES', tabs: SN }, ID_CM: { name: 'MERCURIALE COMPTOIR', tabs: CM } });
+    run(buildAppsScript(opts), g).installer();
+    expect(triggers.map((t) => t.fn)).toEqual(['autreChose', 'envoyerSiChangement/10']);
+    expect(sent).toHaveLength(2);
+    expect(sent[0].url).toBe('https://projet.supabase.co/rest/v1/rpc/sync_mercuriale');
+    expect(sent[0].headers).toEqual({ apikey: 'sb_publishable_x' });
+    expect(sent[0].body.p_key).toBe('nuba_cle');
+    const sn = sent[0].body.p_payload;
+    expect(sn.brand).toBe('saveurs_nomades');
+    expect(sn.file).toBe('MERCURIALE SAVEURS NOMADES');
+    expect(sn.recipes).toEqual([{ name: 'Purée de patate douce', category: 'BASE', portions: 1, portion_weight: 250.5, cost_portion: 0.6, cost_portion_losses: 0.7, status: 'OK', label: 'Patate douce, Beurre, Sel', allergens: 'Lait' }]);
+    expect(sn.lines).toEqual([{ recipe: 'Purée de patate douce', ingredient: 'Patate douce', quantity: 200, unit: 'g', supplier: 'Primeur', loss: 0.25 }]);
+    expect(sn.orders).toEqual([{ day: '2026-11-18', formula: 'Sur mesure', dish: 'Purée de patate douce + Poulet Moutarde Miel (Mariné)', portions: 100, check: 'OK', factor_base: 0.833333, factor_protein: 0.75, factor_vegetable: 0, factor_sauce: 0 }]);
+    expect(sn.roles).toEqual([{ recipe: 'Purée de patate douce', role: 'BASE' }]);
+    expect(sn.ingredients).toEqual([{ name: 'Patate douce', category: 'FRUITS / LEGUMES', supplier: 'Primeur', purchase_price: 2, purchase_unit: 'kg', recipe_unit_price: 0.002, recipe_unit: 'g' }]);
+    const cm = sent[1].body.p_payload;
+    expect(cm.brand).toBe('comptoir');
+    expect(cm.ingredients).toBeUndefined();
+    expect(cm.roles).toEqual([]);
+    expect(cm.lines).toEqual([{ recipe: 'Brownie', ingredient: 'Oeufs', quantity: 5, unit: 'pièce', supplier: 'Grossiste' }]);
+    expect(cm.orders).toEqual([{ day: '2026-11-25', formula: 'Dessert', dish: 'Brownie', portions: 60 }]);
+  });
+
+  it("n'envoie que ce qui a changé", () => {
+    const files = { ID_SN: { name: 'SN', tabs: structuredClone(SN) }, ID_CM: { name: 'CM', tabs: structuredClone(CM) } };
+    const { g, sent } = fakeGoogle(files);
+    const s = run(buildAppsScript(opts), g);
+    s.envoyerSiChangement();
+    expect(sent).toHaveLength(2);
+    s.envoyerSiChangement();
+    expect(sent).toHaveLength(2);
+    files.ID_CM.tabs.PRESTATIONS[1][3] = 80;
+    s.envoyerSiChangement();
+    expect(sent).toHaveLength(3);
+    expect(sent[2].body.p_payload.brand).toBe('comptoir');
+    s.envoyerMaintenant();
+    expect(sent).toHaveLength(5);
+  });
+
+  it('une feuille non renseignée est ignorée', () => {
+    const { g, sent } = fakeGoogle({ ID_SN: { name: 'SN', tabs: SN } });
+    run(buildAppsScript({ ...opts, comptoir: '' }), g).envoyerMaintenant();
+    expect(sent.map((x) => x.body.p_payload.brand)).toEqual(['saveurs_nomades']);
+  });
+
+  it('dit pourquoi un envoi est refusé, sans retenir la version refusée', () => {
+    const { g, sent, props } = fakeGoogle({ ID_SN: { name: 'SN', tabs: SN }, ID_CM: { name: 'CM', tabs: CM } }, '{"ok":false,"error":"key"}');
+    expect(() => run(buildAppsScript(opts), g).envoyerSiChangement()).toThrow(/clé refusée/);
+    expect(sent).toHaveLength(2);
+    expect(props.size).toBe(0);
+  });
+});

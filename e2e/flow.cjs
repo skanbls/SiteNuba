@@ -2,6 +2,8 @@
 // le gérant s'inscrit, compose l'équipe, crée la borne ; un équipier s'inscrit et pointe avec le code de la borne.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { execFileSync } = require('node:child_process');
+const { createHash } = require('node:crypto');
 const { chromium } = require('playwright');
 
 const APP = 'http://127.0.0.1:4173/';
@@ -879,6 +881,98 @@ async function main() {
   await noOverflow(bossPhone, 'administration');
   await shot(bossPhone, '13z-administration-telephone');
   step("e-mails : sans la clé dans le coffre de Supabase, l'essai dit ce qui manque");
+
+  // 13 decies. Production : le gérant relie les mercuriales Google Sheets ; le script généré envoie fiches et commandes.
+  await boss.goto(APP + '#/reglages');
+  await boss.locator('[data-merc="saveurs_nomades"]').getByText('Jamais reçue').waitFor();
+  await boss.getByRole('button', { name: 'Relier', exact: true }).click();
+  await boss.fill('#merc-sn', 'pas un lien');
+  await boss.getByRole('button', { name: 'Créer le script' }).click();
+  await see(boss, 'Colle le lien complet');
+  await boss.fill('#merc-sn', 'https://docs.google.com/spreadsheets/d/SN_feuille_test_123/edit#gid=9006');
+  await boss.fill('#merc-cm', 'https://docs.google.com/spreadsheets/d/CM_feuille_test_456/edit');
+  await boss.getByRole('button', { name: 'Créer le script' }).click();
+  const script = await boss.inputValue('#merc-script');
+  assert.match(script, /"cleSynchro": "nuba_[0-9a-f]{64}"/);
+  assert.match(script, /"saveurs_nomades": "SN_feuille_test_123"/);
+  await shot(boss, '13za-script-mercuriales');
+  await boss.getByRole('button', { name: "C'est fait" }).click();
+
+  // Faux Google Sheets : deux mercuriales réduites ; les envois partent vraiment vers la base locale.
+  const iso = (n) => { const d = new Date(Date.now() + n * 86400000); return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); };
+  const sheets = {
+    SN_feuille_test_123: { name: 'MERCURIALE SAVEURS NOMADES', tabs: {
+      RECETTES: [['Recette', 'Catégorie', 'Portions produites par la fiche', 'Coût matière / portion (€)', 'Coût / portion avec pertes (€)', 'Prix de vente HT (€)', 'Coût matière %', 'État de la fiche', 'Allergènes'],
+        ['Purée de patate douce', 'BASE', 1, 0.5, 0.62, '', '', 'OK', 'Lait'], ['Poulet Moutarde Miel (Mariné)', 'PROTEINE', 1, 0.9, 0.95, '', '', 'OK', 'Moutarde'], ['Brownie', 'Dessert', 10, 0.7, 0.74, 1.8, 0.41, 'OK', 'Gluten, Œufs']],
+      'COMPOSITION CALCUL': [['Recette', 'Ingrédient', 'Quantité', 'Unité', 'Prix unitaire (€)', 'Coût (€)', 'Fournisseur', 'Quantité pour la liste de courses', 'Allergènes', 'Coefficient de pertes'],
+        ['Purée de patate douce', 'Patate douce', 200, 'g', 0.002, 0.4, 'Primeur', 0, '', 0.25], ['Purée de patate douce', 'Beurre', 10, 'g', 0.0064, 0.064, 'Metro', 0, 'Lait', 0.05],
+        ['Poulet Moutarde Miel (Mariné)', 'Cuisse de poulet s/os', 100, 'g', 0.0072, 0.72, 'Boucherie', 0, '', 0.05],
+        ['Brownie', 'Oeufs', 5, 'pièce', 0.272, 1.36, 'Metro', 0, 'Œufs', 0.05], ['Brownie', 'Beurre', 200, 'g', 0.0064, 1.28, 'Metro', 0, 'Lait', 0.05]],
+      PRESTATIONS: [['Date de livraison', 'Type de formule', 'Plat', 'Portions', 'Contrôle des fiches', 'Facteur base', 'Facteur protéine', 'Facteur légume', 'Facteur sauce'],
+        [iso(2), 'Sur mesure', 'Purée de patate douce + Poulet Moutarde Miel (Mariné)', 100, 'OK', 0.85, 0.7, 0, 0], [iso(2), 'Dessert', 'Brownie', 80, 'OK', '', '', '', ''], [iso(-20), 'Dessert', 'Brownie', 30, 'OK', '', '', '', '']],
+      'GRAMMAGES SUR MESURE': [['Grammages du plat sur mesure'], [], [], ['Recette', 'Rôle', 'Type'], ['Purée de patate douce', 'BASE', 'Purée'], ['Poulet Moutarde Miel (Mariné)', 'PROTEINE', 'Sauce incluse']],
+      'PRIX INGREDIENTS': [['Catégorie', 'Ingrédient', 'Fournisseur retenu (le moins cher, automatique)', "Prix d'achat HT retenu (€, automatique)", "Unité d'achat", "Poids d'une pièce (g)", 'Prix unitaire recette (€)', 'Unité en recette'],
+        ['LEGUMES', 'Patate douce', 'Primeur', 2, 'kg', '', 0.002, 'g'], ['CREMERIE', 'Beurre', 'Metro', 6.4, 'kg', '', 0.0064, 'g'],
+        ['VIANDES', 'Cuisse de poulet s/os', 'Boucherie', 7.2, 'kg', '', 0.0072, 'g'], ['EPICERIE', 'Oeufs', 'Metro', 0.272, 'pièce', '', 0.272, 'pièce']],
+    } },
+    CM_feuille_test_456: { name: 'MERCURIALE COMPTOIR MEDITERRANEEN', tabs: {
+      RECETTES: [['Recette', 'Catégorie', 'Portions produites par la fiche', 'État de la fiche'], ['Taboulé oriental', 'Entrée', 1, 'OK']],
+      'COMPOSITION CALCUL': [['Recette', 'Ingrédient', 'Quantité pour la fiche', 'Unité', 'Fournisseur', 'Coefficient de pertes'], ['Taboulé oriental', 'Semoule', 40, 'g', 'Metro', 0.05]],
+      PRESTATIONS: [['Date de livraison', 'Catégorie', 'Plat', 'Portions', 'Contrôle des fiches'], [iso(3), 'Entrée', 'Taboulé oriental', 40, 'OK']],
+    } },
+  };
+  const props = new Map();
+  const google = {
+    SpreadsheetApp: { openById: (id) => ({ getName: () => sheets[id].name, getSheetByName: (n) => (sheets[id].tabs[n] ? { getDataRange: () => ({ getValues: () => sheets[id].tabs[n] }) } : null) }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => props.get(k) ?? null, setProperty: (k, v) => props.set(k, v) }) },
+    UrlFetchApp: { fetch: (url, o) => {
+      const out = execFileSync('curl', ['-s', '-w', '\n%{http_code}', '-X', 'POST', url, '-H', 'Content-Type: application/json', ...Object.entries(o.headers).flatMap(([k, v]) => ['-H', `${k}: ${v}`]), '--data-binary', '@-'], { input: o.payload }).toString();
+      const i = out.lastIndexOf('\n');
+      return { getResponseCode: () => Number(out.slice(i + 1)), getContentText: () => out.slice(0, i) };
+    } },
+    Utilities: { formatDate: (d) => d.toISOString().slice(0, 10), computeDigest: (_a, t) => [...createHash('sha256').update(t).digest()], base64Encode: (b) => Buffer.from(b).toString('base64'), DigestAlgorithm: { SHA_256: 1 }, Charset: { UTF_8: 1 } },
+    ScriptApp: { getProjectTriggers: () => [], deleteTrigger: () => {}, newTrigger: () => ({ timeBased: () => ({ everyMinutes: () => ({ create: () => {} }) }) }) },
+    console: { log: () => {} },
+  };
+  const gs = new Function(...Object.keys(google), `${script}\nreturn { installer, envoyerSiChangement };`)(...Object.values(google));
+  gs.installer();
+  await boss.reload();
+  await boss.locator('[data-merc="saveurs_nomades"]').getByText('3 fiches, 3 commandes').waitFor();
+  await boss.locator('[data-merc="comptoir"]').getByText('1 fiche, 1 commande').waitFor();
+  step('le gérant relie les mercuriales : le script Google généré envoie fiches, commandes et prix');
+
+  await theo.goto(APP + '#/production');
+  await theo.locator('[data-order="Purée de patate douce + Poulet Moutarde Miel (Mariné)"]').click();
+  await theo.getByRole('dialog').locator('[data-need="Patate douce"]').getByText('17,00 kg').waitFor();   // 200 g × 0,85 × 100
+  await theo.getByRole('dialog').getByText('à acheter, pertes comprises : 21,25 kg').waitFor();
+  await theo.getByRole('dialog').locator('[data-need="Cuisse de poulet s/os"]').getByText('7,00 kg').waitFor();
+  assert.equal(await theo.getByText('Coût matière estimé').count(), 0, "un équipier ne voit pas les coûts");
+  await shot(theo, '13zb-production-commande');
+  await theo.getByRole('button', { name: /^Liste de courses du/ }).click();
+  await theo.locator('[data-buy="Beurre"]').getByText('2,57 kg').waitFor();   // (10 × 0,85 × 100 + 200 ÷ 10 × 80) × 1,05 = 2 572,5 g
+  await theo.locator('[data-buy="Oeufs"]').getByText('42 pièces').waitFor();
+  assert.equal(await theo.locator('[data-buy="Semoule"]').count(), 0, "le taboulé du Comptoir est livré un autre jour");
+  await noOverflow(theo, 'production');
+  await shot(theo, '13zc-production-courses');
+  step("l'équipe voit, pour chaque commande, les quantités à produire et la liste de courses par fournisseur");
+
+  await boss.goto(APP + '#/production');
+  await boss.getByRole('button', { name: 'Liste de courses', exact: true }).first().click();
+  await see(boss, 'Coût total estimé');
+  await boss.locator('[data-buy="Patate douce"]').getByText(/42,50/).waitFor();   // 21,25 kg × 2 €
+  await boss.getByRole('button', { name: 'Fiches', exact: true }).click();
+  await boss.locator('[data-merc-recipe="Brownie"]').click();
+  await boss.fill('#merc-portions', '30');
+  await boss.getByRole('dialog').getByText('15 pièces').waitFor();
+  await boss.getByRole('dialog').getByText('coût matière 41,0 %').waitFor();
+  await boss.getByRole('button', { name: 'Fermer' }).click();
+  step('le gérant voit les prix, les coûts et met une fiche à l\'échelle');
+
+  sheets.SN_feuille_test_123.tabs.PRESTATIONS[1][3] = 120;
+  gs.envoyerSiChangement();
+  await theo.reload();
+  await theo.locator('[data-order="Purée de patate douce + Poulet Moutarde Miel (Mariné)"]').getByText('120 portions').waitFor();
+  step('une commande modifiée dans la feuille arrive toute seule dans l\'appli');
 
   // 14. Le gérant désactive Théo : il perd l'accès.
   await boss.goto(APP + '#/equipe');

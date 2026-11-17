@@ -11,6 +11,7 @@ const HINT: Record<string, string> = {
   '/stocks': 'Quantités, seuils d\'alerte, inventaire',
   '/commandes': 'Commandes aux fournisseurs et réception des livraisons',
   '/fiches': 'Recettes, grammages, allergènes',
+  '/production': 'Commandes Saveurs Nomades et Comptoir, quantités, liste de courses',
   '/maintenance': 'Pannes à signaler, contrôles et échéances',
   '/procedures': 'Consignes et formation de l\'équipe',
   '/equipe': "Qui a accès à l'appli, avec quel rôle et quels droits",

@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { MercCost, MercIngredient, MercLine, MercOrder, MercPrice, MercRecipe, MercSource } from './production';
 import { supabase } from './supabase';
 import type { BookingSettings, Checklist, ColdUnit, Customer, Deadline, EmailLogEntry, EmailSettings, Issue, Kiosk, NubaEvent, Procedure, ProcedureRead, Recipe, LeaveRequest, OilLog, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftSwap, Site, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
 
@@ -279,6 +280,45 @@ export function useEmailLog() {
     queryKey: ['emails', 'log'],
     queryFn: async () => must<EmailLogEntry[]>(await supabase.rpc('email_log')),
   });
+}
+
+/**
+ * Toutes les lignes d'une table, par pages de 1 000 : Supabase n'en rend pas plus d'un coup.
+ * `order` doit désigner une colonne unique, pour que les pages ne se chevauchent pas.
+ */
+async function selectAll<T>(table: string, columns: string, order: string[]): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += 1000) {
+    let q = supabase.from(table).select(columns);
+    for (const o of order) q = q.order(o);
+    const page = must<T[]>((await q.range(from, from + 999)) as unknown as { data: T[] | null; error: { message: string } | null });
+    out.push(...page);
+    if (page.length < 1000) return out;
+  }
+}
+
+/* ---------- Production : mercuriales synchronisées depuis Google Sheets ---------- */
+export function useMercSources() {
+  return useQuery({ queryKey: ['merc', 'sources'], queryFn: () => selectAll<MercSource>('merc_sources', '*', ['brand']) });
+}
+export function useMercRecipes() {
+  return useQuery({ queryKey: ['merc', 'recipes'], queryFn: () => selectAll<MercRecipe>('merc_recipes', '*', ['brand', 'name']) });
+}
+export function useMercLines() {
+  return useQuery({ queryKey: ['merc', 'lines'], queryFn: () => selectAll<MercLine>('merc_lines', '*', ['id']) });
+}
+export function useMercOrders() {
+  return useQuery({ queryKey: ['merc', 'orders'], queryFn: () => selectAll<MercOrder>('merc_orders', '*', ['id']) });
+}
+export function useMercIngredients() {
+  return useQuery({ queryKey: ['merc', 'ingredients'], queryFn: () => selectAll<MercIngredient>('merc_ingredients', '*', ['name']) });
+}
+/** Prix et coûts : seulement pour qui a l'accès aux fiches techniques. */
+export function useMercPrices(enabled: boolean) {
+  return useQuery({ queryKey: ['merc', 'prices'], enabled, queryFn: () => selectAll<MercPrice>('merc_ingredient_prices', '*', ['name']) });
+}
+export function useMercCosts(enabled: boolean) {
+  return useQuery({ queryKey: ['merc', 'costs'], enabled, queryFn: () => selectAll<MercCost>('merc_recipe_costs', '*', ['brand', 'name']) });
 }
 
 export function useRefresh() {

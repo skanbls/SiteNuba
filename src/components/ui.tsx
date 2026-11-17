@@ -41,6 +41,7 @@ export const NAV: NavItem[] = [
   { to: '/stocks', label: 'Stocks', icon: 'box' },
   { to: '/commandes', label: 'Commandes', icon: 'truck' },
   { to: '/fiches', label: 'Fiches techniques', icon: 'list' },
+  { to: '/production', label: 'Production', icon: 'pot' },
   { to: '/maintenance', label: 'Maintenance', icon: 'tool' },
   { to: '/procedures', label: 'Procédures', icon: 'doc' },
   { to: '/equipe', label: 'Équipe', icon: 'team', gerant: true },

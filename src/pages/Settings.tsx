@@ -3,9 +3,12 @@ import { Link } from 'react-router-dom';
 import { Icon, type IconName } from '../components/Icon';
 import { RightsPicker } from '../components/Rights';
 import { Avatar, Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
-import { useAllRights, useEmailLog, useEmailSettings, useKiosks, useRefresh, useSites, useTeam } from '../lib/data';
+import { useQuery } from '@tanstack/react-query';
+import { buildAppsScript, sheetId } from '../lib/appsScript';
+import { useAllRights, useEmailLog, useEmailSettings, useKiosks, useMercSources, useRefresh, useSites, useTeam } from '../lib/data';
+import type { MercSource } from '../lib/production';
 import { AREAS, type Area } from '../lib/rights';
-import { appUrl, frError, supabase } from '../lib/supabase';
+import { appUrl, frError, key as publicKey, supabase, url as projectUrl } from '../lib/supabase';
 import { fmtDay, fmtTime } from '../lib/time';
 import { fullName, type EmailLogEntry, type EmailSettings, type Profile, type Site } from '../lib/types';
 
@@ -16,11 +19,14 @@ const ADMIN_LINKS: [string, IconName, string, string][] = [
   ['/stocks', 'box', 'Stocks', 'Produits, seuils d\'alerte, quantités voulues, prix'],
   ['/commandes', 'truck', 'Fournisseurs', 'Coordonnées, jours de livraison, minimum de commande'],
   ['/fiches', 'list', 'Fiches techniques', 'Recettes, grammages, prix de vente'],
+  ['/production', 'pot', 'Production', 'Fiches et commandes des mercuriales : elles se modifient dans Google Sheets'],
   ['/procedures', 'doc', 'Procédures', 'Consignes de l\'équipe, lecture à confirmer'],
   ['/planning', 'cal', 'Planning', 'Services de la semaine, congés'],
   ['/reservations', 'book', 'Réservations', 'Horaires, créneaux, lien et code pour le site'],
   ['/maintenance', 'tool', 'Échéances', 'Contrôles, contrats, documents de l\'équipe'],
 ];
+
+const plural = (n: number, w: string) => `${n} ${w}${n > 1 ? 's' : ''}`;
 
 const MAIL_STATUS: Record<EmailLogEntry['status'], [string, string]> = {
   queued: ['', 'En attente'],
@@ -39,6 +45,17 @@ export default function Settings() {
   const rights = useAllRights(true);
   const mail = useEmailSettings();
   const log = useEmailLog();
+  const merc = useMercSources();
+  const mercStatus = useQuery({
+    queryKey: ['merc', 'status'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('merc_status');
+      if (error) throw error;
+      return data as { key_created_at: string | null; log: { at: string; brand: string; ok: boolean; message: string }[] };
+    },
+  });
+  const [mercSheet, setMercSheet] = useState(false);
+  const closeMerc = useCallback(() => setMercSheet(false), []);
   const [addSite, setAddSite] = useState(false);
   const [addKiosk, setAddKiosk] = useState(false);
   const [pair, setPair] = useState<{ label: string; code: string } | null>(null);
@@ -180,6 +197,26 @@ export default function Settings() {
             <p className="note">Confirmation au client à chaque réservation en ligne, et alerte pour toi à chaque réservation ou demande de privatisation.</p>
           </Section>
 
+          <Section title="Mercuriales Google Sheets" right={<button type="button" className="link" onClick={() => setMercSheet(true)}>{mercStatus.data?.key_created_at ? 'Nouveau script' : 'Relier'}</button>}>
+            {merc.isLoading ? <Loading /> : merc.error ? <div className="list"><p className="empty err">{frError(merc.error)}</p></div> : (
+              <div className="list">
+                {(merc.data ?? []).map((m) => (
+                  <div className="row wrap" key={m.brand} data-merc={m.brand}>
+                    <div className="grow">
+                      <span className="t">{m.label}</span>
+                      <span className="sub">{m.synced_at ? `Reçue ${fmtDay(m.synced_at)} à ${fmtTime(m.synced_at)} · ${plural(m.counts.recipes ?? 0, 'fiche')}, ${plural(m.counts.orders ?? 0, 'commande')}` : 'Jamais reçue'}</span>
+                    </div>
+                    {m.sheet_url && <div className="end"><a className="btn sm" href={m.sheet_url} target="_blank" rel="noopener noreferrer">Ouvrir</a></div>}
+                  </div>
+                ))}
+                {(mercStatus.data?.log ?? []).filter((l) => !l.ok).slice(0, 2).map((l, i) => (
+                  <div className="row" key={i}><div className="grow"><span className="sub err">{fmtDay(l.at)} à {fmtTime(l.at)} : {l.message}</span></div></div>
+                ))}
+              </div>
+            )}
+            <p className="note">Les fiches, les commandes et les prix des mercuriales arrivent dans Production toutes les dix minutes, par un petit script Google que tu installes une fois.</p>
+          </Section>
+
           <Section title="Bornes de pointage" right={<button type="button" className="link" onClick={() => setAddKiosk(true)}>Ajouter une borne</button>}>
             {kiosks.isLoading ? <Loading /> : (
               <div className="list">
@@ -228,6 +265,7 @@ export default function Settings() {
       {pair && <PairCodeSheet label={pair.label} code={pair.code} onClose={closePair} />}
       {rightsFor && <RightsSheet key={rightsFor.id} person={rightsFor} areas={areasOf(rightsFor.id)} onClose={closeRights} />}
       {mailSheet && mail.data && <MailSheet settings={mail.data} onClose={closeMail} />}
+      {mercSheet && <MercSheet sources={merc.data ?? []} onClose={closeMerc} />}
     </Layout>
   );
 }
@@ -259,6 +297,70 @@ function RightsSheet({ person, areas: old, onClose }: { person: Profile; areas: 
         {err && <p className="err" role="alert">{err}</p>}
         <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : 'Enregistrer'}</button>
       </form>
+    </Sheet>
+  );
+}
+
+/** Relier les mercuriales : liens des deux feuilles, clé de synchronisation et script Google à coller. */
+function MercSheet({ sources, onClose }: { sources: MercSource[]; onClose: () => void }) {
+  const toast = useToast();
+  const refresh = useRefresh();
+  const urlOf = (b: string) => sources.find((s) => s.brand === b)?.sheet_url ?? '';
+  const [sn, setSn] = useState(urlOf('saveurs_nomades'));
+  const [cm, setCm] = useState(urlOf('comptoir'));
+  const [script, setScript] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function create(e: FormEvent) {
+    e.preventDefault();
+    const a = sheetId(sn), b = sheetId(cm);
+    if ((sn.trim() && !a) || (cm.trim() && !b)) return setErr("Colle le lien complet de la feuille, tel qu'il apparaît dans la barre d'adresse (docs.google.com/spreadsheets/d/…).");
+    if (!a && !b) return setErr('Colle le lien d\'au moins une mercuriale.');
+    setBusy(true);
+    setErr('');
+    const clean = (id: string) => (id ? `https://docs.google.com/spreadsheets/d/${id}/edit` : '');
+    const { data, error } = await supabase.rpc('merc_new_key', { p_sn_url: clean(a), p_cm_url: clean(b) });
+    setBusy(false);
+    if (error) return setErr(frError(error));
+    await refresh('merc');
+    setScript(buildAppsScript({ url: projectUrl ?? '', publicKey: publicKey ?? '', syncKey: data as string, saveursNomades: a, comptoir: b, date: new Date().toLocaleDateString('fr-FR') }));
+  }
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(script);
+      toast('Script copié');
+    } catch {
+      toast('Sélectionne le texte du script et copie-le à la main', 'bad');
+    }
+  }
+
+  return (
+    <Sheet title="Mercuriales Google Sheets" onClose={onClose}>
+      {!script ? (
+        <form className="form" onSubmit={create}>
+          <p className="note">Ouvre chaque mercuriale dans Google Sheets et copie le lien de la barre d'adresse.</p>
+          <Field label="Mercuriale Saveurs Nomades"><input className="in" id="merc-sn" inputMode="url" value={sn} onChange={(e) => setSn(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" /></Field>
+          <Field label="Mercuriale Comptoir Méditerranéen"><input className="in" id="merc-cm" inputMode="url" value={cm} onChange={(e) => setCm(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" /></Field>
+          <p className="note">Une nouvelle clé remplace l'ancienne : un script déjà installé cesse d'envoyer jusqu'à ce que tu le remplaces.</p>
+          {err && <p className="err" role="alert">{err}</p>}
+          <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : 'Créer le script'}</button>
+        </form>
+      ) : (
+        <div className="form">
+          <ol className="note" style={{ paddingLeft: 18, display: 'grid', gap: 6 }}>
+            <li>Copie le script ci-dessous. Il contient ta clé : il ne s'affichera plus.</li>
+            <li>Sur ton ordinateur, ouvre script.google.com avec ton compte Google, puis « Nouveau projet ».</li>
+            <li>Efface le texte déjà présent, colle le script, et enregistre (icône disquette).</li>
+            <li>En haut, choisis la fonction « installer », puis « Exécuter ». Google demande d'autoriser l'accès à tes feuilles : accepte (s'il parle d'application non validée : « Paramètres avancés », puis « Accéder »).</li>
+            <li>Reviens ici : la date de réception s'affiche sous chaque mercuriale. Ensuite, tout se met à jour seul, toutes les dix minutes.</li>
+          </ol>
+          <textarea className="in" id="merc-script" readOnly value={script} rows={8} style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }} onFocus={(e) => e.currentTarget.select()} />
+          <button type="button" className="btn pri block" onClick={() => void copy()}><Icon name="copy" />Copier le script</button>
+          <button type="button" className="btn block" onClick={onClose}>C'est fait</button>
+        </div>
+      )}
     </Sheet>
   );
 }

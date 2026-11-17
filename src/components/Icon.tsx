@@ -27,6 +27,7 @@ const PATHS = {
   down: <path d="M12 4v11M7 11l5 5 5-5M5 20h14" />,
   copy: (<><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></>),
   alert: (<><path d="M12 4l9 16H3z" /><path d="M12 10v4M12 17v.5" /></>),
+  pot: (<><path d="M4 10h16v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z" /><path d="M2 10h20M9.5 3.5c-.8.9-.8 2.1 0 3M14.5 3.5c-.8.9-.8 2.1 0 3" /></>),
 } as const;
 
 export type IconName = keyof typeof PATHS;

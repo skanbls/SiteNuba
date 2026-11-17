@@ -22,6 +22,7 @@ En ligne : https://skanbls.github.io/SiteNuba/ (mise à jour automatique à chaq
 | | Formulaire de réservation du site web relié à l'appli | Fichier du site remis au gérant, à publier avec le site |
 | | E-mails : confirmation au client, alertes à la Nuba | Prêt avec la migration 0010 ; à activer après la mise en route de Brevo (Administration, E-mails) |
 | | E-mails des comptes de l'équipe (inscription, mot de passe oublié) | À régler dans Supabase : SMTP de Brevo (voir plus bas) |
+| 6. Production | Mercuriales Saveurs Nomades et Comptoir Méditerranéen : fiches, commandes clients, quantités à produire, liste de courses | **En ligne**, une fois la migration 0011 exécutée et le script Google installé (Administration, Mercuriales) |
 | | Ventes Zelty | En attente : accès à l'API à demander à Zelty, puis une fonction côté serveur pour garder la clé secrète |
 | | Documents de l'équipe | Restent dans le Drive du gérant ; l'appli garde le lien du dossier de chaque personne |
 
@@ -98,6 +99,12 @@ Pour les e-mails des comptes de l'équipe (inscription, mot de passe oublié), S
 
 Le formulaire de réservation du site de la Nuba appelle directement les fonctions publiques de la base : `booking_info` (jours ouverts, nombre maximum de personnes, téléphone), `booking_slots` (tables libres d'un jour) et `book_table` (réserver). Il utilise l'adresse du projet et sa clé publique, et renvoie les groupes vers la page `#/privatiser`. Le fichier du site n'est pas dans ce dépôt.
 
+### Production (mercuriales Google Sheets)
+
+Les mercuriales Saveurs Nomades et Comptoir Méditerranéen restent dans Google Sheets : on y crée les fiches (onglet COMPOSITION), les prix et les commandes (PRESTATIONS). Un petit script Google, généré dans Administration avec une clé de synchronisation, lit RECETTES, COMPOSITION CALCUL, PRESTATIONS, GRAMMAGES SUR MESURE et PRIX INGREDIENTS, et les envoie à la base (`sync_mercuriale`) toutes les dix minutes quand quelque chose a changé. Les colonnes sont retrouvées par leur titre.
+
+L'écran Production montre, pour chaque commande, les quantités nettes à produire, fiche par fiche ; pour un plat sur mesure, chaque élément (base, protéine, légume, sauce) est multiplié par son facteur. La liste de courses d'une livraison additionne les besoins, pertes comprises, par fournisseur et dans l'unité d'achat. Toute l'équipe lit fiches et commandes ; les prix, coûts et marges demandent l'accès « fiches techniques ». La clé ne permet que d'envoyer les mercuriales ; une nouvelle clé remplace l'ancienne.
+
 ### iPad partagé
 
 Sur un appareil relié à une borne, « Utiliser l'appli sur cet appareil » ouvre l'appli au nom de la personne : elle touche son prénom et tape son code PIN à 4 chiffres. Cette session a les droits d'un équipier (jamais ceux du gérant), permet de pointer directement sur la borne, et se referme avec « Terminer » ou seule après deux minutes sans activité. Chacun choisit son code dans Mon compte ; le gérant peut en donner un, y compris à un extra sans adresse e-mail, qui n'utilise alors que l'iPad.
@@ -108,7 +115,7 @@ L'appli se met à jour toute seule : elle cherche une nouvelle version à chaque
 
 ## Relier l'appli à Supabase
 
-Pour une base qui a déjà les scripts 0001 à 0003, `supabase/installation/0004-a-0009.sql` regroupe les six suivants en un seul collage, tout ou rien. La migration 0010 se colle ensuite seule ; elle aussi passe en entier ou pas du tout.
+Pour une base qui a déjà les scripts 0001 à 0003, `supabase/installation/0004-a-0009.sql` regroupe les six suivants en un seul collage, tout ou rien. Les migrations 0010 et 0011 se collent ensuite une par une ; elles aussi passent en entier ou pas du tout.
 
 1. Créer un projet sur supabase.com, région Europe.
 2. Dans **SQL Editor**, coller et exécuter les fichiers de `supabase/migrations/`, dans l'ordre de leur numéro.
