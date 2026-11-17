@@ -24,12 +24,13 @@ declare
 begin
   assert (info ->> 'online_enabled')::boolean and (info ->> 'max_party_online')::int = 9, 'règles par défaut';
   assert info -> 'open_weekdays' = '[2, 3, 4, 5, 6, 7]'::jsonb, 'fermé le lundi : ' || (info -> 'open_weekdays')::text;
-  assert jsonb_array_length(slots) = 21 and slots ->> 0 = '12:00' and slots ->> 20 = '22:00', 'mardi : de 12 h à 22 h, toutes les 30 min : ' || slots::text;
+  assert jsonb_array_length(slots) = 12 and slots ->> 0 = '12:00' and slots ? '14:00' and not slots ? '14:30' and not slots ? '18:30' and slots ? '19:00' and slots ->> 11 = '22:00',
+    'mardi : midi de 12 h à 14 h, soir de 19 h à 22 h : ' || slots::text;
   assert public.booking_slots(mon, 2) = '[]'::jsonb, 'aucun créneau le lundi';
   assert public.booking_slots(tue, 10) = '[]'::jsonb, 'pas de réservation en ligne à 10';
   assert public.booking_slots(current_date + 200, 2) = '[]'::jsonb, 'pas de réservation trop loin dans le temps';
-  assert jsonb_array_length(public.booking_slots(tue + 3, 2)) = 22, 'vendredi : jusqu''à 22 h 30';
-  assert public.booking_slots(tue + 5, 2) ->> -1 = '14:00', 'dimanche : dernier créneau à 14 h';
+  assert jsonb_array_length(public.booking_slots(tue + 3, 2)) = 13 and public.booking_slots(tue + 3, 2) ->> -1 = '22:30', 'vendredi : jusqu''à 22 h 30';
+  assert public.booking_slots(tue + 5, 2) ->> -1 = '15:00', 'dimanche : dernier créneau à 15 h';
 
   assert (public.book_table(tue, '20:10', 4, 'Camille', '0611223344', '', '', '')) ->> 'error' = 'slot', 'un horaire hors créneau est refusé';
   assert (public.book_table(mon, '20:00', 4, 'Camille', '0611223344', '', '', '')) ->> 'error' = 'slot', 'un jour fermé est refusé';
@@ -121,7 +122,7 @@ begin
 end $$;
 set role authenticated;
 set request.jwt.claims = :boss;
-update public.opening_hours set last_slot = '22:00', break_from = null, break_to = null where weekday = 2;
+update public.opening_hours set last_slot = '22:00', break_from = '14:30', break_to = '19:00' where weekday = 2;
 update public.booking_settings set online_enabled = false;
 set role anon;
 set request.jwt.claims = '';
