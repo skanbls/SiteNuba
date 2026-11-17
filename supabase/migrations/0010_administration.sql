@@ -398,7 +398,7 @@ begin
   if m.confirm_booking and mail <> '' then
     v_sent := public._email_queue('reservation', mail,
       'Votre réservation à la Nuba, ' || public._fr_day(p_day) || ' à ' || public._fr_time(p_slot),
-      'Bonjour ' || btrim(p_name) || ',' || E'\n\n'
+      'Bonjour ' || left(btrim(p_name), 80) || ',' || E'\n\n'
       || 'Votre table est réservée à la Nuba :' || E'\n'
       || public._fr_day(p_day) || ' à ' || public._fr_time(p_slot) || ', pour ' || p_party || case when p_party > 1 then ' personnes.' else ' personne.' end || E'\n\n'
       || 'Pour consulter ou annuler votre réservation :' || E'\n'
@@ -418,7 +418,7 @@ declare
 begin
   select * into m from public.email_settings;
   if not m.enabled then return null; end if;
-  v_who := new.name || ', ' || public._fr_day(new.day) || ' à ' || public._fr_time(new.slot) || ', '
+  v_who := left(new.name, 80) || ', ' || public._fr_day(new.day) || ' à ' || public._fr_time(new.slot) || ', '
            || new.party || case when new.party > 1 then ' personnes' else ' personne' end;
 
   if tg_op = 'INSERT' then
@@ -433,7 +433,7 @@ begin
   elsif new.status = 'cancelled' and old.status <> 'cancelled' and new.day >= (now() at time zone 'Europe/Paris')::date then
     if m.confirm_booking and new.email <> '' then
       perform public._email_queue('annulation', new.email, 'Votre réservation à la Nuba est annulée',
-        'Bonjour ' || new.name || ',' || E'\n\n'
+        'Bonjour ' || left(new.name, 80) || ',' || E'\n\n'
         || 'Votre réservation du ' || public._fr_day(new.day) || ' à ' || public._fr_time(new.slot) || ' est annulée.' || E'\n\n'
         || 'À bientôt,' || E'\n' || m.signature);
     end if;
@@ -463,9 +463,9 @@ begin
   if not m.enabled or not m.notify_event then return null; end if;
   select * into c from public.customers where id = new.customer_id;
   perform public._email_queue('alerte_evenement', m.notify_email,
-    'Demande en ligne : ' || new.title || ', ' || public._fr_day(new.day),
+    'Demande en ligne : ' || left(new.title, 120) || ', ' || public._fr_day(new.day),
     'Nouvelle demande envoyée depuis la page publique.' || E'\n\n'
-    || new.title || E'\n'
+    || left(new.title, 120) || E'\n'
     || 'Date : ' || public._fr_day(new.day) || E'\n'
     || case when new.guests is not null then 'Personnes : ' || new.guests || E'\n' else '' end
     || case when coalesce(c.company, '') <> '' then 'Société : ' || c.company || E'\n' else '' end

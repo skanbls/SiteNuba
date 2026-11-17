@@ -17,9 +17,13 @@ En ligne : https://skanbls.github.io/SiteNuba/ (mise à jour automatique à chaq
 | 3. Clients et événements | Réservations de tables, en ligne et par l'équipe | **En ligne**, une fois la migration 0007 exécutée |
 | | Événements (privatisations, concerts, expositions, prestations extérieures) et fichier clients | **En ligne**, une fois la migration 0008 exécutée |
 | 4. Pilotage | Fiches techniques, pannes et échéances, procédures et formation | **En ligne**, une fois la migration 0009 exécutée |
+| 5. Administration | Accès confiés aux responsables, écran Administration, lien Drive de chaque personne | **En ligne**, une fois la migration 0010 exécutée |
+| | Créneaux de réservation calés sur la cuisine (midi 12 h – 14 h, soir 19 h – 22 h ou 22 h 30, dimanche 12 h – 15 h) | **En ligne**, une fois la migration 0010 exécutée |
+| | Formulaire de réservation du site web relié à l'appli | Fichier du site remis au gérant, à publier avec le site |
+| | E-mails : confirmation au client, alertes à la Nuba | Prêt avec la migration 0010 ; à activer après la mise en route de Brevo (Administration, E-mails) |
+| | E-mails des comptes de l'équipe (inscription, mot de passe oublié) | À régler dans Supabase : SMTP de Brevo (voir plus bas) |
 | | Ventes Zelty | En attente : accès à l'API à demander à Zelty, puis une fonction côté serveur pour garder la clé secrète |
-| | Pièces jointes (photos de preuve, documents de l'équipe) | À faire : demande le stockage de fichiers de Supabase |
-| | E-mails (invitation de l'équipe, confirmation de réservation) | En attente : service d'envoi à relier dans Supabase |
+| | Documents de l'équipe | Restent dans le Drive du gérant ; l'appli garde le lien du dossier de chaque personne |
 
 ## Comment ça marche
 
@@ -31,9 +35,13 @@ En ligne : https://skanbls.github.io/SiteNuba/ (mise à jour automatique à chaq
 
 | Rôle | Peut |
 | --- | --- |
-| Gérant | Tout : équipe, réglages, corrections de pointage, export |
-| Responsable | Voir les pointages de l'équipe, afficher le QR code de pointage |
-| Équipier | Pointer, voir ses propres heures |
+| Gérant | Tout : équipe, accès, administration, corrections de pointage, export |
+| Responsable | Voir les pointages de l'équipe, afficher le QR code de pointage, et modifier ce que le gérant lui confie |
+| Équipier | Pointer, voir ses propres heures, cocher, relever, signaler |
+
+### Accès des responsables
+
+Le gérant confie à chaque responsable des parties de l'appli, dans Administration ou dans sa fiche d'équipe : checklists, stocks et commandes (catalogue, fournisseurs), procédures, fiches techniques, hygiène, maintenance (sans les documents de l'équipe), planning, pointages, réservations, événements et clients. La base applique ces accès par la fonction `can('zone')`. Ils ne valent qu'avec le compte par e-mail : dans une session à code PIN sur l'iPad, chacun a les droits d'un équipier. L'équipe, les accès, les bornes, les lieux et les e-mails restent au gérant.
 
 Le tout premier compte confirmé devient le gérant. Les autres personnes sont ajoutées par le gérant (écran Équipe), puis créent leur compte avec l'adresse e-mail enregistrée : le compte se rattache tout seul à leur fiche.
 
@@ -59,7 +67,7 @@ Chaque produit a une quantité, un seuil d'alerte, une quantité voulue et un fo
 
 ### Réservations
 
-Les clients réservent sur une page publique, `#/reserver`, à ouvrir par un lien (site web, Instagram, fiche Google) ou à intégrer dans une page du site avec le code donné dans les réglages. La réservation est confirmée à l'écran, avec un lien pour la consulter ou l'annuler ; aucun e-mail n'est envoyé pour l'instant. En ligne : jusqu'à 9 personnes, au moins une heure à l'avance, sur les créneaux d'ouverture ; à partir de 10, la page invite à appeler. L'équipe saisit les réservations prises par téléphone ou sur place, sans limite, et note les arrivées et les absences. Le gérant règle les créneaux jour par jour, la capacité par créneau, le téléphone affiché, et peut fermer la réservation en ligne.
+Les clients réservent sur le formulaire du site web, ou sur une page publique, `#/reserver`, à ouvrir par un lien (Instagram, fiche Google) ou à intégrer dans une page avec le code donné dans les réglages. La réservation est confirmée à l'écran, avec un lien pour la consulter ou l'annuler, et par e-mail une fois les e-mails activés. En ligne : jusqu'à 9 personnes, au moins une heure à l'avance, sur les créneaux de la cuisine (dernière table 30 minutes avant sa fermeture, une heure le dimanche) ; à partir de 10, la page invite à appeler ou à demander une privatisation. L'équipe saisit les réservations prises par téléphone ou sur place, sans limite, et note les arrivées et les absences. Le gérant règle les créneaux jour par jour, la capacité par créneau, le téléphone affiché, et peut fermer la réservation en ligne.
 
 ### Événements et fichier clients
 
@@ -68,6 +76,27 @@ Un événement est une privatisation, un concert, une exposition ou une prestati
 ### Pilotage
 
 Les fiches techniques décrivent chaque recette : ingrédients et grammages, préparation, allergènes. Un ingrédient relié à un produit du stock prend son coût tout seul ; le gérant voit le coût par portion, sa part du prix hors taxe et la marge, l'équipe voit la recette et le tableau des allergènes. Dans Maintenance, toute l'équipe signale et suit les pannes ; le gérant y tient ses échéances (contrôles, contrats, documents de l'équipe), rappelées sur son accueil 30 jours avant. Les procédures se lisent dans l'appli et chacun confirme sa lecture ; le gérant voit qui a lu quoi.
+
+### Administration
+
+L'écran Administration (gérant) réunit les accès des responsables, les raccourcis vers tout ce qui se modifie (listes, catalogue, procédures, horaires…), les liens publics de réservation et de privatisation, les e-mails, les bornes et les lieux. Les documents de l'équipe restent dans le Drive du gérant : sa fiche garde seulement le lien de son dossier, visible du gérant seul.
+
+### E-mails
+
+Les e-mails partent de la base, par l'extension `pg_net`, vers le service Brevo : confirmation au client à chaque réservation en ligne et annulation, alerte à la Nuba pour chaque réservation, annulation par le client et demande de privatisation en ligne. Rien ne part tant que le gérant ne l'a pas activé. Un envoi qui échoue ne bloque jamais une réservation ; le journal des derniers e-mails est dans Administration.
+
+Mise en route, une seule fois :
+
+1. Créer un compte Brevo, y ajouter et valider l'adresse d'expédition, et de préférence authentifier le nom de domaine.
+2. Créer une clé API dans Brevo (SMTP et API, Clés API).
+3. Dans Supabase, Vault : ajouter un secret nommé `brevo_api_key` avec cette clé. Elle ne va jamais dans l'appli, dans ce dépôt ni dans une conversation.
+4. Dans l'appli, Administration, E-mails : activer, indiquer les adresses, enregistrer, puis « Envoyer un essai ».
+
+Pour les e-mails des comptes de l'équipe (inscription, mot de passe oublié), Supabase envoie lui-même, avec une limite très basse tant qu'il utilise son propre service : dans Authentication, Emails, SMTP Settings, activer le SMTP personnalisé avec `smtp-relay.brevo.com`, port 587, l'identifiant et une clé SMTP de Brevo ; puis relever la limite d'e-mails par heure dans Authentication, Rate Limits.
+
+### Site web
+
+Le formulaire de réservation du site de la Nuba appelle directement les fonctions publiques de la base : `booking_info` (jours ouverts, nombre maximum de personnes, téléphone), `booking_slots` (tables libres d'un jour) et `book_table` (réserver). Il utilise l'adresse du projet et sa clé publique, et renvoie les groupes vers la page `#/privatiser`. Le fichier du site n'est pas dans ce dépôt.
 
 ### iPad partagé
 
@@ -79,7 +108,7 @@ L'appli se met à jour toute seule : elle cherche une nouvelle version à chaque
 
 ## Relier l'appli à Supabase
 
-Pour une base qui a déjà les scripts 0001 à 0003, `supabase/installation/0004-a-0009.sql` regroupe les six suivants en un seul collage, tout ou rien.
+Pour une base qui a déjà les scripts 0001 à 0003, `supabase/installation/0004-a-0009.sql` regroupe les six suivants en un seul collage, tout ou rien. La migration 0010 se colle ensuite seule ; elle aussi passe en entier ou pas du tout.
 
 1. Créer un projet sur supabase.com, région Europe.
 2. Dans **SQL Editor**, coller et exécuter les fichiers de `supabase/migrations/`, dans l'ordre de leur numéro.
