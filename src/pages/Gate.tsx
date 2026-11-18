@@ -118,6 +118,7 @@ export function Login({ linkError }: { linkError: string }) {
           {mode === 'in' && <button type="button" className="btn" onClick={() => go('forgot')}>Mot de passe oublié</button>}
         </div>
         <Link className="link center" to="/borne">{hasKiosk() ? 'Revenir à la borne de pointage' : 'Cet appareil est une borne de pointage'}</Link>
+        <Link className="link center" to="/installer">Installer l'appli sur cet appareil</Link>
         <p className="sub center" data-testid="version">Version du {buildLabel()}</p>
       </div>
     </div>

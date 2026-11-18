@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { RightsPicker } from '../components/Rights';
 import { Avatar, Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
@@ -64,7 +65,10 @@ export default function Team() {
         <p className="note">
           Pour rejoindre l'appli, chaque personne ouvre le lien de l'appli et crée son compte avec l'adresse e-mail enregistrée ici. Son compte se rattache alors tout seul à sa fiche.
         </p>
-        <button type="button" className="btn" onClick={() => void copyLink()}><Icon name="copy" />Copier le lien de l'appli</button>
+        <div className="acts">
+          <button type="button" className="btn" onClick={() => void copyLink()}><Icon name="copy" />Copier le lien de l'appli</button>
+          <Link className="btn" to="/installer"><Icon name="qr" />QR code d'installation</Link>
+        </div>
       </Section>
       {inactive.length > 0 && (
         <Section title="Anciens membres">

@@ -1024,6 +1024,29 @@ async function main() {
   await dark.goto(APP + '#/pointeuse');
   await see(dark, 'Mes heures');
   await shot(dark, '16-pointeuse-sombre');
+  await dark.goto(APP + '#/compte');
+  await dark.getByRole('button', { name: 'Clair', exact: true }).click();
+  assert.equal(await dark.evaluate(() => document.documentElement.dataset.theme), 'light');
+  await dark.reload();
+  await see(dark, 'Apparence');
+  assert.equal(await dark.evaluate(() => getComputedStyle(document.body).backgroundColor), 'rgb(247, 237, 225)', 'le choix « Clair » tient après rechargement');
+  await shot(dark, '16b-compte-clair');
+  await dark.getByRole('button', { name: "Comme l'appareil" }).click();
+  assert.equal(await dark.evaluate(() => document.documentElement.dataset.theme ?? ''), '');
+  step('chacun choisit le thème clair ou sombre sur son appareil');
+
+  // 17. Installer l'appli : page publique avec QR code, étapes adaptées à l'appareil.
+  const phone = await open('téléphone', { width: 390, height: 844 }, { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' });
+  await phone.goto(APP);
+  await phone.getByRole('link', { name: "Installer l'appli sur cet appareil" }).click();
+  await phone.getByRole('heading', { name: "Installer l'appli" }).waitFor();
+  await shot(phone, '17-installer');
+  assert.equal(await phone.locator('details[data-device="ios"]').getAttribute('open'), '', "les étapes de l'iPhone sont ouvertes");
+  await phone.locator('details[data-device="ios"]').getByText(/Sur l.écran d.accueil/).waitFor();
+  await phone.locator('.install-qr svg').waitFor();
+  await noOverflow(phone, "page d'installation");
+  await shot(phone, '17-installer');
+  step("la page d'installation guide pas à pas et donne le QR code de l'appli");
 
   await browser.close();
   assert.deepEqual(errors, [], 'erreurs dans le navigateur :\n' + errors.join('\n'));

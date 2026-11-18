@@ -8,6 +8,7 @@ import Checklists from './pages/Checklists';
 import Customers from './pages/Customers';
 import Events from './pages/Events';
 import Hygiene from './pages/Hygiene';
+import Install from './pages/Install';
 import Kiosk from './pages/Kiosk';
 import Maintenance from './pages/Maintenance';
 import More from './pages/More';
@@ -34,6 +35,8 @@ export default function App({ linkError }: { linkError: string }) {
   if (pathname === '/reserver') return <Booking />;
   if (pathname === '/reservation') return <BookingManage />;
   if (pathname === '/privatiser') return <EventRequest />;
+  // Installer l'appli : avant même d'avoir un compte.
+  if (pathname === '/installer') return <Install />;
   if (loading) return <Splash />;
   // Pas de redirection : après la connexion, on reste sur la page demandée (par exemple le lien d'un QR code).
   if (!session && !pin) return <Login linkError={linkError} />;

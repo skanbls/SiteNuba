@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon } from '../components/Icon';
-import { Field, Layout, Section, Spinner, useToast } from '../components/ui';
+import { Chips, Field, Layout, Section, Spinner, useToast } from '../components/ui';
 import { useMe, useSession } from '../lib/session';
 import { frError, supabase } from '../lib/supabase';
 import { CONTRACT_LABEL, ROLE_LABEL, fullName } from '../lib/types';
+import { readTheme, saveTheme, type Theme } from '../lib/theme';
 import { buildLabel, checkForUpdate } from '../lib/update';
 import { hasKiosk, unlinkKiosk } from './Kiosk';
 
@@ -20,6 +21,11 @@ export default function Account() {
   const [checking, setChecking] = useState(false);
   const [code, setCode] = useState('');
   const [codeErr, setCodeErr] = useState('');
+  const [theme, setTheme] = useState<Theme>(readTheme);
+  const chooseTheme = (t: Theme) => {
+    setTheme(t);
+    saveTheme(t);
+  };
 
   async function savePin(e: FormEvent) {
     e.preventDefault();
@@ -104,10 +110,13 @@ export default function Account() {
               )}
             </Section>
           )}
-          <Section title="Installer l'appli sur mon téléphone">
+          <Section title="Apparence">
+            <Chips value={theme} options={[['auto', 'Comme l\'appareil'], ['light', 'Clair'], ['dark', 'Sombre']]} onChange={chooseTheme} label="Apparence" />
+            <p className="note">Pour cet appareil seulement.</p>
+          </Section>
+          <Section title="Installer l'appli">
             <div className="list">
-              <div className="row"><div className="grow"><span className="t">iPhone et iPad</span><span className="sub">Dans Safari : bouton Partager, puis « Sur l'écran d'accueil ».</span></div></div>
-              <div className="row"><div className="grow"><span className="t">Android</span><span className="sub">Dans Chrome : menu ⋮, puis « Installer l'application ».</span></div></div>
+              <Link className="row" to="/installer"><Icon name="down" /><div className="grow"><span className="t">Installer l'appli</span><span className="sub">Sur ce téléphone, un autre appareil, ou pour l'équipe avec un QR code</span></div><span className="chev"><Icon name="chev" size={18} /></span></Link>
             </div>
           </Section>
           <Section title="Version de l'appli">

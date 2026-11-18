@@ -10,9 +10,17 @@ import { ToastProvider } from './components/ui';
 import { SessionProvider } from './lib/session';
 import { hasKiosk } from './pages/Kiosk';
 import { supabase } from './lib/supabase';
+import { applyTheme, readTheme } from './lib/theme';
 import { startUpdates } from './lib/update';
 
+applyTheme(readTheme());
 startUpdates();
+
+// Android et ordinateur : Chrome propose d'installer l'appli ; on garde sa proposition pour la page « Installer l'appli ».
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  (window as unknown as { nubaInstall?: Event }).nubaInstall = e;
+});
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 0, retry: 1, refetchOnWindowFocus: true } },
