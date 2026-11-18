@@ -48,6 +48,7 @@ export const NAV: NavItem[] = [
   { to: '/equipe', label: 'Équipe', icon: 'team', gerant: true },
   { to: '/reglages', label: 'Administration', icon: 'cog', gerant: true },
   { to: '/compte', label: 'Mon compte', icon: 'user' },
+  { to: '/guide', label: "Guide de l'appli", icon: 'help' },
 ];
 
 /** Écrans accessibles à ce rôle. */

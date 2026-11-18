@@ -119,6 +119,7 @@ export function Login({ linkError }: { linkError: string }) {
         </div>
         <Link className="link center" to="/borne">{hasKiosk() ? 'Revenir à la borne de pointage' : 'Cet appareil est une borne de pointage'}</Link>
         <Link className="link center" to="/installer">Installer l'appli sur cet appareil</Link>
+        <Link className="link center" to="/guide">Première fois ? Lis le guide de l'équipe</Link>
         <p className="sub center" data-testid="version">Version du {buildLabel()}</p>
       </div>
     </div>

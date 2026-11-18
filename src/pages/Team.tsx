@@ -68,6 +68,7 @@ export default function Team() {
         <div className="acts">
           <button type="button" className="btn" onClick={() => void copyLink()}><Icon name="copy" />Copier le lien de l'appli</button>
           <Link className="btn" to="/installer"><Icon name="qr" />QR code d'installation</Link>
+          <Link className="btn" to="/guide"><Icon name="help" />Guide pour l'équipe</Link>
         </div>
       </Section>
       {inactive.length > 0 && (

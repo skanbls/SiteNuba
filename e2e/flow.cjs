@@ -1048,6 +1048,17 @@ async function main() {
   await shot(phone, '17-installer');
   step("la page d'installation guide pas à pas et donne le QR code de l'appli");
 
+  // 18. Le guide de l'appli, lisible sans compte.
+  await phone.getByRole('link', { name: "Ensuite : lire le guide de l'appli" }).click();
+  await phone.getByRole('heading', { name: "Bienvenue dans l'appli de la Nuba" }).waitFor();
+  await phone.locator('#g-debut').getByText('Créer mon compte').waitFor();
+  assert.equal(await phone.locator('#g-hygiene').getAttribute('open'), null, 'les parties sont repliées au départ');
+  await phone.getByRole('navigation', { name: 'Sommaire' }).getByText('Hygiène', { exact: true }).click();
+  await phone.locator('#g-hygiene').getByText('Relever').waitFor();
+  await noOverflow(phone, "guide de l'appli");
+  await shot(phone, '18-guide');
+  step("le guide explique l'appli pas à pas, partie par partie");
+
   await browser.close();
   assert.deepEqual(errors, [], 'erreurs dans le navigateur :\n' + errors.join('\n'));
   console.log('Parcours complet : OK');

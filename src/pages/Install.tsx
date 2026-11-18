@@ -112,6 +112,7 @@ export default function Install() {
           <button type="button" className="btn" onClick={() => void copy()}><Icon name="copy" />Copier le lien</button>
         </div>
 
+        <a className="btn pri block" href="#/guide">Ensuite : lire le guide de l'appli</a>
         <a className="btn block" href="#/">Ouvrir l'appli</a>
       </div>
     </div>

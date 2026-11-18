@@ -17,6 +17,7 @@ const HINT: Record<string, string> = {
   '/equipe': "Qui a accès à l'appli, avec quel rôle et quels droits",
   '/reglages': 'Accès des responsables, e-mails, liens du site, bornes',
   '/compte': 'Mes informations, mon mot de passe, me déconnecter',
+  '/guide': "Comment se servir de l'appli, pas à pas",
 };
 
 /** Sur téléphone : les écrans qui n'ont pas leur onglet. */

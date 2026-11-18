@@ -109,6 +109,10 @@ L'écran Production montre, pour chaque commande, les quantités nettes à produ
 
 Sur un appareil relié à une borne, « Utiliser l'appli sur cet appareil » ouvre l'appli au nom de la personne : elle touche son prénom et tape son code PIN à 4 chiffres. Cette session a les droits d'un équipier (jamais ceux du gérant), permet de pointer directement sur la borne, et se referme avec « Terminer » ou seule après deux minutes sans activité. Chacun choisit son code dans Mon compte ; le gérant peut en donner un, y compris à un extra sans adresse e-mail, qui n'utilise alors que l'iPad.
 
+### Guide et installation
+
+Deux pages publiques, lisibles sans compte : `#/installer` (installer l'appli sur iPhone, Android ou ordinateur, avec le QR code de l'appli) et `#/guide`, le tutoriel des nouveaux arrivants, partie par partie, imprimable. On les ouvre depuis l'écran de connexion, le menu (« Guide de l'appli ») et l'écran Équipe.
+
 ### Mises à jour
 
 L'appli se met à jour toute seule : elle cherche une nouvelle version à chaque retour à l'écran et toutes les cinq minutes, puis se recharge. La version en cours (date de construction) s'affiche sur l'écran de connexion, sur la borne et dans Mon compte.
