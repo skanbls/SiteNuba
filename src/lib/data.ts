@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MercCost, MercIngredient, MercLine, MercOrder, MercPrice, MercRecipe, MercSource } from './production';
 import { supabase } from './supabase';
-import type { BookingSettings, Checklist, ColdUnit, Customer, Deadline, EmailLogEntry, EmailSettings, Issue, Kiosk, NubaEvent, Procedure, ProcedureRead, Recipe, LeaveRequest, OilLog, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftSwap, Site, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
+import type { BookingSettings, Checklist, ColdUnit, Contact, Customer, Deadline, EmailLogEntry, EmailSettings, Issue, Kiosk, NubaEvent, Procedure, ProcedureRead, Recipe, LeaveRequest, OilLog, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftSwap, Site, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
 
 const ENTRY = '*, time_breaks(*), profiles(first_name, last_name), sites(name)';
 
@@ -319,6 +319,14 @@ export function useMercPrices(enabled: boolean) {
 }
 export function useMercCosts(enabled: boolean) {
   return useQuery({ queryKey: ['merc', 'costs'], enabled, queryFn: () => selectAll<MercCost>('merc_recipe_costs', '*', ['brand', 'name']) });
+}
+
+/** Numéros utiles, urgences d'abord. */
+export function useContacts() {
+  return useQuery({
+    queryKey: ['contacts'],
+    queryFn: async () => must<Contact[]>(await supabase.from('contacts').select('*').order('urgent', { ascending: false }).order('position').order('name')),
+  });
 }
 
 export function useRefresh() {

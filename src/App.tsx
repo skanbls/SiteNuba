@@ -13,6 +13,7 @@ import Install from './pages/Install';
 import Kiosk from './pages/Kiosk';
 import Maintenance from './pages/Maintenance';
 import More from './pages/More';
+import Contacts from './pages/Contacts';
 import Orders from './pages/Orders';
 import Planning from './pages/Planning';
 import Pointeuse, { PunchFromLink } from './pages/Pointeuse';
@@ -65,6 +66,7 @@ export default function App({ linkError }: { linkError: string }) {
       <Route path="/production" element={<Production />} />
       <Route path="/maintenance" element={<Maintenance />} />
       <Route path="/procedures" element={<Procedures />} />
+      <Route path="/numeros" element={<Contacts />} />
       <Route path="/planning" element={<Planning />} />
       <Route path="/plus" element={<More />} />
       <Route path="/compte" element={<Account />} />

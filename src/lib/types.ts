@@ -464,3 +464,19 @@ export interface EmailLogEntry {
   error: string;
   at: string;
 }
+
+export type ContactCategory = 'urgence' | 'equipe' | 'depannage' | 'fournisseur' | 'administratif' | 'autre';
+export const CONTACT_CATEGORY: Record<ContactCategory, string> = {
+  urgence: 'Urgences', equipe: 'Équipe', depannage: 'Dépannage', fournisseur: 'Fournisseurs', administratif: 'Administratif', autre: 'Autres',
+};
+export interface Contact {
+  id: string;
+  category: ContactCategory;
+  name: string;
+  phone: string;
+  note: string;
+  urgent: boolean;
+  position: number;
+  updated_by: string | null;
+  updated_at: string;
+}

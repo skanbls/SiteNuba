@@ -180,6 +180,18 @@ const PARTS: Part[] = [
     ),
   },
   {
+    id: 'numeros',
+    icon: 'phone',
+    title: 'Numéros utiles',
+    body: (
+      <>
+        <p>Urgences, dépannage, fournisseurs, équipe : dans <b>Numéros utiles</b>, touche un numéro pour l'appeler.</p>
+        <p>En cas d'urgence : <b>15</b> (SAMU), <b>18</b> (pompiers), <b>17</b> (police), <b>112</b> (depuis n'importe quel téléphone). Odeur de gaz : coupe le gaz, aère, sors, puis appelle l'urgence gaz.</p>
+        <p>Un numéro manque ou a changé ? Préviens le gérant ou ton responsable : eux seuls modifient la liste.</p>
+      </>
+    ),
+  },
+  {
     id: 'procedures',
     icon: 'doc',
     title: 'Procédures',
@@ -214,6 +226,7 @@ const PARTS: Part[] = [
       <ul>
         <li>Dans <b>Pointeuse</b>, vue <b>Équipe</b> : qui est là, et les heures de chacun.</li>
         <li><B>Afficher le QR code</B> sur ton téléphone pour faire pointer l'équipe en prestation extérieure.</li>
+        <li>Tu tiens à jour les <b>Numéros utiles</b> : <B>Numéro</B> pour en ajouter un, l'icône réglages pour le modifier.</li>
         <li>Le gérant peut te confier des parties de l'appli (checklists, stocks, procédures, planning…). Tu les modifies avec ton compte, pas avec le code PIN de l'iPad.</li>
       </ul>
     ),

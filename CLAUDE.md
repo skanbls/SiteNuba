@@ -17,6 +17,7 @@ Appli de gestion de la Nuba (Toulouse) : restaurant, bar, soirées et concerts, 
 - Cuisine : 12 h – 14 h 30 et 19 h – 22 h 30 du mardi au jeudi, 23 h vendredi et samedi ; dimanche 12 h – 16 h. Dernière réservation 30 minutes avant la fermeture de la cuisine, une heure le dimanche.
 - Le site web de la Nuba (fichier remis au gérant, hors du dépôt car il contient ses coordonnées) réserve par `booking_info`, `booking_slots` et `book_table`. Ne pas changer ces fonctions sans garder leur forme.
 - Production pour le client Mijote : les mercuriales Saveurs Nomades et Comptoir Méditerranéen (Google Sheets du gérant) restent la référence. L'appli les reçoit par un script Google qu'elle génère (`src/lib/appsScript.ts`, testé avec un faux Google) et ne les modifie jamais. Ne pas mettre dans le dépôt les identifiants des feuilles ni leurs données (prix, recettes) : tests avec des données inventées.
+- Numéros utiles (`contacts`) : lus par toute l'équipe, y compris par code PIN ; modifiés par le gérant et tous les responsables avec leur compte (`is_manager()`, choix du gérant, sans accès à confier).
 - La maquette cliquable validée par le gérant : https://claude.ai/artifact/LDuEx2SWoyRd5tWm4YJUe5
 
 L'ordre de construction et l'état d'avancement sont dans README.md. Le mettre à jour à chaque module livré.

@@ -983,6 +983,24 @@ async function main() {
   assert.equal(await boss.locator('[data-merc-error="comptoir"]').count(), 0, 'le Comptoir n\'a pas d\'erreur');
   step("un envoi refusé est expliqué sous la mercuriale concernée");
 
+  // 13 undecies. Numéros utiles : la responsable en ajoute un, l'équipier l'appelle d'un geste.
+  await ines.goto(APP + '#/numeros');
+  await ines.locator('[data-contact="SAMU, urgence médicale"]').waitFor();
+  await ines.getByRole('button', { name: 'Numéro', exact: true }).click();
+  await ines.fill('#ct-name', 'Plombier Garcia');
+  await ines.fill('#ct-phone', '06 12 34 56 78');
+  await ines.fill('#ct-note', 'Fuite, évacuation bouchée');
+  await ines.getByRole('button', { name: 'Enregistrer' }).click();
+  await see(ines, 'Numéro ajouté');
+  await theo.goto(APP + '#/numeros');
+  assert.equal(await theo.locator('[data-contact="Plombier Garcia"] a').getAttribute('href'), 'tel:0612345678');
+  assert.equal(await theo.locator('[data-contact="SAMU, urgence médicale"] a').getAttribute('href'), 'tel:15');
+  assert.equal(await theo.getByRole('button', { name: 'Numéro', exact: true }).count(), 0, "un équipier n'ajoute pas de numéro");
+  assert.equal(await theo.getByRole('button', { name: 'Modifier Plombier Garcia' }).count(), 0, "un équipier ne modifie pas de numéro");
+  await noOverflow(theo, 'numéros utiles');
+  await shot(theo, '13zd-numeros');
+  step("les numéros utiles s'appellent d'un geste ; seuls gérant et responsables les modifient");
+
   // 14. Le gérant désactive Théo : il perd l'accès.
   await boss.goto(APP + '#/equipe');
   await boss.locator('button.row', { hasText: 'Théo Martin' }).click();
