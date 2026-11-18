@@ -63,7 +63,7 @@ export function CodeView({ info, left }: { info: CodeInfo | null; left: number }
       setSvg('');
       return;
     }
-    void QRCode.toString(link, { type: 'svg', margin: 0, errorCorrectionLevel: 'M', color: { dark: '#161a2e', light: '#ffffff' } }).then((s) => alive && setSvg(s));
+    void QRCode.toString(link, { type: 'svg', margin: 0, errorCorrectionLevel: 'M', color: { dark: '#113f24', light: '#ffffff' } }).then((s) => alive && setSvg(s));
     return () => {
       alive = false;
     };

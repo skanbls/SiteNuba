@@ -4,6 +4,7 @@ import { Field, Spinner } from '../components/ui';
 import { appUrl, supabase } from '../lib/supabase';
 import { addDays, dayKey, fromDayKey } from '../lib/time';
 import type { BookingInfo } from '../lib/types';
+import { BrandHead } from '../components/Logo';
 
 /* Pages publiques, pour les clients : on les vouvoie, contrairement au reste de l'appli. */
 
@@ -88,7 +89,7 @@ export default function Booking() {
     }
   }
 
-  if (loadErr) return <div className="full"><div className="card wide"><h1>La Nuba</h1><p className="err" role="alert">{loadErr}</p></div></div>;
+  if (loadErr) return <div className="full"><div className="card wide"><BrandHead /><h1 className="vh">La Nuba</h1><p className="err" role="alert">{loadErr}</p></div></div>;
   if (!info) return <div className="full"><Spinner /></div>;
 
   if (done) {
@@ -96,6 +97,7 @@ export default function Booking() {
     return (
       <div className="full">
         <div className="card wide">
+          <BrandHead />
           <div>
             <h1>C'est réservé</h1>
             <p className="sub">La Nuba vous attend.</p>
@@ -115,6 +117,7 @@ export default function Booking() {
   return (
     <div className="full">
       <form className="card wide" onSubmit={submit}>
+        <BrandHead />
         <div>
           <h1>Réserver une table</h1>
           <p className="sub">La Nuba, Toulouse{info.notice ? ` · ${info.notice}` : ''}</p>
@@ -225,6 +228,7 @@ export function BookingManage() {
   return (
     <div className="full">
       <div className="card wide">
+        <BrandHead />
         {!b ? (
           <>
             <h1>Réservation introuvable</h1>
@@ -302,6 +306,7 @@ export function EventRequest() {
     return (
       <div className="full">
         <div className="card wide">
+          <BrandHead />
           <div>
             <h1>Demande envoyée</h1>
             <p className="sub">La Nuba, Toulouse</p>
@@ -315,6 +320,7 @@ export function EventRequest() {
   return (
     <div className="full">
       <form className="card wide" onSubmit={submit}>
+        <BrandHead />
         <div>
           <h1>Votre événement à la Nuba</h1>
           <p className="sub">Dites-nous ce que vous imaginez : nous vous rappelons avec une proposition.</p>

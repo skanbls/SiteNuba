@@ -3,6 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { useSession } from '../lib/session';
 import type { Profile } from '../lib/types';
 import { Icon, type IconName } from './Icon';
+import { Logo } from './Logo';
 
 /* ---------- Message bref en bas d'écran ---------- */
 type ToastFn = (msg: string, kind?: 'ok' | 'bad') => void;
@@ -66,7 +67,8 @@ export function Layout({ title, right, children }: { title: string; right?: Reac
     <>
       <nav className="side" aria-label="Modules">
         <div className="brand">
-          Nuba<small>Gestion</small>
+          <Logo />
+          <small>Gestion</small>
         </div>
         <div className="side-nav">
           {items.map((n) => (

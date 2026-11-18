@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { BrandHead, Logo } from '../components/Logo';
 import { Field, Spinner } from '../components/ui';
 import { useSession } from '../lib/session';
 import { appUrl, frError, supabase } from '../lib/supabase';
@@ -9,7 +10,10 @@ import { hasKiosk } from './Kiosk';
 /** Écran d'attente au démarrage. */
 export const Splash = () => (
   <div className="full">
-    <Spinner />
+    <div className="splash">
+      <Logo />
+      <Spinner />
+    </div>
   </div>
 );
 
@@ -17,7 +21,8 @@ export const Splash = () => (
 export const Setup = () => (
   <div className="full">
     <div className="card">
-      <h1>Nuba</h1>
+      <BrandHead />
+      <h1 className="vh">Nuba</h1>
       <p>L'appli n'est pas encore reliée à sa base de données.</p>
       <p className="note">Renseigne VITE_SUPABASE_URL et VITE_SUPABASE_KEY (voir le fichier README), puis reconstruis l'appli.</p>
     </div>
@@ -82,9 +87,10 @@ export function Login({ linkError }: { linkError: string }) {
   return (
     <div className="full">
       <div className="card">
+        <BrandHead />
         <div>
-          <h1>Nuba</h1>
-          <p className="sub">{mode === 'in' ? "Connecte-toi pour accéder à l'appli de l'équipe." : mode === 'up' ? "Utilise l'adresse e-mail que le gérant a enregistrée pour toi." : 'Reçois un lien pour choisir un nouveau mot de passe.'}</p>
+          <h1 className="vh">Nuba Gestion</h1>
+          <p className="sub center">{mode === 'in' ? "Connecte-toi pour accéder à l'appli de l'équipe." : mode === 'up' ? "Utilise l'adresse e-mail que le gérant a enregistrée pour toi." : 'Reçois un lien pour choisir un nouveau mot de passe.'}</p>
         </div>
         <form className="form" onSubmit={submit}>
           {mode === 'up' && (

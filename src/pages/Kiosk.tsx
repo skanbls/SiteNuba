@@ -6,6 +6,7 @@ import { useSession } from '../lib/session';
 import { frError, supabase } from '../lib/supabase';
 import { buildLabel } from '../lib/update';
 import type { CodeInfo } from '../lib/types';
+import { BrandHead, Logo } from '../components/Logo';
 
 const KEY = 'nuba.borne';
 
@@ -75,6 +76,7 @@ export default function Kiosk() {
     <div className="full">
       {dead ? (
         <div className="card">
+          <BrandHead />
           <h1>Borne désactivée</h1>
           <p>Cette borne n'est plus valable : le gérant l'a désactivée.</p>
           <div className="acts">
@@ -123,6 +125,7 @@ function Live({ token, onDead, onLeave }: { token: string; onDead: () => void; o
 
   return (
     <div className="borne">
+      <Logo />
       <p className="clock">{clock.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}{info ? ` · ${info.site_name}` : ''}</p>
       <h1>Scanne ce code pour pointer</h1>
       <CodeView info={info} left={left} />
@@ -258,6 +261,7 @@ function Pair({ onToken, onLeave }: { onToken: (t: string) => void; onLeave: () 
 
   return (
     <div className="card">
+      <BrandHead />
       <div>
         <h1>Relier cette borne</h1>
         <p className="sub">Cet appareil affichera le QR code de pointage à chaque ouverture de l'appli.</p>
