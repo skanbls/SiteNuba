@@ -90,6 +90,13 @@ const opts = { url: 'https://projet.supabase.co/', publicKey: 'sb_publishable_x'
 describe('script Google des mercuriales', () => {
   it("retrouve l'identifiant d'une feuille dans son lien", () => {
     expect(sheetId('https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz_0123456789-ab/edit?usp=drivesdk')).toBe('1AbCdEfGhIjKlMnOpQrStUvWxYz_0123456789-ab');
+    const id = '1AbCdEfGhIjKlMnOpQrStUvWxYz_0123456789-ab';
+    expect(sheetId(`https://docs.google.com/spreadsheets/u/1/d/${id}/edit#gid=0`)).toBe(id);   // plusieurs comptes Google ouverts
+    expect(sheetId(`  https://docs.google.com/spreadsheets/d/${id}/edit?usp=sharing  `)).toBe(id);
+    expect(sheetId(`https://drive.google.com/file/d/${id}/view?usp=drivesdk`)).toBe(id);
+    expect(sheetId(`https://drive.google.com/open?id=${id}`)).toBe(id);
+    expect(sheetId(id)).toBe(id);
+    expect(sheetId('https://docs.google.com/spreadsheets/d/e/2PACX-1vQabcdefghijklmnopqrstuvwxyz/pubhtml')).toBe('');
     expect(sheetId('https://exemple.fr/d/abc')).toBe('');
   });
 

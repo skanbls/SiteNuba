@@ -8,9 +8,16 @@
  * Les colonnes sont retrouvées par leur titre : l'ordre des colonnes peut changer.
  */
 
-/** Identifiant d'une feuille Google à partir de son lien, ou chaîne vide. */
+/**
+ * Identifiant d'une feuille Google à partir de son lien, ou chaîne vide.
+ * Accepte le lien de la barre d'adresse, celui de « Copier le lien » (Sheets ou Drive, ordinateur ou téléphone),
+ * et l'identifiant seul. Refuse le lien de publication (/d/e/…), qui ne donne pas accès à la feuille.
+ */
 export function sheetId(url: string): string {
-  return /\/spreadsheets\/d\/([A-Za-z0-9_-]{10,})/.exec(url.trim())?.[1] ?? '';
+  const t = url.trim();
+  if (/\/d\/e\//.test(t)) return '';
+  const m = /\/(?:spreadsheets\/)?(?:file\/)?d\/([A-Za-z0-9_-]{15,})/.exec(t) ?? /[?&]id=([A-Za-z0-9_-]{15,})/.exec(t) ?? /^([A-Za-z0-9_-]{25,})$/.exec(t);
+  return m?.[1] ?? '';
 }
 
 export interface ScriptOptions {

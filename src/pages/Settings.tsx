@@ -315,7 +315,8 @@ function MercSheet({ sources, onClose }: { sources: MercSource[]; onClose: () =>
   async function create(e: FormEvent) {
     e.preventDefault();
     const a = sheetId(sn), b = sheetId(cm);
-    if ((sn.trim() && !a) || (cm.trim() && !b)) return setErr("Colle le lien complet de la feuille, tel qu'il apparaît dans la barre d'adresse (docs.google.com/spreadsheets/d/…).");
+    const bad = [sn.trim() && !a ? 'Saveurs Nomades' : '', cm.trim() && !b ? 'Comptoir Méditerranéen' : ''].filter(Boolean);
+    if (bad.length) return setErr(`Lien non reconnu pour ${bad.join(' et ')}. Ouvre la mercuriale dans Google Sheets et copie l'adresse en haut du navigateur : elle commence par https://docs.google.com/spreadsheets/d/`);
     if (!a && !b) return setErr('Colle le lien d\'au moins une mercuriale.');
     setBusy(true);
     setErr('');

@@ -888,7 +888,7 @@ async function main() {
   await boss.getByRole('button', { name: 'Relier', exact: true }).click();
   await boss.fill('#merc-sn', 'pas un lien');
   await boss.getByRole('button', { name: 'Créer le script' }).click();
-  await see(boss, 'Colle le lien complet');
+  await see(boss, 'Lien non reconnu pour Saveurs Nomades');
   await boss.fill('#merc-sn', 'https://docs.google.com/spreadsheets/d/SN_feuille_test_123/edit#gid=9006');
   await boss.fill('#merc-cm', 'https://docs.google.com/spreadsheets/d/CM_feuille_test_456/edit');
   await boss.getByRole('button', { name: 'Créer le script' }).click();
