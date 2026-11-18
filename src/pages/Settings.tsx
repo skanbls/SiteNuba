@@ -204,12 +204,14 @@ export default function Settings() {
                   // Dernier envoi de cette mercuriale : s'il a été refusé, on dit pourquoi.
                   const last = (mercStatus.data?.log ?? []).find((l) => l.brand === m.brand);
                   const refused = last && !last.ok ? last : null;
+                  const skipped = last && last.ok && /ignorées/.test(last.message) ? last : null;
                   return (
                     <div className="row wrap" key={m.brand} data-merc={m.brand}>
                       <div className="grow">
                         <span className="t">{m.label}</span>
                         <span className="sub">{m.synced_at ? `Reçue ${fmtDay(m.synced_at)} à ${fmtTime(m.synced_at)} · ${plural(m.counts.recipes ?? 0, 'fiche')}, ${plural(m.counts.orders ?? 0, 'commande')}` : 'Jamais reçue'}</span>
                         {refused && <span className="sub err" data-merc-error={m.brand}>Dernier envoi refusé, {fmtDay(refused.at)} à {fmtTime(refused.at)} : {refused.message}</span>}
+                        {skipped && <span className="sub" style={{ color: 'var(--warn)' }}>Attention : {skipped.message.replace(/^.*\((.*)\)$/, '$1')}. Vérifie leur date, leur plat et leurs portions dans PRESTATIONS.</span>}
                       </div>
                       {m.sheet_url && <div className="end"><a className="btn sm" href={m.sheet_url} target="_blank" rel="noopener noreferrer">Ouvrir</a></div>}
                     </div>

@@ -233,6 +233,25 @@ do $$ begin
 end $$;
 reset role;
 
+-- 9. Dates calculées par formule : un nombre mis en forme jj/mm/aaaa (numéro de série de Google Sheets)
+do $$ begin
+  assert public._mdate('46344') = '2026-11-18' and public._mdate('"46174"') = '2026-06-01' and public._mdate('46344.75') = '2026-11-18', 'numéro de série';
+  assert public._mdate('"2026-11-25"') = '2026-11-25' and public._mdate('"25/11/2026"') = '2026-11-25' and public._mdate('"plus tard"') is null
+     and public._mdate('12') is null and public._mdate('"31/02/2026"') is null, 'autres formes de date';
+end $$;
+set role anon;
+set request.jwt.claims = '';
+do $$
+declare r jsonb := public.sync_mercuriale((select k from t_prod), (select payload from t_prod)
+                     || jsonb_build_object('orders', jsonb_build_array(jsonb_build_object('day', 46344, 'formula', 'Sur mesure', 'dish', 'Brownie', 'portions', 80))));
+begin
+  assert (r ->> 'ok')::boolean and r -> 'counts' ->> 'orders' = '1', 'une commande datée par un nombre est gardée : ' || r::text;
+end $$;
+reset role;
+do $$ begin
+  assert (select day from public.merc_orders where brand = 'saveurs_nomades') = '2026-11-18', 'à la bonne date';
+end $$;
+
 -- Remise en état
 delete from public.merc_sync_log;
 update public.kiosks set revoked_at = now() where revoked_at is null;
