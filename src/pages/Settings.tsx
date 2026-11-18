@@ -200,18 +200,21 @@ export default function Settings() {
           <Section title="Mercuriales Google Sheets" right={<button type="button" className="link" onClick={() => setMercSheet(true)}>{mercStatus.data?.key_created_at ? 'Nouveau script' : 'Relier'}</button>}>
             {merc.isLoading ? <Loading /> : merc.error ? <div className="list"><p className="empty err">{frError(merc.error)}</p></div> : (
               <div className="list">
-                {(merc.data ?? []).map((m) => (
-                  <div className="row wrap" key={m.brand} data-merc={m.brand}>
-                    <div className="grow">
-                      <span className="t">{m.label}</span>
-                      <span className="sub">{m.synced_at ? `Reçue ${fmtDay(m.synced_at)} à ${fmtTime(m.synced_at)} · ${plural(m.counts.recipes ?? 0, 'fiche')}, ${plural(m.counts.orders ?? 0, 'commande')}` : 'Jamais reçue'}</span>
+                {(merc.data ?? []).map((m) => {
+                  // Dernier envoi de cette mercuriale : s'il a été refusé, on dit pourquoi.
+                  const last = (mercStatus.data?.log ?? []).find((l) => l.brand === m.brand);
+                  const refused = last && !last.ok ? last : null;
+                  return (
+                    <div className="row wrap" key={m.brand} data-merc={m.brand}>
+                      <div className="grow">
+                        <span className="t">{m.label}</span>
+                        <span className="sub">{m.synced_at ? `Reçue ${fmtDay(m.synced_at)} à ${fmtTime(m.synced_at)} · ${plural(m.counts.recipes ?? 0, 'fiche')}, ${plural(m.counts.orders ?? 0, 'commande')}` : 'Jamais reçue'}</span>
+                        {refused && <span className="sub err" data-merc-error={m.brand}>Dernier envoi refusé, {fmtDay(refused.at)} à {fmtTime(refused.at)} : {refused.message}</span>}
+                      </div>
+                      {m.sheet_url && <div className="end"><a className="btn sm" href={m.sheet_url} target="_blank" rel="noopener noreferrer">Ouvrir</a></div>}
                     </div>
-                    {m.sheet_url && <div className="end"><a className="btn sm" href={m.sheet_url} target="_blank" rel="noopener noreferrer">Ouvrir</a></div>}
-                  </div>
-                ))}
-                {(mercStatus.data?.log ?? []).filter((l) => !l.ok).slice(0, 2).map((l, i) => (
-                  <div className="row" key={i}><div className="grow"><span className="sub err">{fmtDay(l.at)} à {fmtTime(l.at)} : {l.message}</span></div></div>
-                ))}
+                  );
+                })}
               </div>
             )}
             <p className="note">Les fiches, les commandes et les prix des mercuriales arrivent dans Production toutes les dix minutes, par un petit script Google que tu installes une fois.</p>

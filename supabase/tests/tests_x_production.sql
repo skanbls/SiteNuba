@@ -205,6 +205,34 @@ do $$ begin
   assert (public.sync_mercuriale((select k from t_prod), (select payload from t_prod))) ->> 'error' = 'too_many', 'trop d''envois en dix minutes';
 end $$;
 
+-- 8. Une erreur de la base annule l'envoi et laisse sa raison au journal, lisible par le gérant
+delete from public.merc_sync_log;
+alter table public.merc_orders add constraint test_plat_interdit check (dish <> 'Plat interdit');
+set role anon;
+set request.jwt.claims = '';
+do $$
+declare r jsonb := public.sync_mercuriale((select k from t_prod), (select payload from t_prod)
+                     || jsonb_build_object('orders', jsonb_build_array(jsonb_build_object('day', '2026-12-09', 'dish', 'Plat interdit', 'portions', 10))));
+begin
+  assert r ->> 'error' = 'db' and r ->> 'message' like '%test_plat_interdit%', 'erreur rendue au script : ' || r::text;
+end $$;
+reset role;
+alter table public.merc_orders drop constraint test_plat_interdit;
+do $$ begin
+  assert (select count(*) from public.merc_orders where brand = 'saveurs_nomades') = 2
+     and not exists (select 1 from public.merc_orders where dish = 'Plat interdit')
+     and (select count(*) from public.merc_ingredients) = 5, 'l''envoi refusé n''a rien changé';
+  assert (select message from public.merc_sync_log where not ok) like 'Envoi refusé par la base : %test_plat_interdit%', 'la raison est au journal';
+  assert public._mnum('"1,5 kg"') = 1.5 and public._mnum('"A MAJ"') is null and public._mnum('"1.2.3"') is null and public._mnum('12') = 12
+     and public._mnum('"-0,25"') = -0.25 and public._mnum('null') is null, 'lecture des nombres';
+end $$;
+set role authenticated;
+set request.jwt.claims = :boss;
+do $$ begin
+  assert (public.merc_status() -> 'log' -> 0 ->> 'message') like 'Envoi refusé par la base%', 'le gérant voit la raison';
+end $$;
+reset role;
+
 -- Remise en état
 delete from public.merc_sync_log;
 update public.kiosks set revoked_at = now() where revoked_at is null;

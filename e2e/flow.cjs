@@ -974,6 +974,15 @@ async function main() {
   await theo.locator('[data-order="Purée de patate douce + Poulet Moutarde Miel (Mariné)"]').getByText('120 portions').waitFor();
   step('une commande modifiée dans la feuille arrive toute seule dans l\'appli');
 
+  // Un envoi refusé se voit dans Administration, sous la mercuriale concernée.
+  const conf = JSON.parse(/var NUBA = (\{[\s\S]*?\n\});/.exec(script)[1]);
+  execFileSync('curl', ['-s', '-X', 'POST', conf.adresse, '-H', 'Content-Type: application/json', '-H', `apikey: ${conf.clePublique}`,
+    '--data-binary', JSON.stringify({ p_key: 'nuba_ancienne_cle', p_payload: { brand: 'saveurs_nomades', recipes: [], lines: [], orders: [] } })]);
+  await boss.goto(APP + '#/reglages');
+  await boss.locator('[data-merc-error="saveurs_nomades"]').getByText('Clé refusée').waitFor();
+  assert.equal(await boss.locator('[data-merc-error="comptoir"]').count(), 0, 'le Comptoir n\'a pas d\'erreur');
+  step("un envoi refusé est expliqué sous la mercuriale concernée");
+
   // 14. Le gérant désactive Théo : il perd l'accès.
   await boss.goto(APP + '#/equipe');
   await boss.locator('button.row', { hasText: 'Théo Martin' }).click();
