@@ -480,3 +480,6 @@ export interface Contact {
   updated_by: string | null;
   updated_at: string;
 }
+
+/** Accès comptable : heures travaillées seulement. */
+export interface AccountantAccess { id: string; email: string; name: string; user_id: string | null; active: boolean; created_at: string; last_seen_at: string | null }

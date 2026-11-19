@@ -1001,6 +1001,31 @@ async function main() {
   await shot(theo, '13zd-numeros');
   step("les numéros utiles s'appellent d'un geste ; seuls gérant et responsables les modifient");
 
+  // 13 duodecies. Accès comptable : elle ne voit que les heures travaillées.
+  await boss.goto(APP + '#/reglages');
+  await boss.getByRole('button', { name: 'Ajouter', exact: true }).click();
+  await boss.fill('#acc-name', 'Cabinet Durand');
+  await boss.fill('#acc-email', 'Compta@Cabinet.test');
+  await boss.getByRole('button', { name: 'Enregistrer' }).click();
+  await see(boss, 'Accès créé');
+  await boss.locator('[data-accountant="compta@cabinet.test"]').getByText("En attente d'inscription").waitFor();
+  const compta = await open('comptable', { width: 1180, height: 820 });
+  await signup(compta, 'Claire', 'compta@cabinet.test');
+  await compta.getByRole('heading', { name: 'Heures travaillées' }).waitFor();
+  await compta.getByRole('button', { name: 'Ce mois', exact: true }).click();
+  await compta.locator('[data-person="Théo Martin"]').waitFor();
+  assert.equal(await compta.locator('nav.side').count(), 0, "la comptable n'a pas le menu de l'équipe");
+  const [hoursFile] = await Promise.all([compta.waitForEvent('download'), compta.getByRole('button', { name: /Télécharger le fichier/ }).click()]);
+  const hoursCsv = fs.readFileSync(await hoursFile.path(), 'utf8');
+  assert.ok(hoursCsv.includes('Théo Martin') && hoursCsv.includes('Total par personne'), 'le fichier pour la paie');
+  await shot(compta, '13ze-comptable');
+  await compta.goto(APP + '#/planning');
+  await compta.getByRole('heading', { name: 'Heures travaillées' }).waitFor();
+  assert.equal(await compta.getByText('Bonjour').count(), 0, "aucun autre écran de l'appli");
+  await boss.reload();
+  await boss.locator('[data-accountant="compta@cabinet.test"]').getByText('Compte créé').waitFor();
+  step('la comptable a son accès : les heures travaillées et le fichier pour la paie, rien d\'autre');
+
   // 14. Le gérant désactive Théo : il perd l'accès.
   await boss.goto(APP + '#/equipe');
   await boss.locator('button.row', { hasText: 'Théo Martin' }).click();

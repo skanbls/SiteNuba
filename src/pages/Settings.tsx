@@ -5,12 +5,12 @@ import { RightsPicker } from '../components/Rights';
 import { Avatar, Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
 import { useQuery } from '@tanstack/react-query';
 import { buildAppsScript, sheetId } from '../lib/appsScript';
-import { useAllRights, useEmailLog, useEmailSettings, useKiosks, useMercSources, useRefresh, useSites, useTeam } from '../lib/data';
+import { useAccountants, useAllRights, useEmailLog, useEmailSettings, useKiosks, useMercSources, useRefresh, useSites, useTeam } from '../lib/data';
 import type { MercSource } from '../lib/production';
 import { AREAS, type Area } from '../lib/rights';
 import { appUrl, frError, key as publicKey, supabase, url as projectUrl } from '../lib/supabase';
 import { fmtDay, fmtTime } from '../lib/time';
-import { fullName, type EmailLogEntry, type EmailSettings, type Profile, type Site } from '../lib/types';
+import { fullName, type AccountantAccess, type EmailLogEntry, type EmailSettings, type Profile, type Site } from '../lib/types';
 
 const ADMIN_LINKS: [string, IconName, string, string][] = [
   ['/equipe', 'team', 'Équipe', 'Fiches, rôles, codes PIN, accès et dossiers Drive'],
@@ -55,6 +55,9 @@ export default function Settings() {
     },
   });
   const [mercSheet, setMercSheet] = useState(false);
+  const accountants = useAccountants(true);
+  const [accSheet, setAccSheet] = useState<AccountantAccess | 'new' | null>(null);
+  const closeAcc = useCallback(() => setAccSheet(null), []);
   const closeMerc = useCallback(() => setMercSheet(false), []);
   const [addSite, setAddSite] = useState(false);
   const [addKiosk, setAddKiosk] = useState(false);
@@ -151,6 +154,28 @@ export default function Settings() {
                 </Link>
               ))}
             </div>
+          </Section>
+
+          <Section title="Accès comptable" right={<button type="button" className="link" onClick={() => setAccSheet('new')}>Ajouter</button>}>
+            {accountants.isLoading ? <Loading /> : accountants.error ? <div className="list"><p className="empty err">{frError(accountants.error)}</p></div> : (
+              <div className="list">
+                {(accountants.data ?? []).length === 0 && <p className="empty">Aucun accès. Ajoute l'adresse e-mail de la comptable : elle ne verra que les heures travaillées de l'équipe.</p>}
+                {(accountants.data ?? []).map((a) => (
+                  <button type="button" className="row" key={a.id} onClick={() => setAccSheet(a)} data-accountant={a.email}>
+                    <div className="grow">
+                      <span className="t">{a.name || a.email}</span>
+                      <span className="sub">{[a.name ? a.email : null, a.last_seen_at ? `vue ${fmtDay(a.last_seen_at)} à ${fmtTime(a.last_seen_at)}` : null].filter(Boolean).join(' · ')}</span>
+                    </div>
+                    <span className="end">
+                      {!a.active ? <span className="pill">Désactivé</span> : a.user_id ? <span className="pill ok">Compte créé</span> : <span className="pill warn">En attente d'inscription</span>}
+                      <span className="chev"><Icon name="chev" size={18} /></span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="note">Elle ouvre le lien de l'appli et crée son compte avec cette adresse (« Créer mon compte »). Elle voit les heures pointées, pauses déduites, et télécharge le fichier pour la paie. Rien d'autre : ni planning, ni réservations, ni coordonnées.</p>
+            <Link className="btn" to="/heures"><Icon name="user" />Voir ce que voit la comptable</Link>
           </Section>
 
           <Section title="Site web et liens publics">
@@ -271,6 +296,7 @@ export default function Settings() {
       {rightsFor && <RightsSheet key={rightsFor.id} person={rightsFor} areas={areasOf(rightsFor.id)} onClose={closeRights} />}
       {mailSheet && mail.data && <MailSheet settings={mail.data} onClose={closeMail} />}
       {mercSheet && <MercSheet sources={merc.data ?? []} onClose={closeMerc} />}
+      {accSheet && <AccountantSheet access={accSheet} onClose={closeAcc} />}
     </Layout>
   );
 }
@@ -301,6 +327,56 @@ function RightsSheet({ person, areas: old, onClose }: { person: Profile; areas: 
         <p className="note">Valable avec son compte (sur son téléphone, ou sur l'iPad après connexion par e-mail). Avec le code PIN de l'iPad, ce sont les droits d'un équipier.</p>
         {err && <p className="err" role="alert">{err}</p>}
         <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : 'Enregistrer'}</button>
+      </form>
+    </Sheet>
+  );
+}
+
+/** Accès de la comptable : son adresse e-mail, activer ou retirer. */
+function AccountantSheet({ access, onClose }: { access: AccountantAccess | 'new'; onClose: () => void }) {
+  const toast = useToast();
+  const refresh = useRefresh();
+  const old = access === 'new' ? null : access;
+  const [email, setEmail] = useState(old?.email ?? '');
+  const [name, setName] = useState(old?.name ?? '');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function run(op: () => PromiseLike<{ error: { message: string } | null }>, done: string) {
+    setBusy(true);
+    setErr('');
+    const { error } = await op();
+    setBusy(false);
+    if (error) return setErr(/accountants_email_key/.test(error.message) ? 'Cette adresse a déjà un accès.' : /accountants_email_check/.test(error.message) ? "Vérifie l'adresse e-mail." : frError(error));
+    await refresh('accountants');
+    toast(done);
+    onClose();
+  }
+
+  function save(e: FormEvent) {
+    e.preventDefault();
+    const row = { email: email.trim(), name: name.trim() };
+    void (old ? run(() => supabase.from('accountants').update(row).eq('id', old.id), 'Accès enregistré')
+      : run(() => supabase.from('accountants').insert(row), 'Accès créé : elle peut créer son compte avec cette adresse'));
+  }
+
+  return (
+    <Sheet title={old ? old.name || old.email : 'Accès comptable'} onClose={onClose}>
+      <form className="form" onSubmit={save}>
+        <Field label="Nom" hint="Son nom ou celui du cabinet, pour t'y retrouver."><input className="in" id="acc-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="Cabinet Durand" /></Field>
+        <Field label="Adresse e-mail" hint={old?.user_id ? 'Changer l\'adresse détache son compte : elle devra en créer un avec la nouvelle.' : 'Celle avec laquelle elle créera son compte.'}>
+          <input className="in" id="acc-email" type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        </Field>
+        {err && <p className="err" role="alert">{err}</p>}
+        <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : 'Enregistrer'}</button>
+        {old && (
+          <div className="acts">
+            <button type="button" className="btn" disabled={busy} onClick={() => void run(() => supabase.from('accountants').update({ active: !old.active }).eq('id', old.id), old.active ? 'Accès désactivé' : 'Accès réactivé')}>
+              {old.active ? "Désactiver l'accès" : "Réactiver l'accès"}
+            </button>
+            <button type="button" className="btn no" disabled={busy} onClick={() => void run(() => supabase.from('accountants').delete().eq('id', old.id), 'Accès supprimé')}>Supprimer l'accès</button>
+          </div>
+        )}
       </form>
     </Sheet>
   );

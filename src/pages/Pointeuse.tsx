@@ -8,9 +8,10 @@ import { useEntries, useMyOpenEntry, useOpenEntries, useRefresh, useSites, useTe
 import { PUNCH_ERROR, parsePunchLink, punch, punchBreak, punchKiosk } from '../lib/punch';
 import { useMe, useSession } from '../lib/session';
 import { frError, supabase } from '../lib/supabase';
-import { PERIOD_LABEL, breakMs, dayKey, fmtDate, fmtDayLong, fmtDur, fmtTime, fromLocalInput, periodRange, toCsv, toLocalInput, workedMs, type Period } from '../lib/time';
+import { PERIOD_LABEL, breakMs, dayKey, fmtDayLong, fmtDur, fmtTime, fromLocalInput, periodRange, toLocalInput, workedMs, type Period } from '../lib/time';
 import { fullName, type CodeInfo, type Profile, type Site, type TimeEntry } from '../lib/types';
 import { useCan } from '../lib/rights';
+import { downloadCsv, hoursRows } from '../lib/hours';
 
 const PERIODS: [Period, string][] = [['week', PERIOD_LABEL.week], ['month', PERIOD_LABEL.month], ['lastMonth', PERIOD_LABEL.lastMonth]];
 
@@ -210,25 +211,7 @@ function TeamView() {
   }, [list]);
 
   function exportCsv() {
-    const rows: (string | number)[][] = [['Nom', 'Date', 'Arrivée', 'Départ', 'Pause (min)', 'Temps travaillé', 'Heures (décimal)', 'Lieu', 'Saisie', 'Note']];
-    const sorted = [...list].sort((a, b) => fullName(a.profiles).localeCompare(fullName(b.profiles), 'fr') || a.clock_in.localeCompare(b.clock_in));
-    for (const e of sorted) {
-      const done = !!e.clock_out;
-      rows.push([
-        fullName(e.profiles), fmtDate(e.clock_in), fmtTime(e.clock_in), done ? fmtTime(e.clock_out!) : 'en cours',
-        Math.round(breakMs(e, now) / 60000), done ? fmtDur(workedMs(e)) : '', done ? Math.round(workedMs(e) / 36000) / 100 : '',
-        e.sites?.name ?? '', e.source === 'qr' ? 'QR code' : e.source === 'borne' ? 'Borne, code PIN' : 'Manuelle', (e.needs_review ? 'À corriger. ' : '') + e.note,
-      ]);
-    }
-    rows.push([], ['Total par personne', '', '', '', '', 'Temps travaillé', 'Heures (décimal)']);
-    for (const t of totals) rows.push([t.name, '', '', '', '', fmtDur(t.ms), Math.round(t.ms / 36000) / 100]);
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' }));
-    a.download = `pointages-${dayKey(range.from)}-au-${dayKey(new Date(range.to.getTime() - 86_400_000))}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    downloadCsv(hoursRows(list, now), `pointages-${dayKey(range.from)}-au-${dayKey(new Date(range.to.getTime() - 86_400_000))}.csv`);
   }
 
   return (

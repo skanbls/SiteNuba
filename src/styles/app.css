@@ -295,3 +295,7 @@ button.shift:hover { background: color-mix(in srgb, var(--c, var(--ink-3)) 28%, 
   .full { min-height: 0; padding: 0; }
 }
 .guide-body p { margin: 0; font-size: 14px; color: var(--ink); }
+/* Ligne dépliable (heures par personne) */
+.row-details > summary { list-style: none; cursor: pointer; }
+.row-details > summary::-webkit-details-marker { display: none; }
+.row-details + .row-details { border-top: 1px solid var(--line); }

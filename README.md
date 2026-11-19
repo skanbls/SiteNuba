@@ -24,6 +24,7 @@ En ligne : https://skanbls.github.io/SiteNuba/ (mise à jour automatique à chaq
 | | E-mails des comptes de l'équipe (inscription, mot de passe oublié) | À régler dans Supabase : SMTP de Brevo (voir plus bas) |
 | 6. Production | Mercuriales Saveurs Nomades et Comptoir Méditerranéen : fiches, commandes clients, quantités à produire, liste de courses | **En ligne**, une fois les migrations 0011 à 0014 exécutées et le script Google installé (Administration, Mercuriales) |
 | | Numéros utiles : urgences, dépannage, fournisseurs, équipe ; modifiés par le gérant et les responsables | **En ligne**, une fois la migration 0015 exécutée |
+| | Accès de la comptable : heures travaillées seulement, fichier pour la paie | **En ligne**, une fois la migration 0016 exécutée |
 | | Ventes Zelty | En attente : accès à l'API à demander à Zelty, puis une fonction côté serveur pour garder la clé secrète |
 | | Documents de l'équipe | Restent dans le Drive du gérant ; l'appli garde le lien du dossier de chaque personne |
 
@@ -120,7 +121,7 @@ L'appli se met à jour toute seule : elle cherche une nouvelle version à chaque
 
 ## Relier l'appli à Supabase
 
-Pour une base qui a déjà les scripts 0001 à 0003, `supabase/installation/0004-a-0009.sql` regroupe les six suivants en un seul collage, tout ou rien. Les migrations 0010 à 0015 se collent ensuite une par une ; elles aussi passent en entier ou pas du tout.
+Pour une base qui a déjà les scripts 0001 à 0003, `supabase/installation/0004-a-0009.sql` regroupe les six suivants en un seul collage, tout ou rien. Les migrations 0010 à 0016 se collent ensuite une par une ; elles aussi passent en entier ou pas du tout.
 
 1. Créer un projet sur supabase.com, région Europe.
 2. Dans **SQL Editor**, coller et exécuter les fichiers de `supabase/migrations/`, dans l'ordre de leur numéro.

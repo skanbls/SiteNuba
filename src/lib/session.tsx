@@ -13,6 +13,8 @@ interface Ctx {
   pin: boolean;
   /** Fiche d'équipe de la personne, ou null si le compte n'est rattaché à personne. */
   profile: Profile | null;
+  /** Accès comptable (heures travaillées seulement), pour un compte qui n'est pas dans l'équipe. */
+  accountant: Accountant | null;
   loading: boolean;
   /** Le chargement du profil a échoué (réseau, base). */
   problem: string;
@@ -26,6 +28,8 @@ interface Ctx {
   signOut(): Promise<void>;
 }
 
+export interface Accountant { id: string; name: string; email: string }
+
 const SessionCtx = createContext<Ctx | null>(null);
 
 export function SessionProvider({ children, initialRecovery }: { children: ReactNode; initialRecovery: boolean }) {
@@ -33,6 +37,7 @@ export function SessionProvider({ children, initialRecovery }: { children: React
   const [ready, setReady] = useState(false);
   const [pinTicket, setPinTicket] = useState('');
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [accountant, setAccountant] = useState<Accountant | null>(null);
   const [loadedFor, setLoadedFor] = useState<string | null | undefined>(undefined);
   const [problem, setProblem] = useState('');
   const [recovery, setRecovery] = useState(initialRecovery);
@@ -71,6 +76,7 @@ export function SessionProvider({ children, initialRecovery }: { children: React
   const reload = useCallback(async () => {
     if (!identity) {
       setProfile(null);
+      setAccountant(null);
       setProblem('');
       setLoadedFor(null);
       return;
@@ -82,6 +88,13 @@ export function SessionProvider({ children, initialRecovery }: { children: React
       await endPin();
       return;
     }
+    // Pas de fiche d'équipe : c'est peut-être la comptable. Sans la migration 0016, on passe.
+    let acc: Accountant | null = null;
+    if (!error && !p && !identity.startsWith('pin:')) {
+      const r = await supabase.rpc('accountant_me');
+      if (!r.error && r.data) acc = r.data as Accountant;
+    }
+    setAccountant(acc);
     setProblem(error ? frError(error) : '');
     setProfile(p);
     setLoadedFor(identity);
@@ -116,6 +129,7 @@ export function SessionProvider({ children, initialRecovery }: { children: React
       session,
       pin: !!pinTicket,
       profile,
+      accountant,
       loading: !ready || loadedFor !== identity,
       problem,
       recovery,
@@ -127,7 +141,7 @@ export function SessionProvider({ children, initialRecovery }: { children: React
         else await supabase.auth.signOut();
       },
     }),
-    [session, pinTicket, profile, ready, loadedFor, identity, problem, recovery, reload, startPin, endPin],
+    [session, pinTicket, profile, accountant, ready, loadedFor, identity, problem, recovery, reload, startPin, endPin],
   );
   return <SessionCtx.Provider value={value}>{children}</SessionCtx.Provider>;
 }

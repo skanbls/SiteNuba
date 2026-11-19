@@ -240,6 +240,7 @@ const PARTS: Part[] = [
       <ul>
         <li><b>Équipe</b> : ajouter une personne, son rôle, son code PIN, le lien de son dossier Drive ; <B>QR code d'installation</B> pour l'équipe.</li>
         <li><b>Administration</b> : accès des responsables, e-mails, bornes, mercuriales, liens publics.</li>
+        <li><b>Accès comptable</b>, dans Administration : ajoute l'adresse e-mail de la comptable. Elle crée son compte avec cette adresse et ne voit que les heures travaillées, avec le fichier pour la paie.</li>
         <li><b>Pointeuse</b>, vue Équipe : corriger un pointage, <B>Exporter pour le comptable</B>.</li>
         <li><b>Planning</b> : <B>Service</B> pour planifier, <B>Recopier la semaine précédente</B>, et les demandes de congé et d'échange à accepter.</li>
       </ul>

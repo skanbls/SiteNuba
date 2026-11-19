@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MercCost, MercIngredient, MercLine, MercOrder, MercPrice, MercRecipe, MercSource } from './production';
 import { supabase } from './supabase';
-import type { BookingSettings, Checklist, ColdUnit, Contact, Customer, Deadline, EmailLogEntry, EmailSettings, Issue, Kiosk, NubaEvent, Procedure, ProcedureRead, Recipe, LeaveRequest, OilLog, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftSwap, Site, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
+import type { BookingSettings, AccountantAccess, Checklist, ColdUnit, Contact, Customer, Deadline, EmailLogEntry, EmailSettings, Issue, Kiosk, NubaEvent, Procedure, ProcedureRead, Recipe, LeaveRequest, OilLog, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftSwap, Site, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
 
 const ENTRY = '*, time_breaks(*), profiles(first_name, last_name), sites(name)';
 
@@ -326,6 +326,15 @@ export function useContacts() {
   return useQuery({
     queryKey: ['contacts'],
     queryFn: async () => must<Contact[]>(await supabase.from('contacts').select('*').order('urgent', { ascending: false }).order('position').order('name')),
+  });
+}
+
+/** Accès de la comptable (gérant). */
+export function useAccountants(enabled: boolean) {
+  return useQuery({
+    queryKey: ['accountants'],
+    enabled,
+    queryFn: async () => must<AccountantAccess[]>(await supabase.from('accountants').select('*').order('created_at')),
   });
 }
 

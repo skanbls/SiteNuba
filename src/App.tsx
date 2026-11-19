@@ -7,6 +7,7 @@ import Booking, { BookingManage, EventRequest } from './pages/Booking';
 import Checklists from './pages/Checklists';
 import Customers from './pages/Customers';
 import Events from './pages/Events';
+import HoursPreview, { AccountantHome } from './pages/Hours';
 import Hygiene from './pages/Hygiene';
 import Guide from './pages/Guide';
 import Install from './pages/Install';
@@ -27,7 +28,7 @@ import Team from './pages/Team';
 import Today from './pages/Today';
 
 export default function App({ linkError }: { linkError: string }) {
-  const { session, pin, profile, loading, problem, recovery } = useSession();
+  const { session, pin, profile, accountant, loading, problem, recovery } = useSession();
   const { pathname } = useLocation();
 
   if (!configured) return <Setup />;
@@ -46,6 +47,8 @@ export default function App({ linkError }: { linkError: string }) {
   if (!session && !pin) return <Login linkError={linkError} />;
   if (recovery && !pin) return <NewPassword />;
   if (problem) return <NoAccess reason="problem" />;
+  // La comptable : seulement les heures travaillées, quel que soit le lien ouvert.
+  if (!profile && accountant) return <AccountantHome />;
   if (!profile) return <NoAccess reason="unlinked" />;
   if (!profile.active) return <NoAccess reason="inactive" />;
 
@@ -72,6 +75,7 @@ export default function App({ linkError }: { linkError: string }) {
       <Route path="/compte" element={<Account />} />
       {gerant && <Route path="/equipe" element={<Team />} />}
       {gerant && <Route path="/reglages" element={<Settings />} />}
+      {gerant && <Route path="/heures" element={<HoursPreview />} />}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
