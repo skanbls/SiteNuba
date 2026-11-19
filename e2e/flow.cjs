@@ -891,10 +891,12 @@ async function main() {
   await see(boss, 'Lien non reconnu pour Saveurs Nomades');
   await boss.fill('#merc-sn', 'https://docs.google.com/spreadsheets/d/SN_feuille_test_123/edit#gid=9006');
   await boss.fill('#merc-cm', 'https://docs.google.com/spreadsheets/d/CM_feuille_test_456/edit');
+  await boss.fill('#merc-nuba', 'https://docs.google.com/spreadsheets/d/NB_feuille_test_789/edit');
   await boss.getByRole('button', { name: 'Créer le script' }).click();
   const script = await boss.inputValue('#merc-script');
   assert.match(script, /"cleSynchro": "nuba_[0-9a-f]{64}"/);
   assert.match(script, /"saveurs_nomades": "SN_feuille_test_123"/);
+  assert.match(script, /"nuba": "NB_feuille_test_789"/);
   await shot(boss, '13za-script-mercuriales');
   await boss.getByRole('button', { name: "C'est fait" }).click();
 
@@ -920,6 +922,52 @@ async function main() {
       'COMPOSITION CALCUL': [['Recette', 'Ingrédient', 'Quantité pour la fiche', 'Unité', 'Fournisseur', 'Coefficient de pertes'], ['Taboulé oriental', 'Semoule', 40, 'g', 'Metro', 0.05]],
       PRESTATIONS: [['Date de livraison', 'Catégorie', 'Plat', 'Portions', 'Contrôle des fiches'], [iso(3), 'Entrée', 'Taboulé oriental', 40, 'OK']],
     } },
+    // La mercuriale Nuba : la carte du restaurant, en blocs (données inventées).
+    NB_feuille_test_789: { name: 'MERCURIALE NUBA', tabs: {
+      'FICHES PLATS': [
+        ['Fiches techniques cuisine'], [],
+        ['Plat', 'Velouté test', '', '', 'État de la fiche', '', 'OK'],
+        ['Catégorie', 'Entrée', '', '', 'Coût matière / portion (€)', '', 1.25, 'Allergènes', 'Lait'],
+        ['Portions produites par la fiche', 2, '', '', 'Prix de vente HT (€)', '', 6.363636, 'Marge brute / portion (€)', 5.11],
+        ['Prix de vente TTC carte (€)', 7, '', '', 'Coût matière %', '', 0.1964, 'Coefficient (prix TTC / coût)', 5.6],
+        ['Taux de TVA (selon la catégorie)', 0.1, '', '', 'Objectif coût matière %', '', 0.25, 'Prix TTC conseillé (€)', 5.5],
+        ['Ingrédient', 'Quantité nette pour la fiche', 'Unité', 'Pertes', 'Quantité brute à sortir', 'Prix unitaire (€)', 'Coût avec pertes (€)', 'Fournisseur', 'Allergènes'],
+        ['Légume test', 300, 'g', 0.2, 360, 0.002, 0.72, 'Primeur', ''],
+        ['Crème test', '', 'ml', 0.05, '', 0.004, '', 'Grossiste', 'Lait'],
+        ['Sauce test (maison)', 40, 'g', 0, 40, 0.0025, 0.1, 'Maison', 'Lait'],
+        [], [],
+        ['Plat', 'Burger test', '', '', 'État de la fiche', '', 'Quantités à saisir'],
+        ['Catégorie', 'Plat', '', '', 'Coût matière / portion (€)', '', '', 'Allergènes', 'Gluten, Œufs'],
+        ['Portions produites par la fiche', 1, '', '', 'Prix de vente HT (€)', '', 15, 'Marge brute / portion (€)', ''],
+        ['Prix de vente TTC carte (€)', 16.5, '', '', 'Coût matière %', '', '', 'Coefficient (prix TTC / coût)', ''],
+        ['Taux de TVA (selon la catégorie)', 0.1, '', '', 'Objectif coût matière %', '', 0.3, 'Prix TTC conseillé (€)', ''],
+        ['Ingrédient', 'Quantité nette pour la fiche', 'Unité', 'Pertes', 'Quantité brute à sortir', 'Prix unitaire (€)', 'Coût avec pertes (€)', 'Fournisseur', 'Allergènes'],
+        ['Pain test', '', 'pièce', 0, '', 0.5, '', 'Boulanger', 'Gluten, Œufs'],
+        [], [],
+        ['Plat', '', '', '', 'État de la fiche', '', ''],
+      ],
+      'FICHES BOISSONS': [
+        ['Boisson', 'Cocktail test', '', '', 'État de la fiche', '', 'Doses à saisir'],
+        ['Catégorie', 'Cocktail', '', '', 'Coût matière / portion (€)', '', '', 'Allergènes', 'Aucun déclaré'],
+        ['Portions produites par la fiche', 1, '', '', 'Prix de vente HT (€)', '', 7.5],
+        ['Prix de vente TTC carte (€)', 9],
+        ['Ingrédient', 'Dose (cl, g ou pièce)', 'Unité', 'Pertes', 'Quantité brute', 'Prix unitaire (€)', 'Coût avec pertes (€)', 'Fournisseur', 'Allergènes'],
+        ['Rhum test', '', 'cl', 0.02, '', 0.3, '', 'Cave', ''],
+      ],
+      'PREPARATIONS MAISON': [
+        ['Préparation', 'Sauce test (maison)', '', '', 'État de la fiche', '', 'OK'],
+        ['Rendement : quantité finale obtenue', 1.2, '', '', 'Coût matière total (€)', '', 3, 'Allergènes', 'Lait'],
+        ['Unité du rendement (kg, L ou pièce)', 'kg', '', '', 'Coût par kg, L ou pièce (€)', '', 2.5, 'Utilisée dans', 'Velouté test'],
+        ['Unité dans les fiches', 'g', '', '', 'Coût par unité dans les fiches (€)', '', 0.0025],
+        ['Rendement : poids (kg), volume (L) ou nombre de portions (pièce) obtenu en fin de recette, pesé ou compté.'],
+        ['Ingrédient', 'Quantité nette pour la fiche', 'Unité', 'Pertes', 'Quantité brute à sortir', 'Prix unitaire (€)', 'Coût avec pertes (€)', 'Fournisseur', 'Allergènes'],
+        ['Yaourt test', 1000, 'g', 0.05, 1050, 0.0028, 2.94, 'Grossiste', 'Lait'],
+      ],
+      CALCUL: [
+        ['Ingrédient (base de prix)', 'Unité cuisine', 'Prix / unité cuisine (€)', 'Unité bar', 'Prix / unité bar (€)', 'Pertes', 'Fournisseur', 'Allergènes', 'Allergènes à vérifier'],
+        ['Yaourt test', 'g', 0.0028, 'g', 0.0028, 0.05, 'Grossiste', 'Lait', "Vérifier l'étiquette"],
+      ],
+    } },
   };
   const props = new Map();
   const google = {
@@ -939,6 +987,7 @@ async function main() {
   await boss.reload();
   await boss.locator('[data-merc="saveurs_nomades"]').getByText('3 fiches, 3 commandes').waitFor();
   await boss.locator('[data-merc="comptoir"]').getByText('1 fiche, 1 commande').waitFor();
+  await boss.locator('[data-merc="nuba"]').getByText('2 plats, 1 boisson, 1 préparation maison · 2 fiches à compléter').waitFor();
   step('le gérant relie les mercuriales : le script Google généré envoie fiches, commandes et prix');
 
   await theo.goto(APP + '#/production');
@@ -982,6 +1031,76 @@ async function main() {
   await boss.locator('[data-merc-error="saveurs_nomades"]').getByText('Clé refusée').waitFor();
   assert.equal(await boss.locator('[data-merc-error="comptoir"]').count(), 0, 'le Comptoir n\'a pas d\'erreur');
   step("un envoi refusé est expliqué sous la mercuriale concernée");
+
+  // 13 decies bis. La carte Nuba : fiches pour la cuisine et le bar, allergènes pour la salle, quantités pour la mise en place.
+  await theo.goto(APP + '#/fiches');
+  await theo.locator('[data-carte="Velouté test"]').getByText('7,00 €').waitFor();
+  await theo.locator('[data-carte="Burger test"]').getByText('Quantités à saisir').waitFor();
+  assert.equal(await theo.getByTestId('carte-synthese').count(), 0, "un équipier ne voit pas la synthèse des coûts");
+  await theo.locator('[data-carte="Velouté test"]').click();
+  await theo.getByTestId('fiche-allergenes').getByText('Lait').waitFor();
+  await theo.fill('#carte-qty', '10');
+  await theo.locator('[data-line="Légume test"]').getByText('1,5 kg').waitFor();             // 300 g pour 2 portions, 10 portions
+  await theo.locator('[data-line="Légume test"]').getByText('à sortir : 1,8 kg').waitFor();
+  await theo.locator('[data-line="Crème test"]').getByText('à saisir').waitFor();
+  assert.equal(await theo.getByTestId('fiche-couts').count(), 0, "un équipier ne voit pas les coûts");
+  await noOverflow(theo, 'fiche de la carte');
+  await shot(theo, '13zd-carte-fiche');
+  await theo.getByRole('button', { name: 'Sauce test (maison)' }).click();
+  await theo.locator('[data-line="Yaourt test"]').getByText('1 kg').waitFor();
+  await see(theo, "Vérifier l'étiquette");
+  await theo.getByRole('button', { name: /Retour à Velouté test/ }).click();
+  await theo.locator('[data-line="Légume test"]').waitFor();
+  await theo.getByRole('button', { name: 'Fermer' }).click();
+
+  await theo.getByRole('button', { name: 'Allergènes', exact: true }).click();
+  const allergic = theo.getByRole('group', { name: 'Allergènes du client' });
+  await allergic.getByRole('button', { name: 'Œufs' }).click();
+  await theo.getByTestId('allergenes-ok').locator('[data-allergen-row="Cocktail test"]').waitFor();
+  await theo.getByTestId('allergenes-check').locator('[data-allergen-row="Velouté test"]').waitFor();   // yaourt de la sauce à vérifier
+  await theo.getByTestId('allergenes-non').locator('[data-allergen-row="Burger test"]').waitFor();
+  await allergic.getByRole('button', { name: 'Lait' }).click();
+  await theo.getByTestId('allergenes-non').locator('[data-allergen-row="Velouté test"]').waitFor();
+  await noOverflow(theo, 'allergènes de la carte');
+  await shot(theo, '13zd-carte-allergenes');
+
+  await theo.getByRole('button', { name: 'Quantités', exact: true }).click();
+  await theo.selectOption('#qty-pick', { label: 'Velouté test' });
+  await theo.fill('#qty-n', '10');
+  await theo.getByRole('button', { name: 'Ajouter', exact: true }).click();
+  await theo.locator('[data-prep="Sauce test (maison)"]').getByText('200 g').waitFor();          // 40 g pour 2 portions, 10 portions
+  await theo.locator('[data-raw="Légume test"]').getByText('1,8 kg').waitFor();
+  await theo.locator('[data-raw="Yaourt test"]').getByText('175 g').waitFor();                    // 1 050 g pour 1,2 kg de sauce, 200 g de sauce
+  await theo.getByTestId('quantites-manques').getByText(/Crème test/).waitFor();
+  assert.equal(await theo.getByText('Coût matière estimé').count(), 0, "un équipier ne voit pas les coûts");
+  await noOverflow(theo, 'quantités de la carte');
+  await shot(theo, '13zd-carte-quantites');
+  await theo.reload();
+  await theo.getByRole('button', { name: 'Quantités', exact: true }).click();
+  await theo.locator('[data-want="Velouté test"]').waitFor();
+  await theo.getByRole('button', { name: "Fiches de l'appli" }).click();
+  await theo.locator('[data-recipe="Gin tonic"]').waitFor();
+  await ines.goto(APP + '#/fiches');
+  await ines.reload();   // déjà sur cette page : même adresse, pas de rechargement
+  await ines.locator('[data-carte="Velouté test"]').waitFor();
+  assert.equal(await ines.getByTestId('carte-synthese').count(), 0, "sans l'accès fiches techniques, pas de coûts");
+  step("la carte Nuba : fiches à l'échelle, préparations maison, allergènes pour la salle, quantités pour la mise en place");
+
+  await boss.goto(APP + '#/fiches');
+  await boss.getByTestId('carte-synthese').getByText('1 / 2').waitFor();
+  await boss.locator('[data-carte="Velouté test"]').getByText('19,6 %').waitFor();
+  await boss.locator('[data-carte="Velouté test"]').click();
+  await boss.getByTestId('fiche-couts').getByText('objectif 25,0 %').waitFor();
+  await boss.locator('[data-line="Légume test"]').getByText(/2,00\s€ le kg/).waitFor();
+  await boss.locator('[data-line="Légume test"]').getByText(/0,72\s€/).waitFor();
+  await shot(boss, '13zd-carte-gerant');
+  await boss.getByRole('button', { name: 'Fermer' }).click();
+  await boss.getByRole('button', { name: 'Quantités', exact: true }).click();
+  await boss.selectOption('#qty-pick', { label: 'Velouté test' });
+  await boss.fill('#qty-n', '10');
+  await boss.getByRole('button', { name: 'Ajouter', exact: true }).click();
+  await see(boss, 'Coût matière estimé');
+  step('le gérant voit coûts, marges et objectif de chaque fiche de la carte');
 
   // 13 undecies. Numéros utiles : la responsable en ajoute un, l'équipier l'appelle d'un geste.
   await ines.goto(APP + '#/numeros');

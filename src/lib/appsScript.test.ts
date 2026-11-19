@@ -85,6 +85,48 @@ const CM: Record<string, Cell[][]> = {
   PRESTATIONS: [['Date de livraison', 'Catégorie', 'Plat', 'Portions'], [new Date(Date.UTC(2026, 10, 25)), 'Dessert', 'Brownie', 60]],
 };
 
+// La mercuriale Nuba : des blocs, une fiche par bloc (données inventées).
+const NB: Record<string, Cell[][]> = {
+  'FICHES PLATS': [
+    ['Fiches techniques cuisine'],
+    ['À remplir par la cheffe…'],
+    [],
+    ['Plat', 'Velouté test', '', '', 'État de la fiche', '', 'OK'],
+    ['Catégorie', 'Entrée', '', '', 'Coût matière / portion (€)', '', 1.25, 'Allergènes', 'Lait'],
+    ['Portions produites par la fiche', 2, '', '', 'Prix de vente HT (€)', '', 6.363636, 'Marge brute / portion (€)', 5.11],
+    ['Prix de vente TTC carte (€)', 7, '', '', 'Coût matière %', '', 0.1964, 'Coefficient (prix TTC / coût)', 5.6],
+    ['Taux de TVA (selon la catégorie)', 0.1, '', '', 'Objectif coût matière %', '', 0.25, 'Prix TTC conseillé (€)', ''],
+    ['Ingrédient', 'Quantité nette pour la fiche', 'Unité', 'Pertes', 'Quantité brute à sortir', 'Prix unitaire (€)', 'Coût avec pertes (€)', 'Fournisseur', 'Allergènes'],
+    ['Légume test', 300, 'g', 0.2, 360, 0.002, 0.72, 'Primeur', ''],
+    ['Crème test', '', 'ml', 0.05, '', 0.004, '', 'Grossiste', 'Lait'],
+    ['Sauce test (maison)', 40, 'g', 0, 40, '', '', 'Maison', ''],
+    [], [],
+    ['Plat', '', '', '', 'État de la fiche', '', ''],
+    ['Catégorie', '', '', '', 'Coût matière / portion (€)', '', '', 'Allergènes', ''],
+    ['Ingrédient', 'Quantité nette pour la fiche', 'Unité'],
+  ],
+  'FICHES BOISSONS': [
+    ['Boisson', 'Cocktail test', '', '', 'État de la fiche', '', 'Doses à saisir'],
+    ['Catégorie', 'Cocktail', '', '', 'Coût matière / portion (€)', '', '', 'Allergènes', 'Aucun déclaré'],
+    ['Ingrédient', 'Dose (cl, g ou pièce)', 'Unité', 'Pertes', 'Quantité brute', 'Prix unitaire (€)', 'Coût avec pertes (€)', 'Fournisseur', 'Allergènes'],
+    ['Rhum test', '', 'cl', 0.02, '', 0.3, '', 'Cave', ''],
+  ],
+  'PREPARATIONS MAISON': [
+    ['Préparation', 'Sauce test (maison)', '', '', 'État de la fiche', '', 'OK'],
+    ['Rendement : quantité finale obtenue', 1.2, '', '', 'Coût matière total (€)', '', 3, 'Allergènes', 'Aucun déclaré'],
+    ['Unité du rendement (kg, L ou pièce)', 'kg', '', '', 'Coût par kg, L ou pièce (€)', '', 2.5, 'Utilisée dans', 'Velouté test'],
+    ['Unité dans les fiches', 'g', '', '', 'Coût par unité dans les fiches (€)', '', 0.0025],
+    ['Rendement : poids (kg), volume (L) ou nombre de portions (pièce) obtenu en fin de recette, pesé ou compté.'],
+    ['Ingrédient', 'Quantité nette pour la fiche', 'Unité', 'Pertes', 'Quantité brute à sortir', 'Prix unitaire (€)', 'Coût avec pertes (€)', 'Fournisseur', 'Allergènes'],
+    ['Yaourt test', 1000, 'g', 0.05, 1050, 0.0028, 2.94, 'Grossiste', ''],
+  ],
+  CALCUL: [
+    ['Ingrédient (base de prix)', 'Unité cuisine', 'Prix / unité cuisine (€)', 'Unité bar', 'Prix / unité bar (€)', 'Pertes', 'Fournisseur', 'Allergènes', 'Allergènes à vérifier', '', 'Préparation maison', 'Unité cuisine', 'Prix / unité cuisine (€)', 'Unité bar', 'Prix / unité bar (€)', 'Pertes', 'Fournisseur', 'Allergènes', 'Allergènes à vérifier'],
+    ['Légume test', 'g', 0.002, 'g', 0.002, 0.2, 'Primeur', '', '', '', 'Sauce test (maison)', 'g', 0.0025, 'g', 0.0025, 0, 'Maison', '', 'Ne pas lire'],
+    ['Yaourt test', 'g', 0.0028, 'g', 0.0028, 0.05, 'Grossiste', 'Lait', 'Lait : vérifier l\'étiquette'],
+  ],
+};
+
 const opts = { url: 'https://projet.supabase.co/', publicKey: 'sb_publishable_x', syncKey: 'nuba_cle', saveursNomades: 'ID_SN', comptoir: 'ID_CM', date: '17/11/2026' };
 
 describe('script Google des mercuriales', () => {
@@ -138,6 +180,34 @@ describe('script Google des mercuriales', () => {
     expect(sent[2].body.p_payload.brand).toBe('comptoir');
     s.envoyerMaintenant();
     expect(sent).toHaveLength(5);
+  });
+
+  it('lit la carte Nuba, bloc par bloc, et l\'envoie à part', () => {
+    const { g, sent } = fakeGoogle({ ID_NB: { name: 'MERCURIALE NUBA', tabs: NB } });
+    run(buildAppsScript({ ...opts, saveursNomades: '', comptoir: '', nuba: 'ID_NB' }), g).envoyerMaintenant();
+    expect(sent).toHaveLength(1);
+    expect(sent[0].url).toBe('https://projet.supabase.co/rest/v1/rpc/sync_carte');
+    const nb = sent[0].body.p_payload as { brand: string; file: string; items: Record<string, unknown>[]; lines: Record<string, unknown>[] };
+    expect(nb.brand).toBe('nuba');
+    expect(nb.file).toBe('MERCURIALE NUBA');
+    expect(nb.items).toEqual([
+      { kind: 'plat', block: 1, name: 'Velouté test', status: 'OK', category: 'Entrée', cost_portion: 1.25, allergens: 'Lait', portions: 2, sale_price_ht: 6.363636, margin: 5.11, sale_price: 7, cost_pct: 0.1964, coefficient: 5.6, vat: 0.1, target_pct: 0.25 },
+      { kind: 'boisson', block: 2, name: 'Cocktail test', status: 'Doses à saisir', category: 'Cocktail', allergens: 'Aucun déclaré' },
+      { kind: 'preparation', block: 3, name: 'Sauce test (maison)', status: 'OK', yield_qty: 1.2, cost_total: 3, allergens: 'Aucun déclaré', yield_unit: 'kg', cost_unit: 2.5, used_in: 'Velouté test', recipe_unit: 'g', cost_recipe_unit: 0.0025 },
+    ]);
+    expect(nb.lines).toEqual([
+      { kind: 'plat', block: 1, recipe: 'Velouté test', ingredient: 'Légume test', quantity: 300, unit: 'g', loss: 0.2, gross: 360, unit_price: 0.002, cost: 0.72, supplier: 'Primeur' },
+      { kind: 'plat', block: 1, recipe: 'Velouté test', ingredient: 'Crème test', unit: 'ml', loss: 0.05, unit_price: 0.004, supplier: 'Grossiste', allergens: 'Lait' },
+      { kind: 'plat', block: 1, recipe: 'Velouté test', ingredient: 'Sauce test (maison)', quantity: 40, unit: 'g', loss: 0, gross: 40, supplier: 'Maison' },
+      { kind: 'boisson', block: 2, recipe: 'Cocktail test', ingredient: 'Rhum test', unit: 'cl', loss: 0.02, unit_price: 0.3, supplier: 'Cave' },
+      { kind: 'preparation', block: 3, recipe: 'Sauce test (maison)', ingredient: 'Yaourt test', quantity: 1000, unit: 'g', loss: 0.05, gross: 1050, unit_price: 0.0028, cost: 2.94, supplier: 'Grossiste', check: "Lait : vérifier l'étiquette" },
+    ]);
+  });
+
+  it('les trois mercuriales partent ensemble, la carte vers sa propre adresse', () => {
+    const { g, sent } = fakeGoogle({ ID_SN: { name: 'SN', tabs: SN }, ID_CM: { name: 'CM', tabs: CM }, ID_NB: { name: 'NB', tabs: NB } }, '{"ok":false,"error":"db","message":"valeur trop longue"}');
+    expect(() => run(buildAppsScript({ ...opts, nuba: 'ID_NB' }), g).envoyerMaintenant()).toThrow(/nuba : refusé par la base : valeur trop longue/);
+    expect(sent.map((x) => x.url.split('/').pop())).toEqual(['sync_mercuriale', 'sync_mercuriale', 'sync_carte']);
   });
 
   it('une feuille non renseignée est ignorée', () => {

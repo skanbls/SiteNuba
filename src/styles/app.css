@@ -193,6 +193,8 @@ textarea.in { padding: 10px 12px; min-height: 72px; resize: vertical; }
 /* Feuille (formulaire en surimpression) */
 .sheet-bg { position: fixed; inset: 0; z-index: 20; background: rgb(6 20 12 / 0.6); display: flex; align-items: flex-end; justify-content: center; }
 .sheet { width: 100%; max-width: 520px; max-height: 92dvh; overflow-y: auto; background: var(--bg); border-radius: 20px 20px 0 0; padding: 18px var(--gut-r) calc(20px + env(safe-area-inset-bottom, 0px)) var(--gut-l); display: flex; flex-direction: column; gap: 16px; }
+/* Dans une feuille qui défile, une liste longue garde sa hauteur au lieu d'être écrasée. */
+.sheet > * { flex-shrink: 0; }
 .sheet-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .sheet-h h2 { font: 700 20px/1.2 var(--display); }
 @media (min-width: 620px) {

@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MercCost, MercIngredient, MercLine, MercOrder, MercPrice, MercRecipe, MercSource } from './production';
+import type { MenuCost, MenuItem, MenuLine, MenuLineCost } from './carte';
 import { supabase } from './supabase';
 import type { BookingSettings, AccountantAccess, Checklist, ColdUnit, Contact, Customer, Deadline, EmailLogEntry, EmailSettings, Issue, Kiosk, NubaEvent, Procedure, ProcedureRead, Recipe, LeaveRequest, OilLog, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftSwap, Site, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
 
@@ -319,6 +320,22 @@ export function useMercPrices(enabled: boolean) {
 }
 export function useMercCosts(enabled: boolean) {
   return useQuery({ queryKey: ['merc', 'costs'], enabled, queryFn: () => selectAll<MercCost>('merc_recipe_costs', '*', ['brand', 'name']) });
+}
+
+/* ---------- La carte Nuba (mercuriale Nuba) ---------- */
+/** `enabled` : seulement quand la base connaît la carte (migration 0017). */
+export function useMenuItems(enabled: boolean) {
+  return useQuery({ queryKey: ['carte', 'items'], enabled, queryFn: () => selectAll<MenuItem>('menu_items', '*', ['kind', 'name']) });
+}
+export function useMenuLines(enabled: boolean) {
+  return useQuery({ queryKey: ['carte', 'lines'], enabled, queryFn: () => selectAll<MenuLine>('menu_lines', '*', ['kind', 'recipe', 'position']) });
+}
+/** Coûts et prix d'achat : accès fiches techniques seulement. */
+export function useMenuCosts(enabled: boolean) {
+  return useQuery({ queryKey: ['carte', 'costs'], enabled, queryFn: () => selectAll<MenuCost>('menu_costs', '*', ['kind', 'name']) });
+}
+export function useMenuLineCosts(enabled: boolean) {
+  return useQuery({ queryKey: ['carte', 'line-costs'], enabled, queryFn: () => selectAll<MenuLineCost>('menu_line_costs', '*', ['kind', 'recipe', 'position']) });
 }
 
 /** Numéros utiles, urgences d'abord. */

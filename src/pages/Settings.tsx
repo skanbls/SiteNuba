@@ -18,7 +18,7 @@ const ADMIN_LINKS: [string, IconName, string, string][] = [
   ['/hygiene', 'thermo', 'Hygiène', 'Enceintes froides, plan de nettoyage'],
   ['/stocks', 'box', 'Stocks', 'Produits, seuils d\'alerte, quantités voulues, prix'],
   ['/commandes', 'truck', 'Fournisseurs', 'Coordonnées, jours de livraison, minimum de commande'],
-  ['/fiches', 'list', 'Fiches techniques', 'Recettes, grammages, prix de vente'],
+  ['/fiches', 'list', 'Fiches techniques', 'La carte Nuba (mercuriale Nuba) : coûts, marges, allergènes'],
   ['/production', 'pot', 'Production', 'Fiches et commandes des mercuriales : elles se modifient dans Google Sheets'],
   ['/procedures', 'doc', 'Procédures', 'Consignes de l\'équipe, lecture à confirmer'],
   ['/planning', 'cal', 'Planning', 'Services de la semaine, congés'],
@@ -27,6 +27,7 @@ const ADMIN_LINKS: [string, IconName, string, string][] = [
 ];
 
 const plural = (n: number, w: string) => `${n} ${w}${n > 1 ? 's' : ''}`;
+const MERC_ORDER = ['nuba', 'saveurs_nomades', 'comptoir'];
 
 const MAIL_STATUS: Record<EmailLogEntry['status'], [string, string]> = {
   queued: ['', 'En attente'],
@@ -225,7 +226,7 @@ export default function Settings() {
           <Section title="Mercuriales Google Sheets" right={<button type="button" className="link" onClick={() => setMercSheet(true)}>{mercStatus.data?.key_created_at ? 'Nouveau script' : 'Relier'}</button>}>
             {merc.isLoading ? <Loading /> : merc.error ? <div className="list"><p className="empty err">{frError(merc.error)}</p></div> : (
               <div className="list">
-                {(merc.data ?? []).map((m) => {
+                {[...(merc.data ?? [])].sort((a, b) => MERC_ORDER.indexOf(a.brand) - MERC_ORDER.indexOf(b.brand)).map((m) => {
                   // Dernier envoi de cette mercuriale : s'il a été refusé, on dit pourquoi.
                   const last = (mercStatus.data?.log ?? []).find((l) => l.brand === m.brand);
                   const refused = last && !last.ok ? last : null;
@@ -234,7 +235,9 @@ export default function Settings() {
                     <div className="row wrap" key={m.brand} data-merc={m.brand}>
                       <div className="grow">
                         <span className="t">{m.label}</span>
-                        <span className="sub">{m.synced_at ? `Reçue ${fmtDay(m.synced_at)} à ${fmtTime(m.synced_at)} · ${plural(m.counts.recipes ?? 0, 'fiche')}, ${plural(m.counts.orders ?? 0, 'commande')}` : 'Jamais reçue'}</span>
+                        <span className="sub">{!m.synced_at ? 'Jamais reçue' : `Reçue ${fmtDay(m.synced_at)} à ${fmtTime(m.synced_at)} · ${m.brand === 'nuba'
+                          ? `${plural(m.counts.plats ?? 0, 'plat')}, ${plural(m.counts.boissons ?? 0, 'boisson')}, ${plural(m.counts.preparations ?? 0, 'préparation')} maison${m.counts.todo ? ` · ${plural(m.counts.todo, 'fiche')} à compléter` : ''}`
+                          : `${plural(m.counts.recipes ?? 0, 'fiche')}, ${plural(m.counts.orders ?? 0, 'commande')}`}`}</span>
                         {refused && <span className="sub err" data-merc-error={m.brand}>Dernier envoi refusé, {fmtDay(refused.at)} à {fmtTime(refused.at)} : {refused.message}</span>}
                         {skipped && <span className="sub" style={{ color: 'var(--warn)' }}>Attention : {skipped.message.replace(/^.*\((.*)\)$/, '$1')}. Vérifie leur date, leur plat et leurs portions dans PRESTATIONS.</span>}
                       </div>
@@ -244,7 +247,7 @@ export default function Settings() {
                 })}
               </div>
             )}
-            <p className="note">Les fiches, les commandes et les prix des mercuriales arrivent dans Production toutes les dix minutes, par un petit script Google que tu installes une fois.</p>
+            <p className="note">Un petit script Google, installé une fois, envoie les mercuriales toutes les dix minutes : la carte Nuba dans Fiches techniques, Saveurs Nomades et Comptoir dans Production.</p>
           </Section>
 
           <Section title="Bornes de pointage" right={<button type="button" className="link" onClick={() => setAddKiosk(true)}>Ajouter une borne</button>}>
@@ -382,31 +385,32 @@ function AccountantSheet({ access, onClose }: { access: AccountantAccess | 'new'
   );
 }
 
-/** Relier les mercuriales : liens des deux feuilles, clé de synchronisation et script Google à coller. */
+/** Relier les mercuriales : liens des trois feuilles, clé de synchronisation et script Google à coller. */
 function MercSheet({ sources, onClose }: { sources: MercSource[]; onClose: () => void }) {
   const toast = useToast();
   const refresh = useRefresh();
   const urlOf = (b: string) => sources.find((s) => s.brand === b)?.sheet_url ?? '';
   const [sn, setSn] = useState(urlOf('saveurs_nomades'));
   const [cm, setCm] = useState(urlOf('comptoir'));
+  const [nb, setNb] = useState(urlOf('nuba'));
   const [script, setScript] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function create(e: FormEvent) {
     e.preventDefault();
-    const a = sheetId(sn), b = sheetId(cm);
-    const bad = [sn.trim() && !a ? 'Saveurs Nomades' : '', cm.trim() && !b ? 'Comptoir Méditerranéen' : ''].filter(Boolean);
+    const a = sheetId(sn), b = sheetId(cm), c = sheetId(nb);
+    const bad = [nb.trim() && !c ? 'Nuba' : '', sn.trim() && !a ? 'Saveurs Nomades' : '', cm.trim() && !b ? 'Comptoir Méditerranéen' : ''].filter(Boolean);
     if (bad.length) return setErr(`Lien non reconnu pour ${bad.join(' et ')}. Ouvre la mercuriale dans Google Sheets et copie l'adresse en haut du navigateur : elle commence par https://docs.google.com/spreadsheets/d/`);
-    if (!a && !b) return setErr('Colle le lien d\'au moins une mercuriale.');
+    if (!a && !b && !c) return setErr('Colle le lien d\'au moins une mercuriale.');
     setBusy(true);
     setErr('');
     const clean = (id: string) => (id ? `https://docs.google.com/spreadsheets/d/${id}/edit` : '');
-    const { data, error } = await supabase.rpc('merc_new_key', { p_sn_url: clean(a), p_cm_url: clean(b) });
+    const { data, error } = await supabase.rpc('merc_new_key', { p_sn_url: clean(a), p_cm_url: clean(b), p_nuba_url: clean(c) });
     setBusy(false);
     if (error) return setErr(frError(error));
     await refresh('merc');
-    setScript(buildAppsScript({ url: projectUrl ?? '', publicKey: publicKey ?? '', syncKey: data as string, saveursNomades: a, comptoir: b, date: new Date().toLocaleDateString('fr-FR') }));
+    setScript(buildAppsScript({ url: projectUrl ?? '', publicKey: publicKey ?? '', syncKey: data as string, saveursNomades: a, comptoir: b, nuba: c, date: new Date().toLocaleDateString('fr-FR') }));
   }
 
   async function copy() {
@@ -423,6 +427,7 @@ function MercSheet({ sources, onClose }: { sources: MercSource[]; onClose: () =>
       {!script ? (
         <form className="form" onSubmit={create}>
           <p className="note">Ouvre chaque mercuriale dans Google Sheets et copie le lien de la barre d'adresse.</p>
+          <Field label="Mercuriale Nuba (la carte du restaurant)"><input className="in" id="merc-nuba" inputMode="url" value={nb} onChange={(e) => setNb(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" /></Field>
           <Field label="Mercuriale Saveurs Nomades"><input className="in" id="merc-sn" inputMode="url" value={sn} onChange={(e) => setSn(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" /></Field>
           <Field label="Mercuriale Comptoir Méditerranéen"><input className="in" id="merc-cm" inputMode="url" value={cm} onChange={(e) => setCm(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" /></Field>
           <p className="note">Une nouvelle clé remplace l'ancienne : un script déjà installé cesse d'envoyer jusqu'à ce que tu le remplaces.</p>
@@ -433,8 +438,8 @@ function MercSheet({ sources, onClose }: { sources: MercSource[]; onClose: () =>
         <div className="form">
           <ol className="note" style={{ paddingLeft: 18, display: 'grid', gap: 6 }}>
             <li>Copie le script ci-dessous. Il contient ta clé : il ne s'affichera plus.</li>
-            <li>Sur ton ordinateur, ouvre script.google.com avec ton compte Google, puis « Nouveau projet ».</li>
-            <li>Efface le texte déjà présent, colle le script, et enregistre (icône disquette).</li>
+            <li>Sur ton ordinateur, ouvre script.google.com avec ton compte Google. Si tu as déjà un projet Nuba, ouvre-le ; sinon « Nouveau projet ».</li>
+            <li>Efface tout le texte déjà présent, colle le script, et enregistre (icône disquette).</li>
             <li>En haut, choisis la fonction « installer », puis « Exécuter ». Google demande d'autoriser l'accès à tes feuilles : accepte (s'il parle d'application non validée : « Paramètres avancés », puis « Accéder »).</li>
             <li>Reviens ici : la date de réception s'affiche sous chaque mercuriale. Ensuite, tout se met à jour seul, toutes les dix minutes.</li>
           </ol>

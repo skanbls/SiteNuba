@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Icon } from '../components/Icon';
 import { Chips, Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
 import { useProducts, useRecipes, useRefresh } from '../lib/data';
@@ -19,8 +19,11 @@ function lineCost(l: { product_id: string | null; quantity: number; pack_size: n
   return l.manual_cost ?? 0;
 }
 
-/** Fiches techniques : recettes, grammages, allergènes ; coûts et marges pour le gérant. */
-export default function Recipes() {
+/**
+ * Fiches techniques écrites dans l'appli : recettes, grammages, allergènes ; coûts et marges pour le gérant.
+ * Sans mercuriale Nuba, c'est la page Fiches techniques ; avec elle, l'onglet « Fiches de l'appli ».
+ */
+export default function Recipes({ embedded = false, note }: { embedded?: boolean; note?: ReactNode }) {
   const can = useCan();
   const editor = can('fiches');
   const recipes = useRecipes();
@@ -39,9 +42,12 @@ export default function Recipes() {
   const shown = all.filter((r) => cat === 'Toutes' || r.category === cat).filter((r) => !needle || r.name.toLowerCase().includes(needle));
   const costOf = (r: Recipe) => r.recipe_items.reduce((t, i) => t + lineCost(i, price), 0) / (r.portions || 1);
 
-  return (
-    <Layout title="Fiches techniques" right={editor && <button type="button" className="btn sm pri" onClick={() => setOpen('new')}><Icon name="plus" size={16} />Fiche</button>}>
+  const add = editor && <button type="button" className="btn sm pri" onClick={() => setOpen('new')}><Icon name="plus" size={16} />Fiche</button>;
+  const body = (
+    <>
+      {note}
       <div className="acts">
+        {embedded && add}
         <input className="in" id="recipe-search" style={{ flex: '2 1 180px' }} type="search" placeholder="Chercher une recette" aria-label="Chercher une recette" value={search} onChange={(e) => setSearch(e.target.value)} />
         <button type="button" className="btn" onClick={() => setTable(true)}>Tableau des allergènes</button>
       </div>
@@ -86,8 +92,9 @@ export default function Recipes() {
           </div>
         </Sheet>
       )}
-    </Layout>
+    </>
   );
+  return embedded ? body : <Layout title="Fiches techniques" right={add}>{body}</Layout>;
 }
 
 /* ---------- Lecture d'une fiche (équipe) ---------- */

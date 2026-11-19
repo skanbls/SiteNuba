@@ -3,9 +3,14 @@
  * L'appli le génère avec la clé de synchronisation et l'identifiant des deux feuilles ;
  * le gérant le colle une fois dans script.google.com et lance « installer ».
  *
- * Il lit, dans chaque mercuriale : RECETTES, COMPOSITION CALCUL, PRESTATIONS,
+ * Il lit, dans Saveurs Nomades et Comptoir : RECETTES, COMPOSITION CALCUL, PRESTATIONS,
  * GRAMMAGES SUR MESURE (s'il existe) et, dans Saveurs Nomades, PRIX INGREDIENTS.
  * Les colonnes sont retrouvées par leur titre : l'ordre des colonnes peut changer.
+ *
+ * Dans la mercuriale Nuba (la carte du restaurant) : FICHES PLATS, FICHES BOISSONS et
+ * PREPARATIONS MAISON, faites de blocs (une fiche par bloc : « Plat », « Boisson » ou
+ * « Préparation » en colonne A, puis ses réglages, puis ses ingrédients sous « Ingrédient »),
+ * et la colonne « Allergènes à vérifier » de CALCUL. Chaque réglage est retrouvé par son titre.
  */
 
 /**
@@ -29,6 +34,8 @@ export interface ScriptOptions {
   syncKey: string;
   saveursNomades: string;
   comptoir: string;
+  /** Mercuriale Nuba (la carte du restaurant), ou chaîne vide. */
+  nuba?: string;
   /** Date affichée en tête du script. */
   date: string;
 }
@@ -36,12 +43,13 @@ export interface ScriptOptions {
 export function buildAppsScript(o: ScriptOptions): string {
   const conf = {
     adresse: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/sync_mercuriale`,
+    adresseCarte: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/sync_carte`,
     clePublique: o.publicKey,
     cleSynchro: o.syncKey,
-    mercuriales: { saveurs_nomades: o.saveursNomades, comptoir: o.comptoir },
+    mercuriales: { saveurs_nomades: o.saveursNomades, comptoir: o.comptoir, nuba: o.nuba ?? '' },
   };
   return `/**
- * Nuba Gestion : envoie les mercuriales Saveurs Nomades et Comptoir Méditerranéen vers l'appli.
+ * Nuba Gestion : envoie les mercuriales Saveurs Nomades, Comptoir Méditerranéen et Nuba vers l'appli.
  * Généré par l'appli (Administration, Mercuriales) le ${o.date}.
  *
  * Mise en route, une seule fois :
@@ -70,26 +78,32 @@ function envoyerSiChangement() { nubaEnvoyer_(false); }
 function nubaEnvoyer_(force) {
   var props = PropertiesService.getScriptProperties();
   var erreurs = [];
-  ['saveurs_nomades', 'comptoir'].forEach(function (marque) {
+  ['saveurs_nomades', 'comptoir', 'nuba'].forEach(function (marque) {
     var id = NUBA.mercuriales[marque];
     if (!id) return;
     try {
       var ss = SpreadsheetApp.openById(id);
-      var contenu = {
-        brand: marque,
-        file: ss.getName(),
-        recipes: nubaRecettes_(ss),
-        lines: nubaLignes_(ss),
-        orders: nubaCommandes_(ss),
-        roles: nubaRoles_(ss)
-      };
+      var contenu;
+      if (marque === 'nuba') {
+        var carte = nubaCarte_(ss);
+        contenu = { brand: marque, file: ss.getName(), items: carte.items, lines: carte.lines };
+      } else {
+        contenu = {
+          brand: marque,
+          file: ss.getName(),
+          recipes: nubaRecettes_(ss),
+          lines: nubaLignes_(ss),
+          orders: nubaCommandes_(ss),
+          roles: nubaRoles_(ss)
+        };
+      }
       if (marque === 'saveurs_nomades') contenu.ingredients = nubaIngredients_(ss);
       var texte = JSON.stringify(contenu);
       var empreinte = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, texte, Utilities.Charset.UTF_8));
       var dernier = Number(props.getProperty('nuba_envoi_' + marque) || 0);
       // Rien n'a changé : on n'envoie qu'une fois toutes les six heures, pour dire que tout va bien.
       if (!force && props.getProperty('nuba_empreinte_' + marque) === empreinte && Date.now() - dernier < 6 * 3600 * 1000) return;
-      var rep = UrlFetchApp.fetch(NUBA.adresse, {
+      var rep = UrlFetchApp.fetch(marque === 'nuba' ? NUBA.adresseCarte : NUBA.adresse, {
         method: 'post',
         contentType: 'application/json',
         muteHttpExceptions: true,
@@ -100,7 +114,7 @@ function nubaEnvoyer_(force) {
       var res = null;
       try { res = JSON.parse(corps); } catch (e) { res = null; }
       if (rep.getResponseCode() !== 200 || !res || res.ok !== true) {
-        erreurs.push(marque + ' : ' + nubaRaison_(res, rep.getResponseCode(), corps));
+        erreurs.push(marque + ' : ' + nubaRaison_(res, rep.getResponseCode(), corps, marque));
         return;
       }
       props.setProperty('nuba_empreinte_' + marque, empreinte);
@@ -113,11 +127,12 @@ function nubaEnvoyer_(force) {
   if (erreurs.length) throw new Error('Envoi vers Nuba incomplet. ' + erreurs.join(' | '));
 }
 
-function nubaRaison_(res, code, corps) {
+function nubaRaison_(res, code, corps, marque) {
   if (res && res.error === 'key') return "clé refusée. Génère un nouveau script dans l'appli (Administration, Mercuriales).";
   if (res && res.error === 'too_many') return 'trop d\\'envois en peu de temps, nouvel essai dans 10 minutes.';
   if (res && res.error === 'payload') return 'contenu illisible (onglet renommé ou vidé ?).';
-  if (code === 404) return "l'appli attend la mise à jour 0011 de sa base.";
+  if (res && res.error === 'db') return 'refusé par la base : ' + res.message;
+  if (code === 404) return marque === 'nuba' ? "l'appli attend la mise à jour 0017 de sa base." : "l'appli attend la mise à jour 0011 de sa base.";
   return 'réponse ' + code + ' : ' + String(corps).slice(0, 200);
 }
 
@@ -237,6 +252,114 @@ function nubaIngredients_(ss) {
     recipe_unit: ['Unité en recette'],
     allergens: ['Allergènes']
   }, 'name');
+}
+
+// ---------- Mercuriale Nuba : la carte, en blocs ----------
+
+var NUBA_DEBUTS = { 'plat': 1, 'boisson': 1, 'préparation': 1 };
+
+// Réglages d'une fiche : titre (début du texte de la case) et champ envoyé.
+var NUBA_CHAMPS = [
+  ['catégorie', 'category'], ['état de la fiche', 'status'], ['portions produites', 'portions'],
+  ['prix de vente ttc', 'sale_price'], ['taux de tva', 'vat'], ['coût matière / portion', 'cost_portion'],
+  ['prix de vente ht', 'sale_price_ht'], ['marge brute', 'margin'], ['coût matière %', 'cost_pct'],
+  ['coefficient', 'coefficient'], ['objectif coût matière', 'target_pct'], ['prix ttc conseillé', 'suggested_price'],
+  ['allergènes', 'allergens'], ['rendement : quantité', 'yield_qty'], ['unité du rendement', 'yield_unit'],
+  ['unité dans les fiches', 'recipe_unit'], ['coût matière total', 'cost_total'], ['coût par kg', 'cost_unit'],
+  ['coût par unité', 'cost_recipe_unit'], ['utilisée dans', 'used_in']
+];
+
+var NUBA_LIGNE = {
+  ingredient: ['Ingrédient'],
+  quantity: ['Quantité nette pour la fiche', 'Dose'],
+  unit: ['Unité'],
+  loss: ['Pertes'],
+  gross: ['Quantité brute'],
+  unit_price: ['Prix unitaire'],
+  cost: ['Coût avec pertes'],
+  supplier: ['Fournisseur'],
+  allergens: ['Allergènes']
+};
+
+function nubaChamp_(t) {
+  for (var i = 0; i < NUBA_CHAMPS.length; i++) if (t.indexOf(NUBA_CHAMPS[i][0]) === 0) return NUBA_CHAMPS[i][1];
+  return null;
+}
+
+/** Les réglages d'une ligne du haut de la fiche : la valeur suit son titre, une ou deux cases à droite. */
+function nubaReglages_(ligne, fiche) {
+  for (var c = 0; c < ligne.length; c++) {
+    var k = nubaChamp_(nubaNorme_(ligne[c]));
+    if (!k) continue;
+    var v = '';
+    for (var d = 1; d <= 2 && c + d < ligne.length; d++) {
+      var x = ligne[c + d];
+      if (x === '' || x === null || x === undefined) continue;
+      if (typeof x === 'string' && nubaChamp_(nubaNorme_(x))) break;
+      v = x;
+      break;
+    }
+    v = nubaValeur_(v);
+    if (v !== '' && v !== null && v !== undefined && fiche[k] === undefined) fiche[k] = v;
+  }
+}
+
+/** Allergènes à vérifier de chaque ingrédient de la base (onglet CALCUL). */
+function nubaAVerifier_(ss) {
+  var m = {};
+  nubaObjets_(nubaTableau_(ss, 'CALCUL', 'Ingrédient (base de prix)'), {
+    name: ['Ingrédient (base de prix)'],
+    check: ['Allergènes à vérifier']
+  }, 'name').forEach(function (o) {
+    if (o.check !== undefined && String(o.check) !== '') m[nubaNorme_(o.name)] = String(o.check);
+  });
+  return m;
+}
+
+function nubaCarte_(ss) {
+  var out = { items: [], lines: [] };
+  var bloc = 0;
+  var verif = nubaAVerifier_(ss);
+  [['FICHES PLATS', 'plat'], ['FICHES BOISSONS', 'boisson'], ['PREPARATIONS MAISON', 'preparation']].forEach(function (o) {
+    var sh = ss.getSheetByName(o[0]);
+    if (!sh) return;
+    var fiche = null;
+    var cols = null;
+    sh.getDataRange().getValues().forEach(function (ligne) {
+      var a = nubaNorme_(ligne[0]);
+      if (NUBA_DEBUTS[a]) {
+        var nom = nubaValeur_(ligne[1]);
+        cols = null;
+        fiche = null;
+        if (nom === '' || nom === null || nom === undefined) return;   // fiche vide, prête à remplir
+        bloc++;
+        fiche = { kind: o[1], block: bloc, name: String(nom) };
+        nubaReglages_(ligne, fiche);
+        out.items.push(fiche);
+        return;
+      }
+      if (!fiche) return;
+      if (a === 'ingrédient') {
+        cols = nubaColonnes_(ligne.map(nubaNorme_), NUBA_LIGNE);
+        return;
+      }
+      if (!cols) {
+        nubaReglages_(ligne, fiche);
+        return;
+      }
+      if (a === '') return;
+      var l = { kind: fiche.kind, block: fiche.block, recipe: fiche.name };
+      Object.keys(cols).forEach(function (k) {
+        if (cols[k] === -1) return;
+        var v = nubaValeur_(ligne[cols[k]]);
+        if (v !== '' && v !== null && v !== undefined) l[k] = v;
+      });
+      var aVerifier = verif[nubaNorme_(l.ingredient)];
+      if (aVerifier) l.check = aVerifier;
+      out.lines.push(l);
+    });
+  });
+  return out;
 }
 `;
 }

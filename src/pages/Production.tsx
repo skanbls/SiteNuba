@@ -10,23 +10,12 @@ import {
 import { useCan } from '../lib/rights';
 import { useSession } from '../lib/session';
 import { frError } from '../lib/supabase';
-import { dayKey, fmtDayLong, fromDayKey } from '../lib/time';
+import { ago, dayKey, fmtDayLong, fromDayKey } from '../lib/time';
 
 type Tab = 'commandes' | 'courses' | 'fiches';
 type BrandFilter = 'tout' | Brand;
 const SHORT: Record<Brand, string> = { saveurs_nomades: 'Saveurs Nomades', comptoir: 'Comptoir' };
 const longDay = (d: string) => { const s = fmtDayLong(fromDayKey(d)); return s.charAt(0).toUpperCase() + s.slice(1); };
-
-/** Temps écoulé depuis une date, en mots simples. */
-function ago(iso: string): string {
-  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
-  if (min < 1) return "à l'instant";
-  if (min < 60) return `il y a ${min} min`;
-  const h = Math.round(min / 60);
-  if (h < 24) return `il y a ${h} h`;
-  const d = Math.round(h / 24);
-  return `il y a ${d} jour${d > 1 ? 's' : ''}`;
-}
 
 /**
  * Production : les commandes clients des mercuriales Saveurs Nomades et Comptoir Méditerranéen,
@@ -51,10 +40,12 @@ export default function Production() {
   const costs = useMercCosts(money);
 
   const book = useMemo(() => new Book(recipes.data ?? [], lines.data ?? []), [recipes.data, lines.data]);
+  // La mercuriale Nuba (la carte) vit dans Fiches techniques : ici, Saveurs Nomades et Comptoir.
+  const mijote = (sources.data ?? []).filter((s): s is MercSource & { brand: Brand } => s.brand !== 'nuba');
   const queries = [sources, recipes, lines, orders, ingredients];
   const loading = queries.some((q) => q.isLoading);
   const error = queries.find((q) => q.error)?.error;
-  const synced = (sources.data ?? []).some((s) => s.synced_at);
+  const synced = mijote.some((s) => s.synced_at);
   const inBrand = <T extends { brand: Brand }>(x: T) => brand === 'tout' || x.brand === brand;
   const allOrders = (orders.data ?? []).filter(inBrand);
 
@@ -81,12 +72,12 @@ export default function Production() {
       ) : (
         <Recipes recipes={(recipes.data ?? []).filter(inBrand)} book={book} money={money} costs={costs.data ?? []} />
       )}
-      {synced && <SyncInfo sources={sources.data ?? []} boss={boss} />}
+      {synced && <SyncInfo sources={mijote} boss={boss} />}
     </Layout>
   );
 }
 
-function SyncInfo({ sources, boss }: { sources: MercSource[]; boss: boolean }) {
+function SyncInfo({ sources, boss }: { sources: (MercSource & { brand: Brand })[]; boss: boolean }) {
   return (
     <p className="note" data-testid="merc-sync">
       Mis à jour depuis Google Sheets :{' '}

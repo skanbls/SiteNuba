@@ -164,8 +164,17 @@ const PARTS: Part[] = [
   {
     id: 'fiches',
     icon: 'list',
-    title: 'Fiches techniques et allergènes',
-    body: <p>Chaque recette de la Nuba avec ses grammages et sa préparation. Un client demande les allergènes ? <B>Tableau des allergènes</B>, dans Fiches techniques.</p>,
+    title: 'Fiches techniques, la carte et les allergènes',
+    body: (
+      <ol>
+        <li><b>Cuisine</b> et <b>Bar</b> : chaque plat et chaque boisson de la carte, avec ses ingrédients, ses quantités et son prix. Touche une fiche, puis écris le nombre de portions : les quantités suivent.</li>
+        <li>« À sortir » : la quantité à prendre en réserve, pertes comprises (épluchage, cuisson, mousse…).</li>
+        <li><b>Maison</b> : les préparations maison (sauces, bases, garnitures). Dans une fiche, touche le nom d'une préparation pour l'ouvrir ; <B>Retour</B> pour revenir.</li>
+        <li><b>Allergènes</b> : un client est allergique ? Touche ses allergènes : l'appli range la carte en « Possible », « À confirmer en cuisine » et « À éviter ».</li>
+        <li><b>Quantités</b> : pour la mise en place ou un événement, choisis les plats et le nombre de portions. L'appli donne les préparations maison à faire et les ingrédients à sortir ou à commander, par fournisseur.</li>
+        <li>La carte se modifie dans la mercuriale Nuba (Google Sheets), par la cheffe, la responsable bar ou le gérant : l'appli suit toute seule.</li>
+      </ol>
+    ),
   },
   {
     id: 'pannes',
@@ -239,7 +248,8 @@ const PARTS: Part[] = [
     body: (
       <ul>
         <li><b>Équipe</b> : ajouter une personne, son rôle, son code PIN, le lien de son dossier Drive ; <B>QR code d'installation</B> pour l'équipe.</li>
-        <li><b>Administration</b> : accès des responsables, e-mails, bornes, mercuriales, liens publics.</li>
+        <li><b>Administration</b> : accès des responsables, e-mails, bornes, mercuriales (Nuba, Saveurs Nomades, Comptoir), liens publics.</li>
+        <li><b>Fiches techniques</b>, avec l'accès « fiches techniques » : coût matière, marge, coefficient et prix conseillé de chaque fiche, en rouge au-dessus de l'objectif.</li>
         <li><b>Accès comptable</b>, dans Administration : ajoute l'adresse e-mail de la comptable. Elle crée son compte avec cette adresse et ne voit que les heures travaillées, avec le fichier pour la paie.</li>
         <li><b>Pointeuse</b>, vue Équipe : corriger un pointage, <B>Exporter pour le comptable</B>.</li>
         <li><b>Planning</b> : <B>Service</B> pour planifier, <B>Recopier la semaine précédente</B>, et les demandes de congé et d'échange à accepter.</li>
