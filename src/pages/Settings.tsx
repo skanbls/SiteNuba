@@ -5,7 +5,8 @@ import { RightsPicker } from '../components/Rights';
 import { Avatar, Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
 import { useQuery } from '@tanstack/react-query';
 import { buildAppsScript, sheetId } from '../lib/appsScript';
-import { useAccountants, useAllRights, useEmailLog, useEmailSettings, useKiosks, useMercSources, useRefresh, useSites, useTeam } from '../lib/data';
+import { useAccountants, useAllRights, useDeliverySettings, useEmailLog, useEmailSettings, useKiosks, useMercSources, useRefresh, useSites, useTeam } from '../lib/data';
+import { EMPTY_DELIVERY, type DeliverySettings } from '../lib/delivery';
 import type { MercSource } from '../lib/production';
 import { AREAS, type Area } from '../lib/rights';
 import { appUrl, frError, key as publicKey, supabase, url as projectUrl } from '../lib/supabase';
@@ -56,6 +57,9 @@ export default function Settings() {
     },
   });
   const [mercSheet, setMercSheet] = useState(false);
+  const delivery = useDeliverySettings();
+  const [blSheet, setBlSheet] = useState(false);
+  const closeBl = useCallback(() => setBlSheet(false), []);
   const accountants = useAccountants(true);
   const [accSheet, setAccSheet] = useState<AccountantAccess | 'new' | null>(null);
   const closeAcc = useCallback(() => setAccSheet(null), []);
@@ -250,6 +254,29 @@ export default function Settings() {
             <p className="note">Un petit script Google, installé une fois, envoie les mercuriales toutes les dix minutes : la carte Nuba dans Fiches techniques, Saveurs Nomades et Comptoir dans Production.</p>
           </Section>
 
+          <Section title="Bons de livraison" right={<button type="button" className="link" onClick={() => setBlSheet(true)}>Modifier l'en-tête</button>}>
+            {delivery.isLoading ? <Loading /> : delivery.error ? <div className="list"><p className="empty err">{frError(delivery.error)}</p></div> : (
+              <div className="list">
+                <div className="row wrap" data-testid="bl-reglages">
+                  <div className="grow">
+                    {delivery.data?.sender_name && delivery.data.client_name ? (
+                      <>
+                        <span className="t">{delivery.data.sender_name} → {delivery.data.client_name}</span>
+                        <span className="sub">{[delivery.data.place_name, delivery.data.slot && `créneau ${delivery.data.slot}`, `DLC J+${delivery.data.dlc_days}`, delivery.data.driver && `livreur ${delivery.data.driver}`].filter(Boolean).join(' · ')}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="t">En-tête à remplir</span>
+                        <span className="sub">Ta société, le client et le lieu de livraison, une seule fois.</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            <p className="note">Les bons de livraison Saveurs Nomades et Comptoir se fabriquent tout seuls à partir des commandes des mercuriales : Production, « Bon de livraison » sous chaque jour.</p>
+          </Section>
+
           <Section title="Bornes de pointage" right={<button type="button" className="link" onClick={() => setAddKiosk(true)}>Ajouter une borne</button>}>
             {kiosks.isLoading ? <Loading /> : (
               <div className="list">
@@ -299,6 +326,7 @@ export default function Settings() {
       {rightsFor && <RightsSheet key={rightsFor.id} person={rightsFor} areas={areasOf(rightsFor.id)} onClose={closeRights} />}
       {mailSheet && mail.data && <MailSheet settings={mail.data} onClose={closeMail} />}
       {mercSheet && <MercSheet sources={merc.data ?? []} onClose={closeMerc} />}
+      {blSheet && <DeliverySheet settings={delivery.data ?? EMPTY_DELIVERY} onClose={closeBl} />}
       {accSheet && <AccountantSheet access={accSheet} onClose={closeAcc} />}
     </Layout>
   );
@@ -448,6 +476,81 @@ function MercSheet({ sources, onClose }: { sources: MercSource[]; onClose: () =>
           <button type="button" className="btn block" onClick={onClose}>C'est fait</button>
         </div>
       )}
+    </Sheet>
+  );
+}
+
+const DELIVERY_FIELDS: (keyof DeliverySettings)[] = ['sender_name', 'sender_tagline', 'sender_address', 'sender_siret', 'sender_contact', 'client_name',
+  'client_address', 'client_siret', 'place_name', 'place_address', 'place_access', 'slot', 'driver', 'dlc_days', 'lot_days_before'];
+
+/** En-tête des bons de livraison : expéditeur, client, lieu, créneau, livreur, DLC et lot. */
+function DeliverySheet({ settings, onClose }: { settings: DeliverySettings; onClose: () => void }) {
+  const toast = useToast();
+  const refresh = useRefresh();
+  const [f, setF] = useState<DeliverySettings>(settings);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  type TextKey = Exclude<keyof DeliverySettings, 'dlc_days' | 'lot_days_before' | 'updated_at'>;
+  const text = (k: TextKey, label: string, hint?: string, placeholder?: string) => (
+    <Field label={label} hint={hint}>
+      <input className="in" id={`bl-${k}`} value={f[k]} onChange={(e) => setF((x) => ({ ...x, [k]: e.target.value }))} placeholder={placeholder} maxLength={k.endsWith('address') || k === 'place_access' ? 200 : 120} />
+    </Field>
+  );
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr('');
+    // Seules ces colonnes se modifient : la base refuse les autres (id, auteur, date).
+    const row = Object.fromEntries(DELIVERY_FIELDS.map((k) => [k, f[k]]));
+    const { error } = await supabase.from('delivery_settings').update(row).eq('id', true);
+    setBusy(false);
+    if (error) return setErr(frError(error));
+    await refresh('delivery');
+    toast('En-tête des bons de livraison enregistré');
+    onClose();
+  }
+
+  return (
+    <Sheet title="Bons de livraison" onClose={onClose}>
+      <form className="form" onSubmit={save}>
+        <p className="note">Recopie l'en-tête de ton bon de livraison actuel (onglet « BL À IMPRIMER » de la mercuriale). Il s'imprime en haut et en bas de chaque bon.</p>
+        <Section title="Ta société (expéditeur)">
+          {text('sender_name', 'Nom')}
+          {text('sender_tagline', 'Activité', undefined, 'Restauration et plats préparés')}
+          {text('sender_address', 'Adresse du siège')}
+          <div className="two">
+            {text('sender_siret', 'SIRET')}
+            {text('sender_contact', 'Contact exploitation', 'Le numéro à appeler le jour de la livraison.')}
+          </div>
+        </Section>
+        <Section title="Client (facturation)">
+          {text('client_name', 'Nom du client')}
+          {text('client_address', 'Adresse de facturation')}
+          {text('client_siret', 'SIRET du client')}
+        </Section>
+        <Section title="Livraison">
+          {text('place_name', 'Lieu de réception')}
+          {text('place_address', 'Adresse de livraison')}
+          {text('place_access', "Instructions d'accès", undefined, 'Digicode, quai, interlocuteur…')}
+          <div className="two">
+            {text('slot', 'Créneau de livraison', undefined, '06h30')}
+            {text('driver', 'Livreur', 'Laisse vide pour l\'écrire à la main.')}
+          </div>
+        </Section>
+        <Section title="Traçabilité">
+          <div className="two">
+            <Field label="DLC : jours après la livraison">
+              <input className="in" id="bl-dlc" type="number" min={0} max={30} value={f.dlc_days} onChange={(e) => setF((x) => ({ ...x, dlc_days: Math.max(0, Math.min(30, Number(e.target.value) || 0)) }))} />
+            </Field>
+            <Field label="Lot : jours avant la livraison" hint="Le lot porte la date de production : 1 = la veille.">
+              <input className="in" id="bl-lot" type="number" min={0} max={14} value={f.lot_days_before} onChange={(e) => setF((x) => ({ ...x, lot_days_before: Math.max(0, Math.min(14, Number(e.target.value) || 0)) }))} />
+            </Field>
+          </div>
+        </Section>
+        {err && <p className="err" role="alert">{err}</p>}
+        <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : 'Enregistrer'}</button>
+      </form>
     </Sheet>
   );
 }

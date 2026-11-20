@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MercCost, MercIngredient, MercLine, MercOrder, MercPrice, MercRecipe, MercSource } from './production';
 import type { MenuCost, MenuItem, MenuLine, MenuLineCost } from './carte';
+import type { DeliverySettings } from './delivery';
 import { supabase } from './supabase';
 import type { BookingSettings, AccountantAccess, Checklist, ColdUnit, Contact, Customer, Deadline, EmailLogEntry, EmailSettings, Issue, Kiosk, NubaEvent, Procedure, ProcedureRead, Recipe, LeaveRequest, OilLog, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftSwap, Site, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
 
@@ -336,6 +337,14 @@ export function useMenuCosts(enabled: boolean) {
 }
 export function useMenuLineCosts(enabled: boolean) {
   return useQuery({ queryKey: ['carte', 'line-costs'], enabled, queryFn: () => selectAll<MenuLineCost>('menu_line_costs', '*', ['kind', 'recipe', 'position']) });
+}
+
+/** En-tête des bons de livraison (migration 0018). */
+export function useDeliverySettings() {
+  return useQuery({
+    queryKey: ['delivery'],
+    queryFn: async () => must<DeliverySettings | null>(await supabase.from('delivery_settings').select('*').maybeSingle()),
+  });
 }
 
 /** Numéros utiles, urgences d'abord. */

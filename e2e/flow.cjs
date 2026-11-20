@@ -1023,6 +1023,53 @@ async function main() {
   await theo.locator('[data-order="Purée de patate douce + Poulet Moutarde Miel (Mariné)"]').getByText('120 portions').waitFor();
   step('une commande modifiée dans la feuille arrive toute seule dans l\'appli');
 
+  // Bons de livraison : le gérant remplit l'en-tête une fois ; le bon de chaque jour se fabrique tout seul.
+  await boss.goto(APP + '#/reglages');
+  await boss.getByTestId('bl-reglages').getByText('En-tête à remplir').waitFor();
+  await boss.getByRole('button', { name: "Modifier l'en-tête" }).click();
+  await boss.fill('#bl-sender_name', 'Société Test');
+  await boss.fill('#bl-sender_siret', '000 000 000 00000');
+  await boss.fill('#bl-client_name', 'Client Test');
+  await boss.fill('#bl-place_name', 'Cuisine du client');
+  await boss.fill('#bl-slot', '06h30');
+  await boss.getByRole('button', { name: 'Enregistrer' }).click();
+  await see(boss, 'En-tête des bons de livraison enregistré');
+  await boss.getByTestId('bl-reglages').getByText('Société Test → Client Test').waitFor();
+  await boss.goto(APP + '#/');   // quitter Administration : la revisiter plus loin la rechargera
+
+  const blDay = iso(2).toISOString().slice(0, 10);
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const veille = new Date(iso(1)), dlc = new Date(iso(5));
+  const lot = `L${String(veille.getUTCFullYear()).slice(2)}${pad2(veille.getUTCMonth() + 1)}${pad2(veille.getUTCDate())}`;
+  await theo.goto(APP + '#/production');
+  await theo.locator(`[data-bl-day="${blDay}"]`).click();
+  await theo.locator('[data-bl]').waitFor();
+  assert.equal(await theo.locator('[data-bl]').getAttribute('data-bl'), `BL-${blDay.slice(0, 4)}-${blDay.slice(5, 7)}${blDay.slice(8)}-01`);
+  const surMesure = theo.locator('[data-bl-line="Purée de patate douce / Poulet Moutarde Miel (Mariné)"]');
+  await surMesure.getByText('Allergènes : Lait, Moutarde').waitFor();
+  await surMesure.getByText('Sur mesure · Barquettes scellées').waitFor();
+  await theo.locator('[data-bl-line="Brownie"]').getByText(lot).waitFor();
+  await theo.locator('[data-bl-line="Brownie"]').getByText(`${pad2(dlc.getUTCDate())}/${pad2(dlc.getUTCMonth() + 1)}/${dlc.getUTCFullYear()}`).waitFor();   // DLC : livraison + 3 jours
+  await see(theo, 'Société Test');
+  await theo.fill('#bl-temp', '2');
+  await theo.locator('[data-bl-line="Brownie"]').getByText('+2,0 °C').waitFor();
+  await theo.getByLabel('Quantité livrée, Brownie').fill('78');
+  await theo.getByTestId('bl-total').getByText('198').waitFor();   // 120 + 78
+  await noOverflow(theo, 'bon de livraison');
+  await shot(theo, '13zba-bon-de-livraison');
+  await theo.evaluate(() => { window.print = () => { window.__printed = document.title; }; });
+  await theo.getByRole('button', { name: 'Imprimer' }).click();
+  assert.match(await theo.evaluate(() => window.__printed), /^BL-\d{4}-\d{4}-01$/, 'le PDF prend le numéro du bon pour nom');
+  await theo.emulateMedia({ media: 'print' });
+  assert.equal(await theo.locator('.bl-bar').isVisible(), false, "la barre d'outils ne s'imprime pas");
+  const pdf = await theo.pdf({ path: `${SHOTS}/13zba-bon-de-livraison.pdf`, format: 'A4', printBackground: true });
+  assert.equal((pdf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length, 1, 'le bon tient sur une page A4');
+  await theo.emulateMedia({ media: 'screen' });
+  await theo.getByRole('group', { name: 'Marque' }).getByRole('button', { name: 'Comptoir' }).click();
+  await see(theo, 'Aucune commande à cette date.');
+  assert.match(await theo.locator('[data-bl]').getAttribute('data-bl'), /-CM$/);
+  step('bon de livraison du jour, prêt à imprimer en A4 : lot, DLC, allergènes, température et quantités livrées');
+
   // Un envoi refusé se voit dans Administration, sous la mercuriale concernée.
   const conf = JSON.parse(/var NUBA = (\{[\s\S]*?\n\});/.exec(script)[1]);
   execFileSync('curl', ['-s', '-X', 'POST', conf.adresse, '-H', 'Content-Type: application/json', '-H', `apikey: ${conf.clePublique}`,

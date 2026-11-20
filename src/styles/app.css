@@ -301,3 +301,55 @@ button.shift:hover { background: color-mix(in srgb, var(--c, var(--ink-3)) 28%, 
 .row-details > summary { list-style: none; cursor: pointer; }
 .row-details > summary::-webkit-details-marker { display: none; }
 .row-details + .row-details { border-top: 1px solid var(--line); }
+
+/* ---------- Bon de livraison (A4, imprimé) : un document papier, noir sur blanc dans les deux thèmes ---------- */
+.bl-page { min-height: 100dvh; padding: calc(16px + env(safe-area-inset-top, 0px)) var(--gut-r) 32px var(--gut-l); display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.bl-bar { width: 100%; max-width: 210mm; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.bl-bar .chips { flex: 1 1 300px; }
+.bl-temp { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+.bl-temp .in { width: 90px; }
+.bl-note { width: 100%; max-width: 210mm; margin: 0; }
+.bl { width: 100%; max-width: 210mm; background: #fff; color: #111; padding: 12mm 11mm; border-radius: 6px; box-shadow: 0 2px 14px rgb(0 0 0 / 0.18);
+  font: 400 10.5px/1.35 var(--text, Inter), system-ui, sans-serif; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.bl-scroll { overflow-x: auto; }
+.bl-scroll .bl-table { min-width: 620px; }
+.bl h1 { font: 800 19px/1.1 var(--display), system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+.bl h2 { font: 700 9.5px/1.2 var(--display), system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; color: #111; }
+.bl p { margin: 0; }
+.bl-head { display: flex; justify-content: space-between; gap: 16px; border-bottom: 2px solid #111; padding-bottom: 8px; }
+.bl-sender { font: 800 17px/1.1 var(--display), system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.03em; }
+.bl-tag { font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; font-size: 9.5px; margin-bottom: 4px; }
+.bl-title { text-align: right; }
+.bl-boxes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.bl-boxes > section, .bl-box { border: 1px solid #555; border-radius: 4px; padding: 7px 9px; }
+.bl-strong { font-weight: 700; font-size: 11.5px; }
+.bl-table { width: 100%; border-collapse: collapse; }
+.bl-table th, .bl-table td { border: 1px solid #555; padding: 4px 5px; vertical-align: top; text-align: left; }
+.bl-table thead th { background: #e9e9e9; font-size: 9px; text-transform: uppercase; letter-spacing: 0.03em; vertical-align: bottom; }
+.bl-table tfoot th { background: #f3f3f3; text-transform: uppercase; font-size: 9.5px; }
+.bl-table .n { text-align: right; white-space: nowrap; }
+.bl-table .nw { white-space: nowrap; }
+.bl-table td b { font-size: 11px; }
+.bl-empty { text-align: center !important; padding: 14px !important; color: #555; }
+.bl-qty { width: 4.5em; font: inherit; color: #111; text-align: right; border: 1px dashed #888; border-radius: 3px; background: #fffbe8; padding: 2px 4px; }
+.bl-check { display: inline-block; width: 10px; height: 10px; border: 1px solid #111; vertical-align: -1px; margin: 0 3px 0 8px; }
+.bl-gap { display: inline-block; width: 18px; }
+.bl-legal { font-size: 8.5px; line-height: 1.35; color: #333; }
+.bl-sign > section { min-height: 34mm; display: flex; flex-direction: column; gap: 4px; }
+.bl-foot { border-top: 1px solid #555; padding-top: 5px; font-size: 8.5px; text-align: center; color: #333; }
+@media (max-width: 640px) {
+  .bl { padding: 14px 12px; }
+  .bl-boxes { grid-template-columns: 1fr; }
+  .bl-head { flex-direction: column; }
+  .bl-title { text-align: left; }
+}
+@page { size: A4; margin: 10mm; }
+@media print {
+  .bl-page { padding: 0; min-height: 0; display: block; }
+  .bl { max-width: none; box-shadow: none; border-radius: 0; padding: 0; }
+  .bl-scroll { overflow: visible; }
+  .bl-scroll .bl-table { min-width: 0; }
+  .bl-boxes { grid-template-columns: 1fr 1fr; }
+  .bl-qty { border: none; background: none; padding: 0; }
+  .bl-table thead th, .bl-table tfoot th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

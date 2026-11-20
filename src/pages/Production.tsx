@@ -66,7 +66,7 @@ export default function Production() {
           </p>
         </div>
       ) : tab === 'commandes' ? (
-        <Orders orders={allOrders} book={book} today={today} money={money} costs={costs.data ?? []} onShopping={openShopping} />
+        <Orders orders={allOrders} book={book} today={today} money={money} costs={costs.data ?? []} onShopping={openShopping} brand={brand} />
       ) : tab === 'courses' ? (
         <Shopping orders={allOrders} book={book} today={today} day={shopDay} setDay={setShopDay} ingredients={ingredients.data ?? []} prices={money ? prices.data ?? [] : []} money={money} />
       ) : (
@@ -94,7 +94,10 @@ function SyncInfo({ sources, boss }: { sources: (MercSource & { brand: Brand })[
 }
 
 /* ---------- Commandes ---------- */
-function Orders({ orders, book, today, money, costs, onShopping }: { orders: MercOrder[]; book: Book; today: string; money: boolean; costs: MercCost[]; onShopping: (day: string) => void }) {
+/** Lien du bon de livraison d'un jour, pour la ou les mercuriales affichées. */
+const blLink = (day: string, brand: BrandFilter) => `/bl/${day}${brand === 'tout' ? '' : `?m=${brand}`}`;
+
+function Orders({ orders, book, today, money, costs, onShopping, brand }: { orders: MercOrder[]; book: Book; today: string; money: boolean; costs: MercCost[]; onShopping: (day: string) => void; brand: BrandFilter }) {
   const [past, setPast] = useState(false);
   const [open, setOpen] = useState<MercOrder | null>(null);
   const close = useCallback(() => setOpen(null), []);
@@ -113,7 +116,12 @@ function Orders({ orders, book, today, money, costs, onShopping }: { orders: Mer
         const list = shown.filter((o) => o.day === d);
         const portions = list.reduce((t, o) => t + o.portions, 0);
         return (
-          <Section key={d} title={`${longDay(d)} · ${portions} portions`} right={<button type="button" className="link" onClick={() => onShopping(d)}>Liste de courses</button>}>
+          <Section key={d} title={`${longDay(d)} · ${portions} portions`} right={(
+            <span style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '4px 14px' }}>
+              <button type="button" className="link" onClick={() => onShopping(d)}>Liste de courses</button>
+              <Link className="link" to={blLink(d, brand)} data-bl-day={d}>Bon de livraison</Link>
+            </span>
+          )}>
             <div className="list">
               {list.map((o) => {
                 const comps = components(o, book);
@@ -176,6 +184,7 @@ function OrderSheet({ order, book, money, costs, onShopping, onClose }: { order:
       {money && total != null && <p className="note">Coût matière estimé, pertes comprises : <strong>{fmtEuro(total)}</strong>, soit {fmtEuro(total / order.portions)} par portion.</p>}
       <p className="note">Les quantités sont nettes, à peser pour la production. Celles à acheter comptent les pertes de chaque ingrédient.</p>
       <button type="button" className="btn block" onClick={() => { onClose(); onShopping(order.day); }}>Liste de courses du {fmtDayLong(fromDayKey(order.day))}</button>
+      <Link className="btn block" to={blLink(order.day, 'tout')}><Icon name="doc" />Bon de livraison du {fmtDayLong(fromDayKey(order.day))}</Link>
     </Sheet>
   );
 }

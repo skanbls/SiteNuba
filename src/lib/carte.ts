@@ -43,7 +43,7 @@ const STEMS = ALLERGENS.map((a) => ({ a, re: new RegExp(`\\b${akey(a)}\\b`) }));
 /** Allergènes d'un texte (« Gluten, Œufs »), écrits comme la liste officielle quand on les reconnaît. */
 export function allergensIn(text: string): string[] {
   const out: string[] = [];
-  for (const raw of text.split(/[,;/]/)) {
+  for (const raw of text.split(/[,;/|]/)) {
     const t = raw.trim();
     if (!t || /^aucun/i.test(t)) continue;
     const k = akey(t);
