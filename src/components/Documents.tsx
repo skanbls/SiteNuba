@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { Icon } from './Icon';
 import { Field, Section, Sheet, Spinner, useToast } from './ui';
-import { documentUrl, fileProblem, sendDocument } from '../lib/documents';
-import { useRefresh, useTeamDocuments } from '../lib/data';
+import { documentUrl, fileProblem, lastMonth, monthLabel, removePayslip, sendDocument } from '../lib/documents';
+import { useRefresh, useTeamDocuments, type TeamDocuments } from '../lib/data';
 import { frError, supabase } from '../lib/supabase';
 import { fmtDate } from '../lib/time';
 import { DOC_CATEGORIES, DOC_LABEL, type DocCategory, type StaffDocument } from '../lib/types';
@@ -32,11 +32,12 @@ export function OpenButton({ doc }: { doc: StaffDocument }) {
 
 /** Une ligne de document : catégorie, dates, date d'envoi. */
 export function DocRow({ doc, who, onDelete }: { doc: StaffDocument; who?: string; onDelete?: () => void }) {
-  const dates = doc.start_date ? (doc.end_date && doc.end_date !== doc.start_date ? `du ${day(doc.start_date)} au ${day(doc.end_date)}` : `le ${day(doc.start_date)}`) : '';
+  const payslip = doc.category === 'paie' && !!doc.start_date;
+  const dates = payslip ? '' : doc.start_date ? (doc.end_date && doc.end_date !== doc.start_date ? `du ${day(doc.start_date)} au ${day(doc.end_date)}` : `le ${day(doc.start_date)}`) : '';
   return (
-    <div className="row wrap" data-doc={DOC_LABEL[doc.category]}>
+    <div className="row wrap" data-doc={DOC_LABEL[doc.category]} data-month={payslip ? doc.start_date!.slice(0, 7) : undefined}>
       <span className="grow">
-        <span className="t">{who ? `${who} · ` : ''}{DOC_LABEL[doc.category]}</span>
+        <span className="t">{who ? `${who} · ` : ''}{DOC_LABEL[doc.category]}{payslip ? ` · ${monthLabel(doc.start_date!)}` : ''}</span>
         <span className="sub">{[doc.title && doc.title !== DOC_LABEL[doc.category] ? doc.title : '', dates, `envoyé le ${fmtDate(doc.created_at)}`].filter(Boolean).join(' · ')}</span>
       </span>
       <span className="end">
@@ -60,6 +61,7 @@ export function DocumentSheet({ profileId, name, forOther = false, category: fir
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [start, setStart] = useState('');
+  const [month, setMonth] = useState(lastMonth);
   const [end, setEnd] = useState('');
   const [note, setNote] = useState('');
   const [err, setErr] = useState('');
@@ -76,7 +78,10 @@ export function DocumentSheet({ profileId, name, forOther = false, category: fir
     if (end && start && end < start) return setErr('La fin est avant le début.');
     setBusy(true);
     setErr('');
-    const problem = await sendDocument(file!, profileId, { category, title, start: cat.dates ? start : '', end: cat.dates ? end : '', note });
+    if (cat.month && !/^\d{4}-\d{2}$/.test(month)) return setErr('Choisis le mois du bulletin.');
+    const problem = await sendDocument(file!, profileId, cat.month
+      ? { category, title, start: `${month}-01`, end: '', note }
+      : { category, title, start: cat.dates ? start : '', end: cat.dates ? end : '', note });
     setBusy(false);
     if (problem) return setErr(frError({ message: problem }));
     await refresh('documents', 'leaves');
@@ -99,6 +104,11 @@ export function DocumentSheet({ profileId, name, forOther = false, category: fir
         <Field label="Fichier" hint="Un PDF, ou une photo bien nette et bien éclairée, de tout le document. 10 Mo au plus.">
           <input className="in" id="doc-file" type="file" accept="application/pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} required />
         </Field>
+        {cat.month && (
+          <Field label="Mois du bulletin">
+            <input className="in" id="doc-month" type="month" value={month} onChange={(e) => setMonth(e.target.value)} required />
+          </Field>
+        )}
         {cat.dates && (
           <div className="two">
             <Field label={category === 'justificatif' ? 'Absence du' : 'Arrêt du'}>
@@ -118,7 +128,7 @@ export function DocumentSheet({ profileId, name, forOther = false, category: fir
         {(category === 'arret' || category === 'accident') && (
           <p className="note">L'arrêt sera noté dans le planning à ces dates, et la comptable sera prévenue par e-mail. Garde l'original : il peut t'être demandé.</p>
         )}
-        <p className="note">Seuls le gérant et la comptable verront ce document{forOther ? '' : ', avec toi'}. Les responsables et tes collègues, non.</p>
+        <p className="note">{cat.month ? 'Le salarié le retrouve dans Mon compte et reçoit un e-mail.' : `Seuls le gérant et la comptable verront ce document${forOther ? '' : ', avec toi'}. Les responsables et tes collègues, non.`}</p>
         {err && <p className="err" role="alert">{err}</p>}
         <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : 'Envoyer'}</button>
       </form>
@@ -127,9 +137,12 @@ export function DocumentSheet({ profileId, name, forOther = false, category: fir
 }
 
 /** Tous les documents de l'équipe, par personne : pour la comptable (et le gérant, qui voit la même chose). */
-export function TeamDocumentsView() {
+export function TeamDocumentsView({ accountantId }: { accountantId?: string }) {
   const q = useTeamDocuments(true);
+  const toast = useToast();
+  const refresh = useRefresh();
   const [who, setWho] = useState('');
+  const [deposit, setDeposit] = useState(false);
   if (q.isLoading) return <div className="list"><p className="empty"><Spinner /></p></div>;
   if (q.error) return <div className="list"><p className="empty err">{frError(q.error)}</p></div>;
   const people = q.data?.people ?? [];
@@ -137,8 +150,19 @@ export function TeamDocumentsView() {
   const name = new Map(people.map((p) => [p.id, `${p.first_name} ${p.last_name}`]));
   const recent = docs.slice(0, 8);
   const shown = who ? people.filter((p) => p.id === who) : people;
+  const remove = (d: StaffDocument) => async () => {
+    const e = await removePayslip(d.id);
+    if (e) return toast(frError({ message: e }), 'bad');
+    await refresh('documents');
+    toast('Bulletin retiré');
+  };
+  const own = (d: StaffDocument) => !!accountantId && d.category === 'paie' && d.accountant_id === accountantId ? remove(d) : undefined;
   return (
     <>
+      <div className="acts">
+        <button type="button" className="btn pri" onClick={() => setDeposit(true)}><Icon name="down" />Déposer les bulletins de paie</button>
+      </div>
+      {deposit && q.data && <PayslipSheet team={q.data} onClose={() => setDeposit(false)} />}
       {recent.length > 0 && (
         <Section title="Derniers documents reçus">
           <div className="list" data-testid="docs-recents">{recent.map((d) => <DocRow key={d.id} doc={d} who={name.get(d.profile_id)} />)}</div>
@@ -157,7 +181,7 @@ export function TeamDocumentsView() {
           <Section key={p.id} title={`${p.first_name} ${p.last_name}`} right={p.folder_url ? <a className="link" href={p.folder_url} target="_blank" rel="noopener noreferrer">Dossier Drive</a> : undefined}>
             <div className="list" data-person-docs={`${p.first_name} ${p.last_name}`}>
               {mine.length === 0 && <p className="empty">Aucun document dans l'appli.</p>}
-              {mine.map((d) => <DocRow key={d.id} doc={d} />)}
+              {mine.map((d) => <DocRow key={d.id} doc={d} onDelete={own(d)} />)}
             </div>
             {p.active && missing.length > 0 && <p className="note">Pas encore dans l'appli : {missing.map((c) => DOC_LABEL[c].split(' (')[0].toLowerCase()).join(', ')}.</p>}
           </Section>
@@ -174,4 +198,72 @@ export async function deleteDocument(doc: StaffDocument): Promise<string> {
   if (error) return frError(error);
   await supabase.storage.from('staff-docs').remove([doc.file_path]);
   return '';
+}
+
+/**
+ * Déposer les bulletins d'un mois : une ligne par salarié, un PDF chacun.
+ * Chaque salarié reçoit un e-mail et retrouve son bulletin dans Mon compte.
+ */
+export function PayslipSheet({ team, onClose }: { team: TeamDocuments; onClose: () => void }) {
+  const toast = useToast();
+  const refresh = useRefresh();
+  const [month, setMonth] = useState(lastMonth);
+  const [files, setFiles] = useState<Record<string, File | null>>({});
+  const [errs, setErrs] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState('');
+  const people = team.people.filter((p) => p.active);
+  const has = (id: string) => team.documents.some((d) => d.profile_id === id && d.category === 'paie' && d.start_date?.slice(0, 7) === month);
+  const chosen = people.filter((p) => files[p.id]);
+
+  async function send(e: FormEvent) {
+    e.preventDefault();
+    if (!/^\d{4}-\d{2}$/.test(month)) return;
+    const out: Record<string, string> = {};
+    let ok = 0;
+    for (const p of chosen) {
+      const f = files[p.id]!;
+      const bad = f.type && f.type !== 'application/pdf' ? 'Envoie le bulletin en PDF.' : fileProblem(f);
+      if (bad) { out[p.id] = bad; continue; }
+      setBusy(`${p.first_name} ${p.last_name}`);
+      const problem = await sendDocument(f, p.id, { category: 'paie', title: '', start: `${month}-01`, end: '', note: '' });
+      if (problem) out[p.id] = frError({ message: problem });
+      else ok += 1;
+    }
+    setBusy('');
+    setErrs(out);
+    await refresh('documents');
+    if (ok) toast(`${ok} bulletin${ok > 1 ? 's' : ''} de ${monthLabel(`${month}-01`)} déposé${ok > 1 ? 's' : ''}`);
+    if (!Object.keys(out).length) onClose();
+    else setFiles((f) => Object.fromEntries(Object.entries(f).filter(([id]) => out[id])));
+  }
+
+  return (
+    <Sheet title="Déposer les bulletins de paie" onClose={onClose}>
+      <form className="form" onSubmit={send}>
+        <Field label="Mois des bulletins">
+          <input className="in" id="paie-month" type="month" value={month} onChange={(e) => setMonth(e.target.value)} required />
+        </Field>
+        <div className="list" data-testid="paie-salaries">
+          {people.length === 0 && <p className="empty">Aucun salarié dans l'équipe.</p>}
+          {people.map((p) => (
+            <div className="row wrap" key={p.id} data-paie={`${p.first_name} ${p.last_name}`}>
+              <span className="grow">
+                <span className="t">{p.first_name} {p.last_name}</span>
+                {has(p.id) && <span className="sub">Un bulletin de {monthLabel(`${month}-01`)} est déjà déposé.</span>}
+                {errs[p.id] && <span className="sub err">{errs[p.id]}</span>}
+              </span>
+              <span className="end" style={{ flex: '1 1 220px' }}>
+                <input className="in" type="file" accept="application/pdf" aria-label={`Bulletin de ${p.first_name} ${p.last_name}`}
+                  onChange={(e) => setFiles((f) => ({ ...f, [p.id]: e.target.files?.[0] ?? null }))} />
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="note">Un PDF par salarié. Chacun retrouve le sien dans Mon compte, rubrique « Mes bulletins de paie », et reçoit un e-mail. Personne d'autre ne le voit, à part le gérant.</p>
+        <button className="btn pri block" disabled={!!busy || chosen.length === 0}>
+          {busy ? <><Spinner /> {busy}…</> : chosen.length ? `Déposer ${chosen.length} bulletin${chosen.length > 1 ? 's' : ''}` : 'Choisis au moins un bulletin'}
+        </button>
+      </form>
+    </Sheet>
+  );
 }

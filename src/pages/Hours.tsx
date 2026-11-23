@@ -162,12 +162,12 @@ function Cash() {
 
 const TABS: [Tab, string][] = [['recap', 'Récap du mois'], ['documents', 'Documents'], ['caisse', 'Caisse']];
 
-function AccountantTabs() {
+function AccountantTabs({ accountantId }: { accountantId?: string }) {
   const [tab, setTab] = useState<Tab>('recap');
   return (
     <>
       <Chips value={tab} options={TABS} onChange={setTab} label="Rubrique" />
-      {tab === 'recap' ? <HoursBody /> : tab === 'documents' ? <TeamDocumentsView /> : <Cash />}
+      {tab === 'recap' ? <HoursBody /> : tab === 'documents' ? <TeamDocumentsView accountantId={accountantId} /> : <Cash />}
     </>
   );
 }
@@ -183,7 +183,7 @@ export function AccountantHome() {
           <h1>Espace comptable</h1>
           <p className="sub">Accès comptable{accountant?.name ? ` · ${accountant.name}` : ''} · {accountant?.email}</p>
         </div>
-        <AccountantTabs />
+        <AccountantTabs accountantId={accountant?.id} />
         <button type="button" className="btn" onClick={() => void signOut()}>Se déconnecter</button>
       </div>
     </div>
@@ -194,7 +194,7 @@ export function AccountantHome() {
 export default function HoursPreview() {
   return (
     <Layout title="Vue de la comptable">
-      <p className="note">C'est exactement ce que voit la comptable avec son accès : le récap du mois (heures et absences), les documents de l'équipe et la caisse. Rien d'autre.</p>
+      <p className="note">C'est exactement ce que voit la comptable avec son accès : le récap du mois (heures et absences), les documents de l'équipe (elle y dépose les bulletins de paie) et la caisse. Rien d'autre.</p>
       <AccountantTabs />
     </Layout>
   );

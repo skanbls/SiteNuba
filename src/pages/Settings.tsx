@@ -664,7 +664,7 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
   const [busy, setBusy] = useState(false);
   const text = (k: 'sender_name' | 'sender_email' | 'notify_email' | 'app_url' | 'signature') =>
     (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF((s) => ({ ...s, [k]: e.target.value }));
-  const flag = (k: 'enabled' | 'confirm_booking' | 'notify_booking' | 'notify_event' | 'notify_documents') =>
+  const flag = (k: 'enabled' | 'confirm_booking' | 'notify_booking' | 'notify_event' | 'notify_documents' | 'notify_payslips') =>
     (e: ChangeEvent<HTMLInputElement>) => setF((s) => ({ ...s, [k]: e.target.checked }));
 
   async function save(e: FormEvent) {
@@ -681,6 +681,7 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
       notify_email: f.notify_email.trim().toLowerCase(), app_url: url, signature: f.signature.trim(),
       confirm_booking: f.confirm_booking, notify_booking: f.notify_booking, notify_event: f.notify_event,
       ...(f.notify_documents === undefined ? {} : { notify_documents: f.notify_documents }),
+      ...(f.notify_payslips === undefined ? {} : { notify_payslips: f.notify_payslips }),
     }).eq('id', true);
     setBusy(false);
     if (error) return setErr(frError(error));
@@ -731,6 +732,12 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
           <label className="row" style={{ padding: 0, gap: 10 }}>
             <input id="mail-documents" type="checkbox" checked={f.notify_documents} onChange={flag('notify_documents')} style={box} />
             <span className="grow"><span className="t">Prévenir la comptable à chaque document envoyé</span><span className="sub">Arrêt de travail, pièce d'identité… et toi, pour les arrêts. Sans pièce jointe : elle l'ouvre dans son espace.</span></span>
+          </label>
+        )}
+        {f.notify_payslips !== undefined && (
+          <label className="row" style={{ padding: 0, gap: 10 }}>
+            <input id="mail-payslips" type="checkbox" checked={f.notify_payslips} onChange={flag('notify_payslips')} style={box} />
+            <span className="grow"><span className="t">Prévenir chaque salarié de son bulletin de paie</span><span className="sub">Dès qu'il est déposé, à l'adresse e-mail de sa fiche. Sans pièce jointe.</span></span>
           </label>
         )}
         <Field label="Signature"><textarea className="in" id="mail-signature" value={f.signature} onChange={text('signature')} maxLength={300} rows={2} /></Field>

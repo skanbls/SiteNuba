@@ -106,7 +106,7 @@ export const PART_LABEL: Record<LeavePart, string> = { full: 'Journée', am: 'Ma
 /** Documents de l'équipe (migration 0020). */
 export type DocCategory =
   | 'arret' | 'accident' | 'justificatif' | 'identite' | 'sejour' | 'vitale' | 'rib' | 'mutuelle'
-  | 'medecine' | 'diplome' | 'dpae' | 'contrat' | 'autre';
+  | 'medecine' | 'diplome' | 'dpae' | 'contrat' | 'paie' | 'autre';
 export interface StaffDocument {
   id: string;
   profile_id: string;
@@ -120,10 +120,12 @@ export interface StaffDocument {
   end_date: string | null;
   note: string;
   uploaded_by: string | null;
+  /** Migration 0021 : la comptable qui l'a déposé (bulletins de paie). */
+  accountant_id?: string | null;
   created_at: string;
 }
 /** Catégories : libellé, groupe, et si la personne l'envoie elle-même (sinon le gérant). */
-export const DOC_CATEGORIES: { key: DocCategory; label: string; group: string; self: boolean; dates?: boolean }[] = [
+export const DOC_CATEGORIES: { key: DocCategory; label: string; group: string; self: boolean; dates?: boolean; month?: boolean }[] = [
   { key: 'arret', label: 'Arrêt de travail (maladie)', group: 'Absences', self: true, dates: true },
   { key: 'accident', label: 'Accident du travail ou de trajet', group: 'Absences', self: true, dates: true },
   { key: 'justificatif', label: "Justificatif d'absence", group: 'Absences', self: true, dates: true },
@@ -136,6 +138,7 @@ export const DOC_CATEGORIES: { key: DocCategory; label: string; group: string; s
   { key: 'diplome', label: 'Diplôme ou attestation de formation', group: 'Identité et embauche', self: true },
   { key: 'dpae', label: 'DPAE', group: 'Employeur', self: false },
   { key: 'contrat', label: 'Contrat de travail ou avenant', group: 'Employeur', self: true },
+  { key: 'paie', label: 'Bulletin de paie', group: 'Paie', self: false, month: true },
   { key: 'autre', label: 'Autre document', group: 'Autre', self: true },
 ];
 export const DOC_LABEL = Object.fromEntries(DOC_CATEGORIES.map((c) => [c.key, c.label])) as Record<DocCategory, string>;
@@ -526,6 +529,8 @@ export interface EmailSettings {
   notify_event: boolean;
   /** Migration 0020 : absent avant. */
   notify_documents?: boolean;
+  /** Migration 0021 : absent avant. */
+  notify_payslips?: boolean;
 }
 
 export interface EmailLogEntry {

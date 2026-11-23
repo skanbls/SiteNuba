@@ -108,6 +108,7 @@ const PARTS: Part[] = [
         <li>Pour un congé ou une absence : <B>Demander un congé</B>, choisis le motif (congés payés, récupération, événement familial…) et les dates, ou une demi-journée. Le gérant accepte ou refuse.</li>
         <li>Malade ? <B>Envoyer un arrêt de travail</B> : prends-le en photo, indique ses dates. Il est noté dans le planning et la comptable est prévenue. Tes collègues voient que tu es absent, pas pourquoi.</li>
         <li>Tes autres documents (pièce d'identité, carte Vitale, RIB…) s'envoient dans <b>Mon compte</b>, rubrique « Mes documents ». Seuls le gérant et la comptable les voient. Depuis ton téléphone, avec ton compte : pas depuis l'iPad.</li>
+        <li>Tes bulletins de paie arrivent dans <b>Mon compte</b>, rubrique « Mes bulletins de paie ». Un e-mail te prévient à chaque nouveau bulletin.</li>
         <li>Pour donner un de tes services à un collègue : <B>Céder un service</B>, choisis qui le reprend. Le gérant valide, et le planning se met à jour.</li>
         <li>Tes heures travaillées sont dans <b>Pointeuse</b>.</li>
       </ol>
@@ -254,7 +255,7 @@ const PARTS: Part[] = [
         <li><b>Administration</b> : accès des responsables, e-mails, bornes, mercuriales (Nuba, Saveurs Nomades, Comptoir), en-tête des bons de livraison, liens publics.</li>
         <li><b>Tableau de bord</b> (gérants seulement) : solde, alertes, trésorerie sur 13 semaines, prévisionnel sur 12 mois et échéances, repris du fichier « Tableau de bord financier ». Les chiffres se modifient dans Google Sheets.</li>
         <li><b>Fiches techniques</b>, avec l'accès « fiches techniques » : coût matière, marge, coefficient et prix conseillé de chaque fiche, en rouge au-dessus de l'objectif.</li>
-        <li><b>Accès comptable</b>, dans Administration : ajoute l'adresse e-mail de la comptable. Elle crée son compte avec cette adresse. Son espace : le récap du mois (heures et absences par motif, à télécharger pour la paie), les documents de l'équipe, et la caisse Zelty. Elle reçoit un e-mail à chaque document envoyé.</li>
+        <li><b>Accès comptable</b>, dans Administration : ajoute l'adresse e-mail de la comptable. Elle crée son compte avec cette adresse. Son espace : le récap du mois (heures et absences par motif, à télécharger pour la paie), les documents de l'équipe (elle y dépose les bulletins de paie de chacun : <B>Déposer les bulletins de paie</B>), et la caisse Zelty. Elle reçoit un e-mail à chaque document envoyé.</li>
         <li><b>Équipe</b> : dans la fiche de chacun, ses documents ; <B>Ajouter un document</B> pour la DPAE ou le contrat.</li>
         <li><b>Pointeuse</b>, vue Équipe : corriger un pointage, <B>Exporter pour le comptable</B>.</li>
         <li><b>Planning</b> : <B>Service</B> pour planifier, <B>Recopier la semaine précédente</B>, et les demandes de congé et d'échange à accepter.</li>

@@ -42,12 +42,14 @@ export interface DocMeta { category: DocCategory; title: string; start: string; 
 export async function sendDocument(file: File, profileId: string, meta: DocMeta): Promise<string> {
   const { data, type, ext } = await shrink(file);
   if (data.size > MAX_BYTES) return 'Fichier trop lourd : 10 Mo au plus. Pour un PDF, scanne-le en qualité normale.';
-  const path = `${profileId}/${crypto.randomUUID()}.${ext}`;
+  // Un bulletin de paie se nomme « paie-AAAA-MM-… » : c'est ce qui permet à la comptable de le déposer.
+  const prefix = meta.category === 'paie' ? `paie-${meta.start.slice(0, 7)}-` : '';
+  const path = `${profileId}/${prefix}${crypto.randomUUID()}.${ext}`;
   const up = await supabase.storage.from(BUCKET).upload(path, await data.arrayBuffer(), { contentType: type || 'application/octet-stream', upsert: false });
   if (up.error) {
     const m = up.error.message;
     if (/bucket not found/i.test(m)) return "L'espace des documents n'est pas encore prêt : le gérant doit exécuter la mise à jour 0020 dans Supabase.";
-    if (/row-level security|unauthori[sz]ed|403/i.test(m)) return "Envoi refusé : connecte-toi avec ton compte (pas avec le code PIN de l'iPad).";
+    if (/row-level security|unauthori[sz]ed|403/i.test(m)) return meta.category === 'paie' ? "Envoi refusé : la mise à jour 0021 n'est peut-être pas encore faite dans Supabase." : "Envoi refusé : connecte-toi avec ton compte (pas avec le code PIN de l'iPad).";
     return `Envoi impossible : ${m}`;
   }
   const { error } = await supabase.rpc('add_staff_document', {
@@ -55,6 +57,22 @@ export async function sendDocument(file: File, profileId: string, meta: DocMeta)
     p_mime: type, p_size: data.size, p_start: meta.start || null, p_end: meta.end || meta.start || null, p_note: meta.note.trim(),
   });
   return error ? error.message : '';
+}
+
+/** Mois d'un bulletin : « novembre 2026 ». */
+export const monthLabel = (day: string) => new Date(`${day.slice(0, 7)}-15T12:00:00`).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+/** Le mois précédent, au format AAAA-MM. */
+export function lastMonth(now = new Date()): string {
+  const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** Retire un bulletin de paie (comptable : ceux qu'elle a déposés ; gérant : tous), puis son fichier. */
+export async function removePayslip(id: string): Promise<string> {
+  const { data, error } = await supabase.rpc('delete_payslip', { p_id: id });
+  if (error) return error.message;
+  await supabase.storage.from(BUCKET).remove([data as string]);
+  return '';
 }
 
 /** Lien temporaire (2 minutes) pour ouvrir un document. */

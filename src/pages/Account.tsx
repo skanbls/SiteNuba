@@ -26,6 +26,8 @@ export default function Account() {
   const [theme, setTheme] = useState<Theme>(readTheme);
   const docs = useMyDocuments(me.id, !pin);
   const [docSheet, setDocSheet] = useState(false);
+  const payslips = (docs.data ?? []).filter((d) => d.category === 'paie').sort((a, b) => (b.start_date ?? '').localeCompare(a.start_date ?? ''));
+  const others = (docs.data ?? []).filter((d) => d.category !== 'paie');
   const chooseTheme = (t: Theme) => {
     setTheme(t);
     saveTheme(t);
@@ -82,6 +84,13 @@ export default function Account() {
             <p className="note">Une erreur dans ces informations ? Seul le gérant peut les modifier.</p>
           </Section>
 
+          {!pin && payslips.length > 0 && (
+            <Section title="Mes bulletins de paie">
+              <div className="list" data-testid="mes-bulletins">{payslips.map((d) => <DocRow key={d.id} doc={d} />)}</div>
+              <p className="note">Déposés par la comptable. Garde-les sans limite de durée : enregistre-les sur ton téléphone ou ton ordinateur.</p>
+            </Section>
+          )}
+
           <Section title="Mes documents" right={!pin ? <button type="button" className="link" onClick={() => setDocSheet(true)}>Envoyer</button> : undefined}>
             {pin ? (
               <p className="note">Tes documents (arrêt de travail, carte Vitale, pièce d'identité…) s'envoient depuis ton téléphone, avec ton compte : pas depuis l'iPad partagé.</p>
@@ -89,8 +98,8 @@ export default function Account() {
               <>
                 <div className="list" data-testid="mes-documents">
                   {docs.isLoading ? <p className="empty"><Spinner /></p> : docs.error ? <p className="empty err">{frError(docs.error)}</p>
-                    : (docs.data ?? []).length === 0 ? <p className="empty">Aucun document envoyé.</p>
-                    : (docs.data ?? []).map((d) => <DocRow key={d.id} doc={d} />)}
+                    : others.length === 0 ? <p className="empty">Aucun document envoyé.</p>
+                    : others.map((d) => <DocRow key={d.id} doc={d} />)}
                 </div>
                 <button type="button" className="btn" onClick={() => setDocSheet(true)}><Icon name="doc" />Envoyer un document</button>
                 <p className="note">Arrêt de travail, carte Vitale, pièce d'identité, RIB… Seuls le gérant et la comptable les voient. Pour en retirer un, demande au gérant.</p>

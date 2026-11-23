@@ -1338,6 +1338,26 @@ async function main() {
   await boss.locator('[data-accountant="compta@cabinet.test"]').getByText('Compte créé').waitFor();
   step("la comptable a son espace : récap du mois avec les absences, documents de l'équipe, caisse ; rien d'autre");
 
+  // Bulletins de paie : la comptable dépose celui de Théo, qui le retrouve dans son compte.
+  const payMonth = ymd(new Date()).slice(0, 7);
+  await compta.getByRole('button', { name: 'Documents', exact: true }).click();
+  await compta.getByRole('button', { name: 'Déposer les bulletins de paie' }).click();
+  await compta.fill('#paie-month', payMonth);
+  await compta.getByLabel('Bulletin de Théo Martin').setInputFiles({ name: 'bulletin.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 bulletin de test') });
+  await shot(compta, '13zh-deposer-bulletins');
+  await compta.getByRole('button', { name: 'Déposer 1 bulletin' }).click();
+  await see(compta, 'bulletin de');
+  const slip = compta.locator(`[data-person-docs="Théo Martin"] [data-month="${payMonth}"]`);
+  await slip.waitFor();
+  await theo.goto(APP + '#/compte');
+  await theo.getByTestId('mes-bulletins').locator(`[data-month="${payMonth}"]`).getByText('Bulletin de paie').waitFor();
+  assert.equal(await theo.getByTestId('mes-documents').getByText('Bulletin de paie').count(), 0, 'les bulletins ont leur propre rubrique');
+  await shot(theo, '13zh-mes-bulletins');
+  await slip.getByRole('button', { name: /Supprimer/ }).click();
+  await see(compta, 'Bulletin retiré');
+  await slip.waitFor({ state: 'detached' });
+  step('la comptable dépose les bulletins de paie du mois ; chaque salarié retrouve le sien dans son compte');
+
   // 14. Le gérant désactive Théo : il perd l'accès.
   await boss.goto(APP + '#/equipe');
   await boss.locator('button.row', { hasText: 'Théo Martin' }).click();
