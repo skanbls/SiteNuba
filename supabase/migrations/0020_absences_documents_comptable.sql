@@ -19,8 +19,25 @@
 -- 3. Récap mensuel de la comptable : heures et absences par motif.
 -- 4. Lien vers la caisse Zelty pour la comptable (en attendant la lecture des Z par l'appli).
 -- 5. Liste de courses : les cases cochées, partagées entre tous les appareils.
+--
+-- Elle s'appuie sur les mises à jour 0010 (administration) et 0016 (accès comptable) :
+-- s'il en manque une, elle s'arrête tout de suite en disant laquelle exécuter d'abord.
 -- =====================================================================
 begin;
+
+do $$
+declare missing text := '';
+begin
+  if to_regclass('public.profile_folders') is null or to_regprocedure('public._email_queue(text, text, text, text)') is null then
+    missing := missing || ' 0010 (administration),';
+  end if;
+  if to_regclass('public.accountants') is null or to_regprocedure('public._accountant_id()') is null then
+    missing := missing || ' 0016 (accès comptable),';
+  end if;
+  if missing <> '' then
+    raise exception 'Il manque une mise à jour plus ancienne. Exécute d''abord :% puis relance celle-ci (0020).', rtrim(missing, ',');
+  end if;
+end $$;
 
 -- ---------- 1. Motifs d'absence ----------------------------------------------------
 alter table public.leave_requests
