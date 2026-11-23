@@ -22,6 +22,7 @@ import Procedures from './pages/Procedures';
 import Production from './pages/Production';
 import Carte from './pages/Carte';
 import DeliveryNote from './pages/DeliveryNote';
+import Dashboard from './pages/Dashboard';
 import Reservations from './pages/Reservations';
 import Settings from './pages/Settings';
 import Stocks from './pages/Stocks';
@@ -78,6 +79,7 @@ export default function App({ linkError }: { linkError: string }) {
       {gerant && <Route path="/equipe" element={<Team />} />}
       {gerant && <Route path="/reglages" element={<Settings />} />}
       {gerant && <Route path="/heures" element={<HoursPreview />} />}
+      {gerant && <Route path="/tableau-de-bord" element={<Dashboard />} />}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

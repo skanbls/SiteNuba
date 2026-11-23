@@ -250,6 +250,7 @@ const PARTS: Part[] = [
       <ul>
         <li><b>Équipe</b> : ajouter une personne, son rôle, son code PIN, le lien de son dossier Drive ; <B>QR code d'installation</B> pour l'équipe.</li>
         <li><b>Administration</b> : accès des responsables, e-mails, bornes, mercuriales (Nuba, Saveurs Nomades, Comptoir), en-tête des bons de livraison, liens publics.</li>
+        <li><b>Tableau de bord</b> (gérants seulement) : solde, alertes, trésorerie sur 13 semaines, prévisionnel sur 12 mois et échéances, repris du fichier « Tableau de bord financier ». Les chiffres se modifient dans Google Sheets.</li>
         <li><b>Fiches techniques</b>, avec l'accès « fiches techniques » : coût matière, marge, coefficient et prix conseillé de chaque fiche, en rouge au-dessus de l'objectif.</li>
         <li><b>Accès comptable</b>, dans Administration : ajoute l'adresse e-mail de la comptable. Elle crée son compte avec cette adresse et ne voit que les heures travaillées, avec le fichier pour la paie.</li>
         <li><b>Pointeuse</b>, vue Équipe : corriger un pointage, <B>Exporter pour le comptable</B>.</li>

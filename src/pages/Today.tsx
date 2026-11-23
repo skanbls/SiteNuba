@@ -2,7 +2,9 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Avatar, Layout, Loading, Section } from '../components/ui';
-import { useEntries, useMyOpenEntry, useOpenEntries, useShifts, useTeam, useTodayTasks } from '../lib/data';
+import { parseBoard } from '../lib/dashboard';
+import { useDashboard, useEntries, useMyOpenEntry, useOpenEntries, useShifts, useTeam, useTodayTasks } from '../lib/data';
+import { norm } from '../lib/production';
 import { useMe } from '../lib/session';
 import { addDays, dayKey, fmtDayLong, fmtDur, fmtTime, periodRange, workedMs } from '../lib/time';
 import { EVENT_KIND, fullName, type Shift, type TimeEntry } from '../lib/types';
@@ -16,6 +18,10 @@ const startOfToday = () => {
 export default function Today() {
   const me = useMe();
   const manager = me.role !== 'equipier';
+  // Gérants : l'état de la trésorerie et les alertes du tableau de bord financier.
+  const dash = useDashboard(me.role === 'gerant');
+  const board = useMemo(() => parseBoard(dash.data?.tabs?.['Tableau de bord']), [dash.data]);
+  const cash = board.sections.flatMap((x) => x.rows).find((k) => /^statut/.test(norm(k.label)));
   const open = useMyOpenEntry(me.id);
   const present = useOpenEntries(manager);
   const week = periodRange('week');
@@ -102,6 +108,12 @@ export default function Today() {
                   <span className="sub">{t.event_requests} demande{(t.event_requests ?? 0) > 1 ? 's' : ''} à traiter</span>
                 </div>
                 <div className="end"><span className="pill info">À voir</span><span className="chev"><Icon name="chev" size={18} /></span></div>
+              </Link>
+            )}
+            {me.role === 'gerant' && dash.data?.synced_at && (cash || board.alerts.length > 0) && (
+              <Link className="row" to="/tableau-de-bord" data-testid="today-tresorerie">
+                <div className="grow"><span className="t">Trésorerie</span><span className="sub">{board.alerts.length ? `${board.alerts.length} alerte${board.alerts.length > 1 ? 's' : ''} dans le tableau de bord` : 'Aucune alerte'}</span></div>
+                <div className="end">{cash && <span className={`pill ${cash.tone === 'neutral' ? '' : cash.tone}`}>{cash.status || cash.value}</span>}<span className="chev"><Icon name="chev" size={18} /></span></div>
               </Link>
             )}
             {(t.procedures_unread ?? 0) > 0 && (

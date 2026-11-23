@@ -892,11 +892,13 @@ async function main() {
   await boss.fill('#merc-sn', 'https://docs.google.com/spreadsheets/d/SN_feuille_test_123/edit#gid=9006');
   await boss.fill('#merc-cm', 'https://docs.google.com/spreadsheets/d/CM_feuille_test_456/edit');
   await boss.fill('#merc-nuba', 'https://docs.google.com/spreadsheets/d/NB_feuille_test_789/edit');
+  await boss.fill('#merc-tableau', 'https://docs.google.com/spreadsheets/d/TB_feuille_test_321/edit');
   await boss.getByRole('button', { name: 'Créer le script' }).click();
   const script = await boss.inputValue('#merc-script');
   assert.match(script, /"cleSynchro": "nuba_[0-9a-f]{64}"/);
   assert.match(script, /"saveurs_nomades": "SN_feuille_test_123"/);
   assert.match(script, /"nuba": "NB_feuille_test_789"/);
+  assert.match(script, /"tableau": "TB_feuille_test_321"/);
   await shot(boss, '13za-script-mercuriales');
   await boss.getByRole('button', { name: "C'est fait" }).click();
 
@@ -922,6 +924,55 @@ async function main() {
       'COMPOSITION CALCUL': [['Recette', 'Ingrédient', 'Quantité pour la fiche', 'Unité', 'Fournisseur', 'Coefficient de pertes'], ['Taboulé oriental', 'Semoule', 40, 'g', 'Metro', 0.05]],
       PRESTATIONS: [['Date de livraison', 'Catégorie', 'Plat', 'Portions', 'Contrôle des fiches'], [iso(3), 'Entrée', 'Taboulé oriental', 40, 'OK']],
     } },
+    // Le tableau de bord financier (gérants seulement) : texte affiché et valeurs brutes, données inventées.
+    TB_feuille_test_321: { name: 'TABLEAU DE BORD TEST', tabs: (() => {
+      const e = (n) => ({ d: `${Math.round(n).toLocaleString('fr-FR').replace(/\u202f/g, ' ')} €`, v: n });
+      const weeks = ['01/12', '08/12', '15/12', '22/12', '29/12', '05/01', '12/01', '19/01', '26/01', '02/02', '09/02', '16/02', '23/02'];
+      const wk = [20000, 18000, 15000, 12500, 11000, 9500, 8200, 9000, 10500, 12000, 13500, 15500, 17000];
+      const months = ['déc. 2026', 'janv. 2027', 'févr. 2027', 'mars 2027', 'avr. 2027', 'mai 2027'];
+      const mo = [15000, 9800, 11000, 14000, 18000, 23000];
+      return {
+        'Tableau de bord': [
+          ['Société test : tableau de bord financier'],
+          ['Solde de référence du 01/12/2026.'],
+          [],
+          ['Trésorerie'],
+          ['Solde bancaire retenu', e(20000), '01/12/2026'],
+          ['Statut sur 13 semaines', 'ORANGE'],
+          ['Marge de manœuvre', e(-1200), 'DÉPASSEMENT'],
+          ['Seuil vert / seuil rouge', e(10000), e(5000)],
+          ["Budget d'ouverture"],
+          ['Encore disponible dans l\'enveloppe', e(3000), 'OK'],
+          [],
+          ['Alertes', '', '2 alerte(s) active(s)'],
+          [],
+          ['Trésorerie sous le seuil vert la semaine du 12/01 : pas de nouvelle dépense.'],
+          ['Une échéance importante à régler sous 30 jours.'],
+          [],
+          ['Prochaines échéances (30 jours)'],
+          ['Date', 'Libellé', 'Montant'],
+          [{ d: '10/12/2026', v: new Date(Date.UTC(2026, 11, 10)) }, 'Assurance test', { d: '-300,00 €', v: -300 }],
+          [{ d: '05/12/2026', v: new Date(Date.UTC(2026, 11, 5)) }, 'Loyer test', { d: '-1 200,00 €', v: -1200 }],
+        ],
+        'Tréso 13 semaines': [
+          ['Trésorerie test (13 semaines)'], [],
+          ['Début de semaine', '', ...weeks],
+          ['Solde fin de semaine', '', ...wk.map(e)],
+          ['Seuil vert', '', ...wk.map(() => e(10000))],
+          ['Seuil rouge', '', ...wk.map(() => e(5000))],
+          ['Statut', '', ...wk.map((v) => (v < 10000 ? 'ORANGE' : 'VERT'))],
+        ],
+        'Prévisionnel 12 mois': [
+          ['Prévisionnel test'], [],
+          ['Mois', '', ...months],
+          ['Solde fin de mois', '', ...mo.map(e)],
+          ['Seuil vert', '', ...mo.map(() => e(10000))],
+          ['Seuil rouge', '', ...mo.map(() => e(5000))],
+          ['Solde fin si le CA est inférieur de 30 % (test de résistance)', '', ...mo.map((v) => e(v * 0.7))],
+        ],
+        'Historique KPI': [['Date', 'Solde retenu', 'Statut 13 semaines'], ['24/11/2026', e(21000), 'VERT'], ['01/12/2026', e(20000), 'ORANGE']],
+      };
+    })() },
     // La mercuriale Nuba : la carte du restaurant, en blocs (données inventées).
     NB_feuille_test_789: { name: 'MERCURIALE NUBA', tabs: {
       'FICHES PLATS': [
@@ -971,7 +1022,13 @@ async function main() {
   };
   const props = new Map();
   const google = {
-    SpreadsheetApp: { openById: (id) => ({ getName: () => sheets[id].name, getSheetByName: (n) => (sheets[id].tabs[n] ? { getDataRange: () => ({ getValues: () => sheets[id].tabs[n] }) } : null) }) },
+    SpreadsheetApp: { openById: (id) => ({ getName: () => sheets[id].name, getSheetByName: (n) => {
+      const t = sheets[id].tabs[n];
+      if (!t) return null;
+      // Une case peut donner sa valeur et son texte affiché, comme Google Sheets.
+      const shown = (c) => c !== null && typeof c === 'object' && !(c instanceof Date);
+      return { getDataRange: () => ({ getValues: () => t.map((r) => r.map((c) => (shown(c) ? c.v : c))), getDisplayValues: () => t.map((r) => r.map((c) => (shown(c) ? c.d : String(c)))) }) };
+    } }) },
     PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => props.get(k) ?? null, setProperty: (k, v) => props.set(k, v) }) },
     UrlFetchApp: { fetch: (url, o) => {
       const out = execFileSync('curl', ['-s', '-w', '\n%{http_code}', '-X', 'POST', url, '-H', 'Content-Type: application/json', ...Object.entries(o.headers).flatMap(([k, v]) => ['-H', `${k}: ${v}`]), '--data-binary', '@-'], { input: o.payload }).toString();
@@ -988,6 +1045,7 @@ async function main() {
   await boss.locator('[data-merc="saveurs_nomades"]').getByText('3 fiches, 3 commandes').waitFor();
   await boss.locator('[data-merc="comptoir"]').getByText('1 fiche, 1 commande').waitFor();
   await boss.locator('[data-merc="nuba"]').getByText('2 plats, 1 boisson, 1 préparation maison · 2 fiches à compléter').waitFor();
+  await boss.locator('[data-merc="tableau"]').getByText(/Reçu .* gérants seulement/).waitFor();
   step('le gérant relie les mercuriales : le script Google généré envoie fiches, commandes et prix');
 
   await theo.goto(APP + '#/production');
@@ -1148,6 +1206,37 @@ async function main() {
   await boss.getByRole('button', { name: 'Ajouter', exact: true }).click();
   await see(boss, 'Coût matière estimé');
   step('le gérant voit coûts, marges et objectif de chaque fiche de la carte');
+
+  // 13 decies quater. Tableau de bord financier : les gérants seulement.
+  await boss.goto(APP + '#/tableau-de-bord');
+  await boss.getByTestId('dash-hero').getByText('20 000 €').waitFor();
+  await boss.getByTestId('dash-hero').locator('[data-status="ORANGE"]').waitFor();
+  await boss.getByTestId('dash-alertes').getByText('pas de nouvelle dépense').waitFor();
+  await boss.locator('[data-kpi="Marge de manœuvre"]').locator('[data-status="DÉPASSEMENT"]').waitFor();
+  await boss.locator('[data-kpi="Seuil vert / seuil rouge"]').getByText('10 000 € / 5 000 €').waitFor();
+  assert.deepEqual(await boss.getByTestId('dash-echeances').locator('[data-due]').evaluateAll((els) => els.map((e) => e.getAttribute('data-due'))), ['Loyer test', 'Assurance test'], 'échéances par date');
+  const chart13 = boss.getByTestId('chart-13');
+  await chart13.locator('path.line.is-main').waitFor();
+  await chart13.getByText(/plus bas 8\s200\s€/).waitFor();
+  const plot = await chart13.locator('svg rect').boundingBox();
+  await boss.mouse.move(plot.x + plot.width / 2, plot.y + plot.height / 2);
+  await chart13.locator('.chart-tip').getByText('État : ORANGE').waitFor();
+  await boss.getByTestId('chart-12').locator('.chart-legend').getByText('Si le CA est 30 % plus bas').waitFor();
+  await boss.getByTestId('chart-12').getByText('Voir les chiffres').click();
+  await boss.getByTestId('chart-12').locator('table').getByText('janv. 2027').waitFor();
+  await shot(boss, '13zf-tableau-de-bord');
+  await bossPhone.goto(APP + '#/tableau-de-bord');
+  await bossPhone.getByTestId('chart-13').locator('path.line.is-main').waitFor();
+  await noOverflow(bossPhone, 'tableau de bord');
+  await shot(bossPhone, '13zf-tableau-de-bord-telephone');
+  await boss.goto(APP + '#/');
+  await boss.getByTestId('today-tresorerie').getByText('ORANGE').waitFor();
+  for (const [who, page] of [['un équipier', theo], ['une responsable', ines]]) {
+    await page.goto(APP + '#/tableau-de-bord');
+    await page.waitForFunction(() => location.hash === '#/');
+    assert.equal(await page.getByRole('link', { name: 'Tableau de bord' }).count(), 0, `${who} n'a pas le tableau de bord dans le menu`);
+  }
+  step('tableau de bord financier : alertes, trésorerie et échéances, pour les gérants seulement');
 
   // 13 undecies. Numéros utiles : la responsable en ajoute un, l'équipier l'appelle d'un geste.
   await ines.goto(APP + '#/numeros');

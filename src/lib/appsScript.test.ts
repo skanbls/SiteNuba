@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { buildAppsScript, sheetId } from './appsScript';
 
 /* Un faux Google : feuilles en mémoire, envois notés, déclencheurs comptés. */
-type Cell = string | number | Date;
+type Plain = string | number | Date;
+/** Une case : sa valeur, ou sa valeur et le texte affiché par la feuille. */
+type Cell = Plain | { d: string; v: Plain };
+const isShown = (c: Cell): c is { d: string; v: Plain } => typeof c === 'object' && !(c instanceof Date);
 function fakeGoogle(files: Record<string, { name: string; tabs: Record<string, Cell[][]> }>, answer = '{"ok":true,"counts":{}}') {
   const sent: { url: string; body: { p_key: string; p_payload: Record<string, unknown> }; headers: Record<string, string> }[] = [];
   const props = new Map<string, string>();
@@ -15,7 +18,12 @@ function fakeGoogle(files: Record<string, { name: string; tabs: Record<string, C
         if (!f) throw new Error('fichier introuvable ' + id);
         return {
           getName: () => f.name,
-          getSheetByName: (n: string) => (f.tabs[n] ? { getDataRange: () => ({ getValues: () => f.tabs[n] }) } : null),
+          getSheetByName: (n: string) => (f.tabs[n] ? {
+            getDataRange: () => ({
+              getValues: () => f.tabs[n].map((r) => r.map((c) => (isShown(c) ? c.v : c))),
+              getDisplayValues: () => f.tabs[n].map((r) => r.map((c) => (isShown(c) ? c.d : String(c)))),
+            }),
+          } : null),
         };
       },
     },
@@ -208,6 +216,36 @@ describe('script Google des mercuriales', () => {
     const { g, sent } = fakeGoogle({ ID_SN: { name: 'SN', tabs: SN }, ID_CM: { name: 'CM', tabs: CM }, ID_NB: { name: 'NB', tabs: NB } }, '{"ok":false,"error":"db","message":"valeur trop longue"}');
     expect(() => run(buildAppsScript({ ...opts, nuba: 'ID_NB' }), g).envoyerMaintenant()).toThrow(/nuba : refusé par la base : valeur trop longue/);
     expect(sent.map((x) => x.url.split('/').pop())).toEqual(['sync_mercuriale', 'sync_mercuriale', 'sync_carte']);
+  });
+
+  it('envoie le tableau de bord tel qu\'il s\'affiche, sans lignes ni colonnes vides', () => {
+    const histo: Cell[][] = [['Date', 'Solde retenu'], ...Array.from({ length: 320 }, (_, i) => [`S${i}`, i] as Cell[])];
+    const TB: Record<string, Cell[][]> = {
+      'Tableau de bord': [
+        ['Tableau test', '', '', '', ''],
+        [],
+        ['Trésorerie', '', '', '', ''],
+        ['Solde retenu', { d: '10 000 €', v: 10000.4 }, { d: '01/12/2026', v: new Date(Date.UTC(2026, 11, 1)) }, '', ''],
+        ['', '', '', '', ''],
+      ],
+      'Tréso 13 semaines': [['Solde fin de semaine', '', { d: '9 000 €', v: 9000 }]],
+      'Historique KPI': histo,
+      'Autre onglet': [['Pas envoyé']],
+    };
+    const { g, sent } = fakeGoogle({ ID_TB: { name: 'TABLEAU', tabs: TB } });
+    run(buildAppsScript({ ...opts, saveursNomades: '', comptoir: '', tableau: 'ID_TB' }), g).envoyerMaintenant();
+    expect(sent).toHaveLength(1);
+    expect(sent[0].url).toBe('https://projet.supabase.co/rest/v1/rpc/sync_dashboard');
+    const tb = sent[0].body.p_payload as { brand: string; tabs: Record<string, { d: string[][]; v: unknown[][] }> };
+    expect(tb.brand).toBe('tableau');
+    expect(Object.keys(tb.tabs)).toEqual(['Tableau de bord', 'Tréso 13 semaines', 'Historique KPI']);
+    expect(tb.tabs['Tableau de bord'].d).toEqual([['Tableau test', '', ''], [], ['Trésorerie', '', ''], ['Solde retenu', '10 000 €', '01/12/2026']]);
+    expect(tb.tabs['Tableau de bord'].v[3]).toEqual(['Solde retenu', 10000.4, '2026-12-01']);
+    expect(tb.tabs['Tréso 13 semaines'].v).toEqual([['Solde fin de semaine', '', 9000]]);
+    const h = tb.tabs['Historique KPI'].d;
+    expect(h).toHaveLength(301);
+    expect(h[0]).toEqual(['Date', 'Solde retenu']);
+    expect(h[300]).toEqual(['S319', '319']);
   });
 
   it('une feuille non renseignée est ignorée', () => {

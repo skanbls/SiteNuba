@@ -4,7 +4,7 @@ import { Icon } from '../components/Icon';
 import { Chips, Field, Layout, Loading, Section, Sheet, useToast } from '../components/ui';
 import { useMercCosts, useMercIngredients, useMercLines, useMercOrders, useMercPrices, useMercRecipes, useMercSources } from '../lib/data';
 import {
-  BRAND_LABEL, Book, ROLE_LABEL, components, fmtEuro, fmtPct, fmtQty, orderIssues, orderNeeds, shopping,
+  BRAND_LABEL, BRANDS, Book, ROLE_LABEL, components, fmtEuro, fmtPct, fmtQty, orderIssues, orderNeeds, shopping,
   type Brand, type MercCost, type MercIngredient, type MercOrder, type MercPrice, type MercRecipe, type MercSource, type Need,
 } from '../lib/production';
 import { useCan } from '../lib/rights';
@@ -41,7 +41,7 @@ export default function Production() {
 
   const book = useMemo(() => new Book(recipes.data ?? [], lines.data ?? []), [recipes.data, lines.data]);
   // La mercuriale Nuba (la carte) vit dans Fiches techniques : ici, Saveurs Nomades et Comptoir.
-  const mijote = (sources.data ?? []).filter((s): s is MercSource & { brand: Brand } => s.brand !== 'nuba');
+  const mijote = (sources.data ?? []).filter((s): s is MercSource & { brand: Brand } => (BRANDS as string[]).includes(s.brand));
   const queries = [sources, recipes, lines, orders, ingredients];
   const loading = queries.some((q) => q.isLoading);
   const error = queries.find((q) => q.error)?.error;

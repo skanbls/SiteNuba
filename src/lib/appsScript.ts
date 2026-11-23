@@ -11,6 +11,10 @@
  * PREPARATIONS MAISON, faites de blocs (une fiche par bloc : « Plat », « Boisson » ou
  * « Préparation » en colonne A, puis ses réglages, puis ses ingrédients sous « Ingrédient »),
  * et la colonne « Allergènes à vérifier » de CALCUL. Chaque réglage est retrouvé par son titre.
+ *
+ * Dans le tableau de bord financier (gérants seulement) : les onglets Tableau de bord,
+ * Tréso 13 semaines, Prévisionnel 12 mois et Historique KPI, tels qu'ils s'affichent
+ * (texte affiché et valeurs brutes). L'appli les lit elle-même.
  */
 
 /**
@@ -36,6 +40,8 @@ export interface ScriptOptions {
   comptoir: string;
   /** Mercuriale Nuba (la carte du restaurant), ou chaîne vide. */
   nuba?: string;
+  /** Tableau de bord financier (gérants seulement), ou chaîne vide. */
+  tableau?: string;
   /** Date affichée en tête du script. */
   date: string;
 }
@@ -44,12 +50,14 @@ export function buildAppsScript(o: ScriptOptions): string {
   const conf = {
     adresse: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/sync_mercuriale`,
     adresseCarte: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/sync_carte`,
+    adresseTableau: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/sync_dashboard`,
     clePublique: o.publicKey,
     cleSynchro: o.syncKey,
-    mercuriales: { saveurs_nomades: o.saveursNomades, comptoir: o.comptoir, nuba: o.nuba ?? '' },
+    mercuriales: { saveurs_nomades: o.saveursNomades, comptoir: o.comptoir, nuba: o.nuba ?? '', tableau: o.tableau ?? '' },
   };
   return `/**
- * Nuba Gestion : envoie les mercuriales Saveurs Nomades, Comptoir Méditerranéen et Nuba vers l'appli.
+ * Nuba Gestion : envoie les mercuriales Saveurs Nomades, Comptoir Méditerranéen et Nuba,
+ * et le tableau de bord financier, vers l'appli.
  * Généré par l'appli (Administration, Mercuriales) le ${o.date}.
  *
  * Mise en route, une seule fois :
@@ -78,7 +86,7 @@ function envoyerSiChangement() { nubaEnvoyer_(false); }
 function nubaEnvoyer_(force) {
   var props = PropertiesService.getScriptProperties();
   var erreurs = [];
-  ['saveurs_nomades', 'comptoir', 'nuba'].forEach(function (marque) {
+  ['saveurs_nomades', 'comptoir', 'nuba', 'tableau'].forEach(function (marque) {
     var id = NUBA.mercuriales[marque];
     if (!id) return;
     try {
@@ -87,6 +95,8 @@ function nubaEnvoyer_(force) {
       if (marque === 'nuba') {
         var carte = nubaCarte_(ss);
         contenu = { brand: marque, file: ss.getName(), items: carte.items, lines: carte.lines };
+      } else if (marque === 'tableau') {
+        contenu = { brand: marque, file: ss.getName(), tabs: nubaFinances_(ss) };
       } else {
         contenu = {
           brand: marque,
@@ -103,7 +113,8 @@ function nubaEnvoyer_(force) {
       var dernier = Number(props.getProperty('nuba_envoi_' + marque) || 0);
       // Rien n'a changé : on n'envoie qu'une fois toutes les six heures, pour dire que tout va bien.
       if (!force && props.getProperty('nuba_empreinte_' + marque) === empreinte && Date.now() - dernier < 6 * 3600 * 1000) return;
-      var rep = UrlFetchApp.fetch(marque === 'nuba' ? NUBA.adresseCarte : NUBA.adresse, {
+      var adresse = marque === 'nuba' ? NUBA.adresseCarte : marque === 'tableau' ? NUBA.adresseTableau : NUBA.adresse;
+      var rep = UrlFetchApp.fetch(adresse, {
         method: 'post',
         contentType: 'application/json',
         muteHttpExceptions: true,
@@ -132,7 +143,7 @@ function nubaRaison_(res, code, corps, marque) {
   if (res && res.error === 'too_many') return 'trop d\\'envois en peu de temps, nouvel essai dans 10 minutes.';
   if (res && res.error === 'payload') return 'contenu illisible (onglet renommé ou vidé ?).';
   if (res && res.error === 'db') return 'refusé par la base : ' + res.message;
-  if (code === 404) return marque === 'nuba' ? "l'appli attend la mise à jour 0017 de sa base." : "l'appli attend la mise à jour 0011 de sa base.";
+  if (code === 404) return "l'appli attend la mise à jour " + ({ nuba: '0017', tableau: '0019' }[marque] || '0011') + ' de sa base.';
   return 'réponse ' + code + ' : ' + String(corps).slice(0, 200);
 }
 
@@ -360,6 +371,39 @@ function nubaCarte_(ss) {
     });
   });
   return out;
+}
+
+// ---------- Tableau de bord financier : les onglets tels qu'ils s'affichent ----------
+
+var NUBA_FINANCES = ['Tableau de bord', 'Tréso 13 semaines', 'Prévisionnel 12 mois', 'Historique KPI'];
+
+function nubaFinances_(ss) {
+  var tabs = {};
+  NUBA_FINANCES.forEach(function (nom) {
+    var sh = ss.getSheetByName(nom);
+    if (!sh) return;
+    var r = sh.getDataRange();
+    var d = r.getDisplayValues();
+    var v = r.getValues();
+    // Lignes et colonnes vides de la fin retirées ; 30 colonnes au plus.
+    var hauteur = 0, largeur = 0;
+    d.forEach(function (ligne, i) {
+      ligne.forEach(function (c, j) {
+        if (String(c).trim() !== '') { hauteur = Math.max(hauteur, i + 1); largeur = Math.max(largeur, j + 1); }
+      });
+    });
+    largeur = Math.min(largeur, 30);
+    var lignes = [];
+    for (var i = 0; i < hauteur; i++) lignes.push(i);
+    // Historique : la ligne de titres et les 300 dernières lignes.
+    if (lignes.length > 301) lignes = [0].concat(lignes.slice(lignes.length - 300));
+    if (lignes.length > 400) lignes = lignes.slice(0, 400);
+    tabs[nom] = {
+      d: lignes.map(function (i) { return d[i].slice(0, largeur).map(function (c) { return String(c).trim(); }); }),
+      v: lignes.map(function (i) { return v[i].slice(0, largeur).map(function (c) { var x = nubaValeur_(c); return x === undefined ? '' : x; }); })
+    };
+  });
+  return tabs;
 }
 `;
 }

@@ -5,7 +5,7 @@ import { RightsPicker } from '../components/Rights';
 import { Avatar, Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
 import { useQuery } from '@tanstack/react-query';
 import { buildAppsScript, sheetId } from '../lib/appsScript';
-import { useAccountants, useAllRights, useDeliverySettings, useEmailLog, useEmailSettings, useKiosks, useMercSources, useRefresh, useSites, useTeam } from '../lib/data';
+import { useAccountants, useAllRights, useDashboard, useDeliverySettings, useEmailLog, useEmailSettings, useKiosks, useMercSources, useRefresh, useSites, useTeam } from '../lib/data';
 import { EMPTY_DELIVERY, type DeliverySettings } from '../lib/delivery';
 import type { MercSource } from '../lib/production';
 import { AREAS, type Area } from '../lib/rights';
@@ -58,6 +58,7 @@ export default function Settings() {
   });
   const [mercSheet, setMercSheet] = useState(false);
   const delivery = useDeliverySettings();
+  const dashboard = useDashboard(true);
   const [blSheet, setBlSheet] = useState(false);
   const closeBl = useCallback(() => setBlSheet(false), []);
   const accountants = useAccountants(true);
@@ -251,7 +252,26 @@ export default function Settings() {
                 })}
               </div>
             )}
-            <p className="note">Un petit script Google, installé une fois, envoie les mercuriales toutes les dix minutes : la carte Nuba dans Fiches techniques, Saveurs Nomades et Comptoir dans Production.</p>
+            {!dashboard.error && (() => {
+              const d = dashboard.data;
+              const last = (mercStatus.data?.log ?? []).find((l) => l.brand === 'tableau');
+              return (
+                <div className="list">
+                  <div className="row wrap" data-merc="tableau">
+                    <div className="grow">
+                      <span className="t">Tableau de bord financier</span>
+                      <span className="sub">{d?.synced_at ? `Reçu ${fmtDay(d.synced_at)} à ${fmtTime(d.synced_at)} · gérants seulement` : 'Jamais reçu · gérants seulement'}</span>
+                      {last && !last.ok && <span className="sub err" data-merc-error="tableau">Dernier envoi refusé, {fmtDay(last.at)} à {fmtTime(last.at)} : {last.message}</span>}
+                    </div>
+                    <div className="end">
+                      {d?.synced_at && <Link className="btn sm" to="/tableau-de-bord">Voir</Link>}
+                      {d?.sheet_url && <a className="btn sm" href={d.sheet_url} target="_blank" rel="noopener noreferrer">Ouvrir</a>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+            <p className="note">Un petit script Google, installé une fois, envoie les mercuriales toutes les dix minutes : la carte Nuba dans Fiches techniques, Saveurs Nomades et Comptoir dans Production, et le tableau de bord financier (gérants seulement).</p>
           </Section>
 
           <Section title="Bons de livraison" right={<button type="button" className="link" onClick={() => setBlSheet(true)}>Modifier l'en-tête</button>}>
@@ -325,7 +345,7 @@ export default function Settings() {
       {pair && <PairCodeSheet label={pair.label} code={pair.code} onClose={closePair} />}
       {rightsFor && <RightsSheet key={rightsFor.id} person={rightsFor} areas={areasOf(rightsFor.id)} onClose={closeRights} />}
       {mailSheet && mail.data && <MailSheet settings={mail.data} onClose={closeMail} />}
-      {mercSheet && <MercSheet sources={merc.data ?? []} onClose={closeMerc} />}
+      {mercSheet && <MercSheet sources={merc.data ?? []} dashboardUrl={dashboard.data?.sheet_url ?? ''} onClose={closeMerc} />}
       {blSheet && <DeliverySheet settings={delivery.data ?? EMPTY_DELIVERY} onClose={closeBl} />}
       {accSheet && <AccountantSheet access={accSheet} onClose={closeAcc} />}
     </Layout>
@@ -414,31 +434,32 @@ function AccountantSheet({ access, onClose }: { access: AccountantAccess | 'new'
 }
 
 /** Relier les mercuriales : liens des trois feuilles, clé de synchronisation et script Google à coller. */
-function MercSheet({ sources, onClose }: { sources: MercSource[]; onClose: () => void }) {
+function MercSheet({ sources, dashboardUrl, onClose }: { sources: MercSource[]; dashboardUrl: string; onClose: () => void }) {
   const toast = useToast();
   const refresh = useRefresh();
   const urlOf = (b: string) => sources.find((s) => s.brand === b)?.sheet_url ?? '';
   const [sn, setSn] = useState(urlOf('saveurs_nomades'));
   const [cm, setCm] = useState(urlOf('comptoir'));
   const [nb, setNb] = useState(urlOf('nuba'));
+  const [tb, setTb] = useState(dashboardUrl);
   const [script, setScript] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function create(e: FormEvent) {
     e.preventDefault();
-    const a = sheetId(sn), b = sheetId(cm), c = sheetId(nb);
-    const bad = [nb.trim() && !c ? 'Nuba' : '', sn.trim() && !a ? 'Saveurs Nomades' : '', cm.trim() && !b ? 'Comptoir Méditerranéen' : ''].filter(Boolean);
+    const a = sheetId(sn), b = sheetId(cm), c = sheetId(nb), t = sheetId(tb);
+    const bad = [nb.trim() && !c ? 'Nuba' : '', sn.trim() && !a ? 'Saveurs Nomades' : '', cm.trim() && !b ? 'Comptoir Méditerranéen' : '', tb.trim() && !t ? 'le tableau de bord' : ''].filter(Boolean);
     if (bad.length) return setErr(`Lien non reconnu pour ${bad.join(' et ')}. Ouvre la mercuriale dans Google Sheets et copie l'adresse en haut du navigateur : elle commence par https://docs.google.com/spreadsheets/d/`);
-    if (!a && !b && !c) return setErr('Colle le lien d\'au moins une mercuriale.');
+    if (!a && !b && !c && !t) return setErr('Colle le lien d\'au moins une mercuriale.');
     setBusy(true);
     setErr('');
     const clean = (id: string) => (id ? `https://docs.google.com/spreadsheets/d/${id}/edit` : '');
-    const { data, error } = await supabase.rpc('merc_new_key', { p_sn_url: clean(a), p_cm_url: clean(b), p_nuba_url: clean(c) });
+    const { data, error } = await supabase.rpc('merc_new_key', { p_sn_url: clean(a), p_cm_url: clean(b), p_nuba_url: clean(c), p_dashboard_url: clean(t) });
     setBusy(false);
     if (error) return setErr(frError(error));
-    await refresh('merc');
-    setScript(buildAppsScript({ url: projectUrl ?? '', publicKey: publicKey ?? '', syncKey: data as string, saveursNomades: a, comptoir: b, nuba: c, date: new Date().toLocaleDateString('fr-FR') }));
+    await refresh('merc', 'dashboard');
+    setScript(buildAppsScript({ url: projectUrl ?? '', publicKey: publicKey ?? '', syncKey: data as string, saveursNomades: a, comptoir: b, nuba: c, tableau: t, date: new Date().toLocaleDateString('fr-FR') }));
   }
 
   async function copy() {
@@ -458,6 +479,9 @@ function MercSheet({ sources, onClose }: { sources: MercSource[]; onClose: () =>
           <Field label="Mercuriale Nuba (la carte du restaurant)"><input className="in" id="merc-nuba" inputMode="url" value={nb} onChange={(e) => setNb(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" /></Field>
           <Field label="Mercuriale Saveurs Nomades"><input className="in" id="merc-sn" inputMode="url" value={sn} onChange={(e) => setSn(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" /></Field>
           <Field label="Mercuriale Comptoir Méditerranéen"><input className="in" id="merc-cm" inputMode="url" value={cm} onChange={(e) => setCm(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" /></Field>
+          <Field label="Tableau de bord financier (gérants seulement)" hint="Ton fichier « Tableau de bord financier » : il ne s'affiche qu'aux gérants.">
+            <input className="in" id="merc-tableau" inputMode="url" value={tb} onChange={(e) => setTb(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" />
+          </Field>
           <p className="note">Une nouvelle clé remplace l'ancienne : un script déjà installé cesse d'envoyer jusqu'à ce que tu le remplaces.</p>
           {err && <p className="err" role="alert">{err}</p>}
           <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : 'Créer le script'}</button>
