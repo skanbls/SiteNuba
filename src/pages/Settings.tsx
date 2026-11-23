@@ -234,7 +234,6 @@ export default function Settings() {
                 {[...(merc.data ?? [])].sort((a, b) => MERC_ORDER.indexOf(a.brand) - MERC_ORDER.indexOf(b.brand)).map((m) => {
                   // Dernier envoi de cette mercuriale : s'il a été refusé, on dit pourquoi.
                   const last = (mercStatus.data?.log ?? []).find((l) => l.brand === m.brand);
-                  const refused = last && !last.ok ? last : null;
                   const skipped = last && last.ok && /ignorées/.test(last.message) ? last : null;
                   return (
                     <div className="row wrap" key={m.brand} data-merc={m.brand}>
@@ -243,7 +242,7 @@ export default function Settings() {
                         <span className="sub">{!m.synced_at ? 'Jamais reçue' : `Reçue ${fmtDay(m.synced_at)} à ${fmtTime(m.synced_at)} · ${m.brand === 'nuba'
                           ? `${plural(m.counts.plats ?? 0, 'plat')}, ${plural(m.counts.boissons ?? 0, 'boisson')}, ${plural(m.counts.preparations ?? 0, 'préparation')} maison${m.counts.todo ? ` · ${plural(m.counts.todo, 'fiche')} à compléter` : ''}`
                           : `${plural(m.counts.recipes ?? 0, 'fiche')}, ${plural(m.counts.orders ?? 0, 'commande')}`}`}</span>
-                        {refused && <span className="sub err" data-merc-error={m.brand}>Dernier envoi refusé, {fmtDay(refused.at)} à {fmtTime(refused.at)} : {refused.message}</span>}
+                        <SyncProblem brand={m.brand} linked={!!m.sheet_url} syncedAt={m.synced_at} log={mercStatus.data?.log ?? []} keyAt={mercStatus.data?.key_created_at ?? null} />
                         {skipped && <span className="sub" style={{ color: 'var(--warn)' }}>Attention : {skipped.message.replace(/^.*\((.*)\)$/, '$1')}. Vérifie leur date, leur plat et leurs portions dans PRESTATIONS.</span>}
                       </div>
                       {m.sheet_url && <div className="end"><a className="btn sm" href={m.sheet_url} target="_blank" rel="noopener noreferrer">Ouvrir</a></div>}
@@ -254,14 +253,13 @@ export default function Settings() {
             )}
             {!dashboard.error && (() => {
               const d = dashboard.data;
-              const last = (mercStatus.data?.log ?? []).find((l) => l.brand === 'tableau');
               return (
                 <div className="list">
                   <div className="row wrap" data-merc="tableau">
                     <div className="grow">
                       <span className="t">Tableau de bord financier</span>
                       <span className="sub">{d?.synced_at ? `Reçu ${fmtDay(d.synced_at)} à ${fmtTime(d.synced_at)} · gérants seulement` : 'Jamais reçu · gérants seulement'}</span>
-                      {last && !last.ok && <span className="sub err" data-merc-error="tableau">Dernier envoi refusé, {fmtDay(last.at)} à {fmtTime(last.at)} : {last.message}</span>}
+                      <SyncProblem brand="tableau" linked={!!d?.sheet_url} syncedAt={d?.synced_at ?? null} log={mercStatus.data?.log ?? []} keyAt={mercStatus.data?.key_created_at ?? null} />
                     </div>
                     <div className="end">
                       {d?.synced_at && <Link className="btn sm" to="/tableau-de-bord">Voir</Link>}
@@ -272,6 +270,11 @@ export default function Settings() {
               );
             })()}
             <p className="note">Un petit script Google, installé une fois, envoie les mercuriales toutes les dix minutes : la carte Nuba dans Fiches techniques, Saveurs Nomades et Comptoir dans Production, et le tableau de bord financier (gérants seulement).</p>
+            {mercStatus.data?.key_created_at && (
+              <p className="note" data-testid="merc-key">
+                Script actuel créé {fmtDay(mercStatus.data.key_created_at)} à {fmtTime(mercStatus.data.key_created_at)} : c'est celui-là qui doit être collé dans Google. Chaque « Créer le script » en fait un nouveau et arrête le précédent.
+              </p>
+            )}
           </Section>
 
           <Section title="Bons de livraison" right={<button type="button" className="link" onClick={() => setBlSheet(true)}>Modifier l'en-tête</button>}>
@@ -345,7 +348,7 @@ export default function Settings() {
       {pair && <PairCodeSheet label={pair.label} code={pair.code} onClose={closePair} />}
       {rightsFor && <RightsSheet key={rightsFor.id} person={rightsFor} areas={areasOf(rightsFor.id)} onClose={closeRights} />}
       {mailSheet && mail.data && <MailSheet settings={mail.data} onClose={closeMail} />}
-      {mercSheet && <MercSheet sources={merc.data ?? []} dashboardUrl={dashboard.data?.sheet_url ?? ''} onClose={closeMerc} />}
+      {mercSheet && <MercSheet sources={merc.data ?? []} dashboardUrl={dashboard.data?.sheet_url ?? ''} keyAt={mercStatus.data?.key_created_at ?? null} onClose={closeMerc} />}
       {blSheet && <DeliverySheet settings={delivery.data ?? EMPTY_DELIVERY} onClose={closeBl} />}
       {accSheet && <AccountantSheet access={accSheet} onClose={closeAcc} />}
     </Layout>
@@ -434,7 +437,30 @@ function AccountantSheet({ access, onClose }: { access: AccountantAccess | 'new'
 }
 
 /** Relier les mercuriales : liens des trois feuilles, clé de synchronisation et script Google à coller. */
-function MercSheet({ sources, dashboardUrl, onClose }: { sources: MercSource[]; dashboardUrl: string; onClose: () => void }) {
+/**
+ * Ce qui bloque l'arrivée d'une feuille : le dernier envoi refusé, expliqué ; ou, après une nouvelle clé,
+ * l'attente du nouveau script. Un refus plus ancien que la clé actuelle ne compte plus.
+ */
+function SyncProblem({ brand, linked, syncedAt, log, keyAt }: {
+  brand: string; linked: boolean; syncedAt: string | null; log: { at: string; brand: string; ok: boolean; message: string }[]; keyAt: string | null;
+}) {
+  const last = log.find((l) => l.brand === brand);
+  const key = keyAt ? new Date(keyAt).getTime() : 0;
+  if (last && !last.ok && new Date(last.at).getTime() >= key) {
+    return (
+      <span className="sub err" data-merc-error={brand}>
+        Dernier envoi refusé, {fmtDay(last.at)} à {fmtTime(last.at)} : {last.message}.
+        {/clé refusée/i.test(last.message) && " Le script installé dans Google n'a pas la dernière clé : colle le dernier script créé ici à la place de tout le texte de ton projet, enregistre, puis lance « installer »."}
+      </span>
+    );
+  }
+  if (linked && key && (!syncedAt || new Date(syncedAt).getTime() < key)) {
+    return <span className="sub" style={{ color: 'var(--warn)' }} data-merc-wait={brand}>En attente du nouveau script : colle-le dans Google, puis lance « installer ».</span>;
+  }
+  return null;
+}
+
+function MercSheet({ sources, dashboardUrl, keyAt, onClose }: { sources: MercSource[]; dashboardUrl: string; keyAt: string | null; onClose: () => void }) {
   const toast = useToast();
   const refresh = useRefresh();
   const urlOf = (b: string) => sources.find((s) => s.brand === b)?.sheet_url ?? '';
@@ -482,7 +508,11 @@ function MercSheet({ sources, dashboardUrl, onClose }: { sources: MercSource[]; 
           <Field label="Tableau de bord financier (gérants seulement)" hint="Ton fichier « Tableau de bord financier » : il ne s'affiche qu'aux gérants.">
             <input className="in" id="merc-tableau" inputMode="url" value={tb} onChange={(e) => setTb(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" />
           </Field>
-          <p className="note">Une nouvelle clé remplace l'ancienne : un script déjà installé cesse d'envoyer jusqu'à ce que tu le remplaces.</p>
+          {keyAt ? (
+            <p className="err" data-testid="merc-replace">
+              Tu as déjà un script, créé {fmtDay(keyAt)} à {fmtTime(keyAt)}. En créer un nouveau l'arrête : continue seulement si tu vas coller le nouveau tout de suite, à la place de l'ancien.
+            </p>
+          ) : <p className="note">Une nouvelle clé remplace l'ancienne : un script déjà installé cesse d'envoyer jusqu'à ce que tu le remplaces.</p>}
           {err && <p className="err" role="alert">{err}</p>}
           <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : 'Créer le script'}</button>
         </form>
@@ -494,6 +524,7 @@ function MercSheet({ sources, dashboardUrl, onClose }: { sources: MercSource[]; 
             <li>Efface tout le texte déjà présent, colle le script, et enregistre (icône disquette).</li>
             <li>En haut, choisis la fonction « installer », puis « Exécuter ». Google demande d'autoriser l'accès à tes feuilles : accepte (s'il parle d'application non validée : « Paramètres avancés », puis « Accéder »).</li>
             <li>Reviens ici : la date de réception s'affiche sous chaque mercuriale. Ensuite, tout se met à jour seul, toutes les dix minutes.</li>
+            <li>Ne crée plus de nouveau script ensuite : chaque « Créer le script » change la clé et arrête celui que tu viens de coller.</li>
           </ol>
           <textarea className="in" id="merc-script" readOnly value={script} rows={8} style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }} onFocus={(e) => e.currentTarget.select()} />
           <button type="button" className="btn pri block" onClick={() => void copy()}><Icon name="copy" />Copier le script</button>

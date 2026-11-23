@@ -901,6 +901,10 @@ async function main() {
   assert.match(script, /"tableau": "TB_feuille_test_321"/);
   await shot(boss, '13za-script-mercuriales');
   await boss.getByRole('button', { name: "C'est fait" }).click();
+  // Tant que le script n'est pas collé et lancé, chaque feuille dit qu'elle l'attend.
+  await boss.locator('[data-merc-wait="saveurs_nomades"]').getByText('En attente du nouveau script').waitFor();
+  await boss.locator('[data-merc-wait="tableau"]').waitFor();
+  await boss.getByTestId('merc-key').waitFor();
 
   // Faux Google Sheets : deux mercuriales réduites ; les envois partent vraiment vers la base locale.
   const iso = (n) => { const d = new Date(Date.now() + n * 86400000); return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); };
@@ -1133,7 +1137,7 @@ async function main() {
   execFileSync('curl', ['-s', '-X', 'POST', conf.adresse, '-H', 'Content-Type: application/json', '-H', `apikey: ${conf.clePublique}`,
     '--data-binary', JSON.stringify({ p_key: 'nuba_ancienne_cle', p_payload: { brand: 'saveurs_nomades', recipes: [], lines: [], orders: [] } })]);
   await boss.goto(APP + '#/reglages');
-  await boss.locator('[data-merc-error="saveurs_nomades"]').getByText('Clé refusée').waitFor();
+  await boss.locator('[data-merc-error="saveurs_nomades"]').getByText(/Clé refusée.*n'a pas la dernière clé/).waitFor();
   assert.equal(await boss.locator('[data-merc-error="comptoir"]').count(), 0, 'le Comptoir n\'a pas d\'erreur');
   step("un envoi refusé est expliqué sous la mercuriale concernée");
 
