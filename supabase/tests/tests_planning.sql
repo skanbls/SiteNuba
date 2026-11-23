@@ -101,7 +101,10 @@ set request.jwt.claims = :theo;
 do $$
 declare n int;
 begin
-  assert (select count(*) from public.leave_requests) = 2, 'une absence acceptée est visible de toute l''équipe';
+  -- Depuis la 0020 : chacun lit ses propres absences ; celles des autres, sans motif, par team_absences.
+  assert (select count(*) from public.leave_requests) = 1, 'un équipier lit ses propres absences';
+  assert exists (select 1 from jsonb_array_elements(public.team_absences(current_date)) a
+                 where a ->> 'profile_id' = (select id::text from public.profiles where email = 'ines@nuba.fr')), 'une absence acceptée est connue de toute l''équipe';
   assert (select status from public.leave_requests where note = 'Mariage') = 'refused', 'Théo voit sa demande refusée';
   delete from public.leave_requests;
   get diagnostics n = row_count;

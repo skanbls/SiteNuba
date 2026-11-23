@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { DocRow, DocumentSheet, deleteDocument } from '../components/Documents';
 import { Icon } from '../components/Icon';
 import { RightsPicker } from '../components/Rights';
 import { Avatar, Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
-import { useAllRights, useFolders, useRefresh, useTeam } from '../lib/data';
+import { useAllRights, useFolders, useRefresh, useTeam, useTeamDocuments } from '../lib/data';
 import { AREAS, type Area } from '../lib/rights';
 import { useMe } from '../lib/session';
 import { appUrl, frError, supabase } from '../lib/supabase';
@@ -191,10 +192,11 @@ function MemberSheet({ member, self, areas: oldAreas, folder: oldFolder, onClose
             <p className="note">Valable avec son compte, sur son téléphone ou sur l'iPad après connexion par e-mail. Avec le code PIN de l'iPad, elle a les droits d'un équipier.</p>
           </div>
         )}
-        <Field label="Dossier Drive" hint="Lien du dossier où tu ranges ses documents (contrat, pièces, visites médicales). Toi seul le vois.">
+        <Field label="Dossier Drive" hint="Lien du dossier où tu ranges ses autres documents. Toi et la comptable le voyez ; elle l'ouvre si tu lui partages le dossier dans Google Drive.">
           <input className="in" id="m-folder" type="url" inputMode="url" value={folder} onChange={(e) => setFolder(e.target.value)} placeholder="https://drive.google.com/…" />
         </Field>
         {oldFolder && <a className="btn" href={oldFolder} target="_blank" rel="noopener noreferrer"><Icon name="doc" />Ouvrir son dossier</a>}
+        {old && <MemberDocuments member={old} />}
         {err && <p className="err" role="alert">{err}</p>}
         <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : 'Enregistrer'}</button>
         {old && !self && (
@@ -214,5 +216,27 @@ function MemberSheet({ member, self, areas: oldAreas, folder: oldFolder, onClose
         {old && !self && <p className="note">Désactiver coupe l'accès à l'appli et conserve les pointages. Une fiche sans compte peut être supprimée.</p>}
       </form>
     </Sheet>
+  );
+}
+
+/** Documents d'une personne dans l'appli : le gérant les voit, en ajoute (DPAE, contrat…) et en retire. */
+function MemberDocuments({ member }: { member: Profile }) {
+  const toast = useToast();
+  const refresh = useRefresh();
+  const q = useTeamDocuments(true);
+  const [adding, setAdding] = useState(false);
+  const docs = (q.data?.documents ?? []).filter((d) => d.profile_id === member.id);
+  return (
+    <div className="field">
+      <span>Ses documents dans l'appli</span>
+      <div className="list" data-testid="membre-documents">
+        {q.isLoading ? <p className="empty"><Spinner /></p> : docs.length === 0 ? <p className="empty">Aucun document.</p> : docs.map((d) => (
+          <DocRow key={d.id} doc={d} onDelete={() => void deleteDocument(d).then(async (e) => { if (e) toast(e, 'bad'); else { await refresh('documents'); toast('Document supprimé'); } })} />
+        ))}
+      </div>
+      <button type="button" className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={() => setAdding(true)}><Icon name="plus" size={16} />Ajouter un document</button>
+      <small>Arrêts de travail, pièce d'identité, carte Vitale, DPAE, contrat… La comptable les voit aussi ; les responsables, non.</small>
+      {adding && <DocumentSheet profileId={member.id} name={fullName(member)} forOther category="dpae" onClose={() => setAdding(false)} />}
+    </div>
   );
 }

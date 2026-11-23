@@ -5,7 +5,7 @@ import { RightsPicker } from '../components/Rights';
 import { Avatar, Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
 import { useQuery } from '@tanstack/react-query';
 import { buildAppsScript, sheetId } from '../lib/appsScript';
-import { useAccountants, useAllRights, useDashboard, useDeliverySettings, useEmailLog, useEmailSettings, useKiosks, useMercSources, useRefresh, useSites, useTeam } from '../lib/data';
+import { useAccountants, useAccountingSettings, useAllRights, useDashboard, useDeliverySettings, useEmailLog, useEmailSettings, useKiosks, useMercSources, useRefresh, useSites, useTeam } from '../lib/data';
 import { EMPTY_DELIVERY, type DeliverySettings } from '../lib/delivery';
 import type { MercSource } from '../lib/production';
 import { AREAS, type Area } from '../lib/rights';
@@ -58,6 +58,8 @@ export default function Settings() {
   });
   const [mercSheet, setMercSheet] = useState(false);
   const delivery = useDeliverySettings();
+  const accounting = useAccountingSettings(true);
+  const [zeltySheet, setZeltySheet] = useState(false);
   const dashboard = useDashboard(true);
   const [blSheet, setBlSheet] = useState(false);
   const closeBl = useCallback(() => setBlSheet(false), []);
@@ -165,7 +167,7 @@ export default function Settings() {
           <Section title="Accès comptable" right={<button type="button" className="link" onClick={() => setAccSheet('new')}>Ajouter</button>}>
             {accountants.isLoading ? <Loading /> : accountants.error ? <div className="list"><p className="empty err">{frError(accountants.error)}</p></div> : (
               <div className="list">
-                {(accountants.data ?? []).length === 0 && <p className="empty">Aucun accès. Ajoute l'adresse e-mail de la comptable : elle ne verra que les heures travaillées de l'équipe.</p>}
+                {(accountants.data ?? []).length === 0 && <p className="empty">Aucun accès. Ajoute l'adresse e-mail de la comptable : elle verra le récap du mois, les documents de l'équipe et la caisse.</p>}
                 {(accountants.data ?? []).map((a) => (
                   <button type="button" className="row" key={a.id} onClick={() => setAccSheet(a)} data-accountant={a.email}>
                     <div className="grow">
@@ -180,7 +182,16 @@ export default function Settings() {
                 ))}
               </div>
             )}
-            <p className="note">Elle ouvre le lien de l'appli et crée son compte avec cette adresse (« Créer mon compte »). Elle voit les heures pointées, pauses déduites, et télécharge le fichier pour la paie. Rien d'autre : ni planning, ni réservations, ni coordonnées.</p>
+            <div className="list">
+              <div className="row wrap" data-testid="zelty-lien">
+                <div className="grow">
+                  <span className="t">Caisse Zelty</span>
+                  <span className="sub">{accounting.data?.zelty_url ? accounting.data.zelty_url : 'Lien du tableau de bord Zelty, pour la comptable (Z de caisse, encaissements)'}</span>
+                </div>
+                <div className="end"><button type="button" className="btn sm" onClick={() => setZeltySheet(true)}>{accounting.data?.zelty_url ? 'Changer le lien' : 'Ajouter le lien'}</button></div>
+              </div>
+            </div>
+            <p className="note">Elle ouvre le lien de l'appli et crée son compte avec cette adresse (« Créer mon compte »). Elle voit le récap du mois (heures, pauses déduites, absences par motif) et le télécharge pour la paie, les documents de l'équipe (arrêts, pièces d'identité, DPAE…) et la caisse. Elle reçoit un e-mail à chaque document envoyé. Rien d'autre : ni planning, ni réservations, ni coordonnées.</p>
             <Link className="btn" to="/heures"><Icon name="user" />Voir ce que voit la comptable</Link>
           </Section>
 
@@ -350,6 +361,7 @@ export default function Settings() {
       {mailSheet && mail.data && <MailSheet settings={mail.data} onClose={closeMail} />}
       {mercSheet && <MercSheet sources={merc.data ?? []} dashboardUrl={dashboard.data?.sheet_url ?? ''} keyAt={mercStatus.data?.key_created_at ?? null} onClose={closeMerc} />}
       {blSheet && <DeliverySheet settings={delivery.data ?? EMPTY_DELIVERY} onClose={closeBl} />}
+      {zeltySheet && <ZeltySheet url={accounting.data?.zelty_url ?? ''} onClose={() => setZeltySheet(false)} />}
       {accSheet && <AccountantSheet access={accSheet} onClose={closeAcc} />}
     </Layout>
   );
@@ -535,6 +547,39 @@ function MercSheet({ sources, dashboardUrl, keyAt, onClose }: { sources: MercSou
   );
 }
 
+/** Lien vers la caisse Zelty, montré à la comptable. */
+function ZeltySheet({ url: old, onClose }: { url: string; onClose: () => void }) {
+  const toast = useToast();
+  const refresh = useRefresh();
+  const [url, setUrl] = useState(old);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    const v = url.trim();
+    if (v && !/^https:\/\/\S+$/.test(v)) return setErr('Le lien commence par https://');
+    setBusy(true);
+    const { error } = await supabase.from('accounting_settings').update({ zelty_url: v }).eq('id', true);
+    setBusy(false);
+    if (error) return setErr(frError(error));
+    await refresh('accounting');
+    toast('Lien de la caisse enregistré');
+    onClose();
+  }
+  return (
+    <Sheet title="Caisse Zelty" onClose={onClose}>
+      <form className="form" onSubmit={save}>
+        <Field label="Lien du tableau de bord Zelty" hint="La comptable s'y connecte avec son propre accès Zelty (à créer dans Zelty).">
+          <input className="in" id="zelty-url" type="url" inputMode="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" />
+        </Field>
+        <p className="note">Plus tard, une fois l'abonnement et l'accès à Zelty activés, l'appli lira elle-même les Z de caisse de chaque jour et les encaissements.</p>
+        {err && <p className="err" role="alert">{err}</p>}
+        <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : 'Enregistrer'}</button>
+      </form>
+    </Sheet>
+  );
+}
+
 const DELIVERY_FIELDS: (keyof DeliverySettings)[] = ['sender_name', 'sender_tagline', 'sender_address', 'sender_siret', 'sender_contact', 'client_name',
   'client_address', 'client_siret', 'place_name', 'place_address', 'place_access', 'slot', 'driver', 'dlc_days', 'lot_days_before'];
 
@@ -619,7 +664,7 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
   const [busy, setBusy] = useState(false);
   const text = (k: 'sender_name' | 'sender_email' | 'notify_email' | 'app_url' | 'signature') =>
     (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF((s) => ({ ...s, [k]: e.target.value }));
-  const flag = (k: 'enabled' | 'confirm_booking' | 'notify_booking' | 'notify_event') =>
+  const flag = (k: 'enabled' | 'confirm_booking' | 'notify_booking' | 'notify_event' | 'notify_documents') =>
     (e: ChangeEvent<HTMLInputElement>) => setF((s) => ({ ...s, [k]: e.target.checked }));
 
   async function save(e: FormEvent) {
@@ -635,6 +680,7 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
       enabled: f.enabled, sender_name: f.sender_name.trim() || 'La Nuba', sender_email: f.sender_email.trim().toLowerCase(),
       notify_email: f.notify_email.trim().toLowerCase(), app_url: url, signature: f.signature.trim(),
       confirm_booking: f.confirm_booking, notify_booking: f.notify_booking, notify_event: f.notify_event,
+      ...(f.notify_documents === undefined ? {} : { notify_documents: f.notify_documents }),
     }).eq('id', true);
     setBusy(false);
     if (error) return setErr(frError(error));
@@ -681,6 +727,12 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
           <input id="mail-event" type="checkbox" checked={f.notify_event} onChange={flag('notify_event')} style={box} />
           <span className="grow"><span className="t">M'alerter des demandes de privatisation</span><span className="sub">Envoyées depuis la page publique ou le site</span></span>
         </label>
+        {f.notify_documents !== undefined && (
+          <label className="row" style={{ padding: 0, gap: 10 }}>
+            <input id="mail-documents" type="checkbox" checked={f.notify_documents} onChange={flag('notify_documents')} style={box} />
+            <span className="grow"><span className="t">Prévenir la comptable à chaque document envoyé</span><span className="sub">Arrêt de travail, pièce d'identité… et toi, pour les arrêts. Sans pièce jointe : elle l'ouvre dans son espace.</span></span>
+          </label>
+        )}
         <Field label="Signature"><textarea className="in" id="mail-signature" value={f.signature} onChange={text('signature')} maxLength={300} rows={2} /></Field>
         <Field label="Adresse de l'appli" hint="Sert aux liens dans les e-mails (consulter ou annuler une réservation)."><input className="in" id="mail-app" value={f.app_url} onChange={text('app_url')} /></Field>
         {err && <p className="err" role="alert">{err}</p>}

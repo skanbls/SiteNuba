@@ -105,7 +105,9 @@ const PARTS: Part[] = [
     body: (
       <ol>
         <li><b>Planning</b> montre tes services et ceux de l'équipe, semaine par semaine.</li>
-        <li>Pour un congé : <B>Demander un congé</B>, choisis les dates. Le gérant accepte ou refuse.</li>
+        <li>Pour un congé ou une absence : <B>Demander un congé</B>, choisis le motif (congés payés, récupération, événement familial…) et les dates, ou une demi-journée. Le gérant accepte ou refuse.</li>
+        <li>Malade ? <B>Envoyer un arrêt de travail</B> : prends-le en photo, indique ses dates. Il est noté dans le planning et la comptable est prévenue. Tes collègues voient que tu es absent, pas pourquoi.</li>
+        <li>Tes autres documents (pièce d'identité, carte Vitale, RIB…) s'envoient dans <b>Mon compte</b>, rubrique « Mes documents ». Seuls le gérant et la comptable les voient. Depuis ton téléphone, avec ton compte : pas depuis l'iPad.</li>
         <li>Pour donner un de tes services à un collègue : <B>Céder un service</B>, choisis qui le reprend. Le gérant valide, et le planning se met à jour.</li>
         <li>Tes heures travaillées sont dans <b>Pointeuse</b>.</li>
       </ol>
@@ -155,7 +157,7 @@ const PARTS: Part[] = [
     body: (
       <ol>
         <li><b>Commandes</b> : touche une commande pour voir les quantités à peser, fiche par fiche.</li>
-        <li><b>Liste de courses</b> : tout ce qu'il faut acheter pour une livraison, par fournisseur, pertes comprises.</li>
+        <li><b>Liste de courses</b> : tout ce qu'il faut acheter pour une livraison, par famille (fruits et légumes, crèmerie…) ou par fournisseur, pertes comprises. Coche chaque article mis dans le panier : la case est cochée pour toute l'équipe.</li>
         <li><b>Fiches</b> : chaque recette, à mettre à l'échelle du nombre de portions.</li>
         <li><b>Bon de livraison</b>, sous chaque jour de commandes : le bon de livraison prêt à imprimer, avec lot, DLC et allergènes. Écris la température au départ, corrige une quantité livrée si besoin, puis <B>Imprimer</B>. Le client le signe à la livraison.</li>
         <li>Les fiches et les commandes se modifient dans les mercuriales (Google Sheets), pas dans l'appli : elle suit toute seule.</li>
@@ -252,7 +254,8 @@ const PARTS: Part[] = [
         <li><b>Administration</b> : accès des responsables, e-mails, bornes, mercuriales (Nuba, Saveurs Nomades, Comptoir), en-tête des bons de livraison, liens publics.</li>
         <li><b>Tableau de bord</b> (gérants seulement) : solde, alertes, trésorerie sur 13 semaines, prévisionnel sur 12 mois et échéances, repris du fichier « Tableau de bord financier ». Les chiffres se modifient dans Google Sheets.</li>
         <li><b>Fiches techniques</b>, avec l'accès « fiches techniques » : coût matière, marge, coefficient et prix conseillé de chaque fiche, en rouge au-dessus de l'objectif.</li>
-        <li><b>Accès comptable</b>, dans Administration : ajoute l'adresse e-mail de la comptable. Elle crée son compte avec cette adresse et ne voit que les heures travaillées, avec le fichier pour la paie.</li>
+        <li><b>Accès comptable</b>, dans Administration : ajoute l'adresse e-mail de la comptable. Elle crée son compte avec cette adresse. Son espace : le récap du mois (heures et absences par motif, à télécharger pour la paie), les documents de l'équipe, et la caisse Zelty. Elle reçoit un e-mail à chaque document envoyé.</li>
+        <li><b>Équipe</b> : dans la fiche de chacun, ses documents ; <B>Ajouter un document</B> pour la DPAE ou le contrat.</li>
         <li><b>Pointeuse</b>, vue Équipe : corriger un pointage, <B>Exporter pour le comptable</B>.</li>
         <li><b>Planning</b> : <B>Service</B> pour planifier, <B>Recopier la semaine précédente</B>, et les demandes de congé et d'échange à accepter.</li>
       </ul>

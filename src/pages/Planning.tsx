@@ -1,11 +1,12 @@
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
+import { DocumentSheet } from '../components/Documents';
 import { Icon } from '../components/Icon';
 import { Avatar, Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
 import { useLeaves, useRefresh, useShifts, useSites, useSwaps, useTeam } from '../lib/data';
-import { useMe } from '../lib/session';
+import { useMe, useSession } from '../lib/session';
 import { frError, supabase } from '../lib/supabase';
 import { addDays, dayKey, fmtDateShort, fmtDur, fmtTime, shiftRange, timeInput, weekStart } from '../lib/time';
-import { LEAVE_LABEL, STATUS_LABEL, STATUS_PILL, fullName, type LeaveRequest, type Profile, type Shift, type ShiftSwap, type Site } from '../lib/types';
+import { ABSENCE_REASONS, LEAVE_LABEL, PART_LABEL, REASON_LABEL, REASON_SHORT, STATUS_LABEL, STATUS_PILL, fullName, type LeavePart, type LeaveReason, type LeaveRequest, type Profile, type Shift, type ShiftSwap, type Site } from '../lib/types';
 import { useCan } from '../lib/rights';
 
 const AREAS = ['Salle', 'Bar', 'Cuisine'];
@@ -16,8 +17,14 @@ const hours = (h: number) => String(h).replace('.', ',');
 /** Service décrit en une ligne : ven. 20 nov., 18:00 – 01:00, Salle. */
 const shiftLine = (s: Pick<Shift, 'starts_at' | 'ends_at' | 'area'>) =>
   `${new Date(s.starts_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}, ${fmtTime(s.starts_at)} – ${fmtTime(s.ends_at)}${s.area ? `, ${s.area}` : ''}`;
-const onLeave = (leaves: LeaveRequest[], profileId: string, day: string) =>
-  leaves.some((l) => l.status === 'approved' && l.profile_id === profileId && l.start_date <= day && day <= l.end_date);
+const leaveOn = (leaves: LeaveRequest[], profileId: string, day: string) =>
+  leaves.find((l) => l.status === 'approved' && l.profile_id === profileId && l.start_date <= day && day <= l.end_date);
+const onLeave = (leaves: LeaveRequest[], profileId: string, day: string) => !!leaveOn(leaves, profileId, day);
+/** Nom d'une absence : son motif quand on a le droit de le voir, sinon simplement « Absence ». */
+const leaveName = (l: LeaveRequest) => (l.kind === 'indisponibilite' ? LEAVE_LABEL.indisponibilite : l.reason ? REASON_LABEL[l.reason] : 'Absence');
+/** Ce qu'affiche la case du planning : « CP », « Maladie », « Absent (matin) »… */
+const leaveTag = (l: LeaveRequest) =>
+  `${l.kind === 'indisponibilite' ? 'Indispo' : l.reason ? REASON_SHORT[l.reason] : 'Absent'}${l.part === 'am' ? ' (matin)' : l.part === 'pm' ? ' (ap.-midi)' : ''}`;
 
 type Editing = { shift: Shift } | { profileId: string; day: string } | null;
 
@@ -51,6 +58,9 @@ export default function Planning() {
   const [busy, setBusy] = useState(false);
   const closeEdit = useCallback(() => setEditing(null), []);
   const closeLeave = useCallback(() => setLeaveSheet(false), []);
+  const { pin } = useSession();
+  const [arret, setArret] = useState(false);
+  const closeArret = useCallback(() => setArret(false), []);
   const closeSwap = useCallback(() => setSwapSheet(false), []);
 
   const go = (w: Date) => {
@@ -103,8 +113,8 @@ export default function Planning() {
       <div className="row wrap" key={l.id}>
         <Avatar p={p} />
         <div className="grow">
-          <span className="t">{fullName(p)} · {LEAVE_LABEL[l.kind]}</span>
-          <span className="sub">{l.start_date === l.end_date ? `le ${fmtDateShort(l.start_date)}` : `du ${fmtDateShort(l.start_date)} au ${fmtDateShort(l.end_date)}`}{l.note ? ` · ${l.note}` : ''}</span>
+          <span className="t">{fullName(p)} · {leaveName(l)}</span>
+          <span className="sub">{l.start_date === l.end_date ? `le ${fmtDateShort(l.start_date)}${l.part && l.part !== 'full' ? `, ${PART_LABEL[l.part].toLowerCase()}` : ''}` : `du ${fmtDateShort(l.start_date)} au ${fmtDateShort(l.end_date)}`}{l.note ? ` · ${l.note}` : ''}{l.document_id ? ' · justificatif reçu' : ''}</span>
         </div>
         <div className="end">
           {decide && l.status === 'pending' ? (
@@ -220,7 +230,7 @@ export default function Planning() {
                   {days.map((d) => {
                     const k = dayKey(d);
                     const mine = list.filter((s) => s.profile_id === p.id && dayKey(s.starts_at) === k);
-                    const away = onLeave(allLeaves, p.id, k);
+                    const away = leaveOn(allLeaves, p.id, k);
                     return (
                       <td key={k}>
                         {mine.map((s) => editor ? (
@@ -230,7 +240,8 @@ export default function Planning() {
                         ) : (
                           <span key={s.id} className={`shift ${areaClass(s.area)}`}>{fmtTime(s.starts_at)}–{fmtTime(s.ends_at)}<small>{s.area || 'Poste non précisé'}</small></span>
                         ))}
-                        {mine.length === 0 && (away ? <span className="off">Absent</span> : editor ? (
+                        {away && <span className="off away" data-away={`${p.first_name} ${k}`}>{leaveTag(away)}</span>}
+                        {mine.length === 0 && (away ? null : editor ? (
                           <button type="button" className="add" onClick={() => setEditing({ profileId: p.id, day: k })} aria-label={`Ajouter un service pour ${p.first_name} le ${fmtDateShort(d)}`}>+</button>
                         ) : <span className="off">Repos</span>)}
                       </td>
@@ -264,6 +275,7 @@ export default function Planning() {
             <div className="acts">
               <button type="button" className="btn" onClick={() => setLeaveSheet(true)}>{editor ? 'Saisir une absence' : 'Demander un congé'}</button>
               <button type="button" className="btn" onClick={() => setSwapSheet(true)}>Céder un service</button>
+              {!pin && <button type="button" className="btn" onClick={() => setArret(true)}><Icon name="doc" size={16} />Envoyer un arrêt de travail</button>}
             </div>
           </Section>
         </div>
@@ -306,6 +318,7 @@ export default function Planning() {
 
       {editing && <ShiftSheet editing={editing} team={active} sites={(sites.data ?? []).filter((s) => s.active)} leaves={allLeaves} onClose={closeEdit} />}
       {leaveSheet && <LeaveSheet me={me} team={active} onClose={closeLeave} />}
+      {arret && <DocumentSheet profileId={me.id} category="arret" onClose={closeArret} />}
       {swapSheet && <SwapSheet me={me} team={active} onClose={closeSwap} />}
     </Layout>
   );
@@ -412,6 +425,9 @@ function LeaveSheet({ me, team, onClose }: { me: Profile; team: Profile[]; onClo
   const editor = can('planning');
   const [who, setWho] = useState(me.id);
   const [kind, setKind] = useState<LeaveRequest['kind']>('conge');
+  const [reason, setReason] = useState<LeaveReason>('conges_payes');
+  const [part, setPart] = useState<LeavePart>('full');
+  const reasons = ABSENCE_REASONS.filter((r) => editor || r.ask);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [note, setNote] = useState('');
@@ -425,7 +441,8 @@ function LeaveSheet({ me, team, onClose }: { me: Profile; team: Profile[]; onClo
     if (end < from) return setErr('La fin est avant le début.');
     setBusy(true);
     setErr('');
-    const row = { profile_id: who, kind, start_date: from, end_date: end, note: note.trim() };
+    const single = end === from;
+    const row = { profile_id: who, kind, reason: kind === 'conge' ? reason : 'autre', part: single ? part : 'full', start_date: from, end_date: end, note: note.trim() };
     // Le gérant enregistre directement une absence acceptée ; les autres font une demande.
     const payload: Record<string, unknown> = editor ? { ...row, status: 'approved', decided_by: me.id, decided_at: new Date().toISOString() } : row;
     const { error } = await supabase.from('leave_requests').insert(payload);
@@ -448,10 +465,17 @@ function LeaveSheet({ me, team, onClose }: { me: Profile; team: Profile[]; onClo
         )}
         <Field label="Type">
           <select className="in" id="leave-kind" value={kind} onChange={(e) => setKind(e.target.value as LeaveRequest['kind'])}>
-            <option value="conge">Congé</option>
-            <option value="indisponibilite">Indisponibilité</option>
+            <option value="conge">Absence ou congé</option>
+            <option value="indisponibilite">Indisponibilité (je ne peux pas travailler)</option>
           </select>
         </Field>
+        {kind === 'conge' && (
+          <Field label="Motif" hint={editor ? undefined : "Malade ? Envoie plutôt ton arrêt de travail : il sera noté tout seul."}>
+            <select className="in" id="leave-reason" value={reason} onChange={(e) => setReason(e.target.value as LeaveReason)}>
+              {reasons.map((r) => (<option key={r.key} value={r.key}>{r.label}</option>))}
+            </select>
+          </Field>
+        )}
         <div className="two">
           <Field label="Du">
             <input className="in" id="leave-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} required />
@@ -460,6 +484,15 @@ function LeaveSheet({ me, team, onClose }: { me: Profile; team: Profile[]; onClo
             <input className="in" id="leave-to" type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
           </Field>
         </div>
+        {(!to || to === from) && (
+          <Field label="Durée">
+            <select className="in" id="leave-part" value={part} onChange={(e) => setPart(e.target.value as LeavePart)}>
+              <option value="full">Toute la journée</option>
+              <option value="am">Le matin</option>
+              <option value="pm">L'après-midi</option>
+            </select>
+          </Field>
+        )}
         <Field label="Note">
           <input className="in" id="leave-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} placeholder="Facultatif" />
         </Field>

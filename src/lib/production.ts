@@ -88,6 +88,10 @@ export function orderIssues(comps: Component[], book: Book): string[] {
 
 export interface Purchase {
   supplier: string;
+  /** Famille de l'ingrédient (Fruits et légumes, Crèmerie…), d'après PRIX INGREDIENTS. */
+  family: string;
+  /** Repère stable pour cocher l'article. */
+  key: string;
   ingredient: string;
   /** Quantité à acheter, dans l'unité d'achat de la mercuriale. */
   qty: number;
@@ -100,6 +104,35 @@ export interface Purchase {
 }
 
 const isPiece = (u: string) => /^pi[eè]ce/i.test(u.trim());
+
+/** Familles de la liste de courses, dans l'ordre d'un passage chez les fournisseurs. */
+const FAMILIES: [RegExp, string][] = [
+  [/fruit|legume/, 'Fruits et légumes'],
+  [/viande|poisson|boucher|volaille/, 'Viandes et poissons'],
+  [/cremerie|laitier|fromage|oeuf/, 'Crèmerie'],
+  [/surgel/, 'Surgelés'],
+  [/boulang|patisser/, 'Boulangerie'],
+  [/epicerie|epice|condiment/, 'Épicerie'],
+  [/sirop|jus/, 'Sirops et jus'],
+  [/cafe|\bthe\b/, 'Café et thé'],
+  [/biere/, 'Bières'],
+  [/\bvins?\b/, 'Vins'],
+  [/spiritueux|alcool/, 'Spiritueux'],
+  [/boisson/, 'Boissons'],
+  [/emballage|barquette|jetable/, 'Emballages'],
+];
+export const NO_FAMILY = 'Sans famille';
+/** Famille lisible d'une catégorie de la mercuriale : « FRUITS / LEGUMES » → « Fruits et légumes ». */
+export function familyOf(category: string): string {
+  const t = norm(category);
+  if (!t) return NO_FAMILY;
+  const f = FAMILIES.find(([re]) => re.test(t));
+  if (f) return f[1];
+  const c = category.trim().toLowerCase().replace(/\s*\/\s*/g, ' et ');
+  return c.charAt(0).toUpperCase() + c.slice(1);
+}
+/** Rang d'une famille dans la liste : les familles connues dans l'ordre, les autres ensuite, « Sans famille » à la fin. */
+export const familyRank = (f: string) => (f === NO_FAMILY ? 99 : (() => { const i = FAMILIES.findIndex(([, l]) => l === f); return i === -1 ? 50 : i; })());
 
 /** Convertit une quantité de recette (g ou pièce) dans l'unité d'achat (kg, L ou pièce). */
 export function toPurchase(qty: number, unit: string, ing: MercIngredient | undefined): { qty: number; unit: string } {
@@ -131,7 +164,10 @@ export function shopping(needs: Need[], ingredients: MercIngredient[], prices: M
     const qty = buy.unit === 'pièce' ? Math.ceil(buy.qty - 1e-9) : buy.qty;
     const price = p?.purchase_price ?? null;
     const cost = price != null ? buy.qty * price : p?.recipe_unit_price != null ? s.qty * p.recipe_unit_price : null;
-    out.push({ supplier: i?.supplier || s.supplier || 'Sans fournisseur', ingredient: i?.name ?? s.ingredient, qty, unit: buy.unit, recipeQty: s.qty, recipeUnit: s.unit, price, cost });
+    out.push({
+      supplier: i?.supplier || s.supplier || 'Sans fournisseur', family: familyOf(i?.category ?? ''), key: `${norm(s.ingredient)}|${isPiece(s.unit) ? 'pièce' : s.unit}`,
+      ingredient: i?.name ?? s.ingredient, qty, unit: buy.unit, recipeQty: s.qty, recipeUnit: s.unit, price, cost,
+    });
   }
   return out.sort((a, b) => a.supplier.localeCompare(b.supplier, 'fr') || a.ingredient.localeCompare(b.ingredient, 'fr'));
 }

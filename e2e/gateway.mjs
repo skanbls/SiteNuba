@@ -1,6 +1,7 @@
 // Banc d'essai local : imite la partie de Supabase dont l'appli a besoin.
 //   /auth/v1/*  comptes en clair dans auth.users (base de test uniquement)
 //   /rest/v1/*  relayé vers PostgREST, qui applique les vraies règles RLS des migrations
+//   /storage/v1/* fichiers gardés en mémoire ; l'accès passe par les vraies règles RLS de storage.objects
 // Ne sert qu'aux tests de bout en bout. Jamais en production.
 import crypto from 'node:crypto';
 import http from 'node:http';
@@ -49,7 +50,7 @@ const userById = async (id) => (await db.query('select * from auth.users where i
 
 const CORS = {
   'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
-  'access-control-allow-headers': 'authorization,apikey,content-type,prefer,range,accept,accept-profile,content-profile,x-client-info,x-supabase-api-version,x-nuba-ticket',
+  'access-control-allow-headers': 'authorization,apikey,content-type,prefer,range,accept,accept-profile,content-profile,x-client-info,x-supabase-api-version,x-nuba-ticket,x-upsert,cache-control',
   'access-control-expose-headers': 'content-range,content-profile',
   'access-control-max-age': '600',
 };
@@ -85,6 +86,59 @@ async function auth(req, url, body) {
   return [404, { msg: 'not found' }];
 }
 
+// ---------- Stockage de fichiers (imitation de Supabase Storage) ----------
+const files = new Map();      // « bucket/chemin » → { mime, data }
+const signed = new Map();     // jeton → « bucket/chemin »
+/** Exécute une requête avec le rôle et l'identité de la personne : les règles RLS s'appliquent. */
+async function asUser(req, sql, params) {
+  const c = bearer(req);
+  const client = await db.connect();
+  try {
+    await client.query('begin');
+    await client.query(`set local role ${c?.role === 'authenticated' ? 'authenticated' : 'anon'}`);
+    await client.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify(c || {})]);
+    const r = await client.query(sql, params);
+    await client.query('commit');
+    return r;
+  } catch (e) {
+    await client.query('rollback');
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+async function storage(req, url, body) {
+  const path = decodeURIComponent(url.pathname.replace('/storage/v1', ''));
+  let m;
+  if ((m = /^\/object\/sign\/([^/]+)\/(.+)$/.exec(path)) && req.method === 'POST') {
+    const { rowCount } = await asUser(req, 'select 1 from storage.objects where bucket_id = $1 and name = $2', [m[1], m[2]]);
+    if (!rowCount || !files.has(`${m[1]}/${m[2]}`)) return [400, { statusCode: '404', error: 'not_found', message: 'Object not found' }];
+    const token = crypto.randomUUID();
+    signed.set(token, `${m[1]}/${m[2]}`);
+    return [200, { signedURL: `/object/sign/${m[1]}/${m[2]}?token=${token}` }];
+  }
+  if ((m = /^\/object\/sign\/([^/]+)\/(.+)$/.exec(path)) && req.method === 'GET') {
+    const f = signed.get(url.searchParams.get('token')) === `${m[1]}/${m[2]}` && files.get(`${m[1]}/${m[2]}`);
+    return f ? [200, f.data, f.mime] : [400, { error: 'invalid_token' }];
+  }
+  if ((m = /^\/object\/([^/]+)\/(.+)$/.exec(path)) && req.method === 'POST') {
+    try {
+      await asUser(req, 'insert into storage.objects (bucket_id, name, owner) values ($1, $2, $3)', [m[1], m[2], bearer(req)?.sub ?? null]);
+    } catch (e) {
+      return [403, { statusCode: '403', error: 'Unauthorized', message: String(e.message) }];
+    }
+    files.set(`${m[1]}/${m[2]}`, { mime: req.headers['content-type'] || 'application/octet-stream', data: body });
+    return [200, { Key: `${m[1]}/${m[2]}`, Id: crypto.randomUUID() }];
+  }
+  if ((m = /^\/object\/([^/]+)$/.exec(path)) && req.method === 'DELETE') {
+    const names = JSON.parse(body.toString() || '{}').prefixes || [];
+    const { rows } = await asUser(req, 'delete from storage.objects where bucket_id = $1 and name = any($2) returning name', [m[1], names]);
+    for (const r of rows) files.delete(`${m[1]}/${r.name}`);
+    return [200, rows.map((r) => ({ name: r.name }))];
+  }
+  return [404, { message: 'not found' }];
+}
+
 http.createServer(async (req, res) => {
   const origin = req.headers.origin || '*';
   const cors = { ...CORS, 'access-control-allow-origin': origin, vary: 'Origin' };
@@ -98,6 +152,11 @@ http.createServer(async (req, res) => {
       const [status, json] = await auth(req, url, body);
       res.writeHead(status, { ...cors, 'content-type': 'application/json' });
       return res.end(json === null ? undefined : JSON.stringify(json));
+    }
+    if (url.pathname.startsWith('/storage/v1')) {
+      const [status, out, mime] = await storage(req, url, body);
+      res.writeHead(status, { ...cors, 'content-type': mime || 'application/json' });
+      return res.end(Buffer.isBuffer(out) ? out : JSON.stringify(out));
     }
     if (url.pathname.startsWith('/rest/v1')) {
       const headers = {};

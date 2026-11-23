@@ -1,15 +1,16 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Chips, Field, Layout, Loading, Section, Sheet, useToast } from '../components/ui';
-import { useMercCosts, useMercIngredients, useMercLines, useMercOrders, useMercPrices, useMercRecipes, useMercSources } from '../lib/data';
+import { useMercCosts, useMercIngredients, useMercLines, useMercOrders, useMercPrices, useMercRecipes, useMercSources, useShoppingChecks } from '../lib/data';
 import {
-  BRAND_LABEL, BRANDS, Book, ROLE_LABEL, components, fmtEuro, fmtPct, fmtQty, orderIssues, orderNeeds, shopping,
-  type Brand, type MercCost, type MercIngredient, type MercOrder, type MercPrice, type MercRecipe, type MercSource, type Need,
+  BRAND_LABEL, BRANDS, Book, ROLE_LABEL, familyRank, components, fmtEuro, fmtPct, fmtQty, orderIssues, orderNeeds, shopping,
+  type Brand, type Purchase, type MercCost, type MercIngredient, type MercOrder, type MercPrice, type MercRecipe, type MercSource, type Need,
 } from '../lib/production';
 import { useCan } from '../lib/rights';
 import { useSession } from '../lib/session';
-import { frError } from '../lib/supabase';
+import { frError, supabase } from '../lib/supabase';
 import { ago, dayKey, fmtDayLong, fromDayKey } from '../lib/time';
 
 type Tab = 'commandes' | 'courses' | 'fiches';
@@ -199,13 +200,35 @@ function Shopping({ orders, book, today, day, setDay, ingredients, prices, money
   const dayOrders = orders.filter((o) => o.day === current);
   const needs: Need[] = dayOrders.flatMap((o) => orderNeeds(o, components(o, book), book));
   const list = shopping(needs, ingredients, prices);
-  const suppliers = Array.from(new Set(list.map((p) => p.supplier)));
+  const [by, setBy] = useState<'family' | 'supplier'>('family');
+  const groupOf = (p: Purchase) => (by === 'family' ? p.family : p.supplier);
+  const groups = Array.from(new Set(list.map(groupOf))).sort((a, b) => (by === 'family' ? familyRank(a) - familyRank(b) : 0) || a.localeCompare(b, 'fr'));
   const total = list.every((p) => p.cost != null) ? list.reduce((t, p) => t + (p.cost ?? 0), 0) : null;
   const missing = dayOrders.flatMap((o) => orderIssues(components(o, book), book));
+  // Cases cochées : partagées entre l'iPad et les téléphones, par jour de livraison.
+  const qc = useQueryClient();
+  const checks = useShoppingChecks(current);
+  // Ce qui vient d'être touché sur cet appareil s'affiche tout de suite, avant la réponse de la base.
+  const [mine, setMine] = useState<Record<string, boolean>>({});
+  const server = new Set((checks.data ?? []).map((c) => c.item));
+  const checked = new Set(list.map((p) => p.key).filter((k) => mine[k] ?? server.has(k)));
+  const done = list.filter((p) => checked.has(p.key)).length;
+  async function tick(key: string, on: boolean) {
+    setMine((m) => (key ? { ...m, [key]: on } : Object.fromEntries(list.map((p) => [p.key, false]))));
+    const { error } = await supabase.rpc('check_shopping', { p_day: current, p_item: key, p_on: on });
+    if (error) toast(frError(error), 'bad');
+    await qc.invalidateQueries({ queryKey: ['shopping', current] });
+    setMine((m) => {
+      if (!key) return {};
+      const { [key]: _done, ...rest } = m;
+      void _done;
+      return rest;
+    });
+  }
 
   async function copy() {
     const text = [`Liste de courses, livraison du ${fmtDayLong(fromDayKey(current))}`, '',
-      ...suppliers.flatMap((s) => [s, ...list.filter((p) => p.supplier === s).map((p) => `- ${p.ingredient} : ${fmtQty(p.qty, p.unit)}`), ''])].join('\n');
+      ...groups.flatMap((g) => [g, ...list.filter((p) => groupOf(p) === g && !checked.has(p.key)).map((p) => `- ${p.ingredient} : ${fmtQty(p.qty, p.unit)}${by === 'family' ? ` (${p.supplier})` : ''}`), ''])].join('\n');
     try {
       await navigator.clipboard.writeText(text);
       toast('Liste copiée : colle-la dans un message');
@@ -237,31 +260,46 @@ function Shopping({ orders, book, today, day, setDay, ingredients, prices, money
             </div>
             {missing.length > 0 && <p className="err">{missing.join(' · ')} : ces plats manquent dans la liste.</p>}
           </Section>
-          {suppliers.map((s) => {
-            const items = list.filter((p) => p.supplier === s);
+          <div className="acts">
+            <Chips value={by} options={[['family', 'Par famille'], ['supplier', 'Par fournisseur']]} onChange={setBy} label="Classer" />
+          </div>
+          {!checks.error && list.length > 0 && (
+            <div className="shop-progress" data-testid="courses-progression">
+              <div className="bar"><i style={{ width: `${(done / list.length) * 100}%` }} /></div>
+              <span className="num">{done} sur {list.length} dans le panier</span>
+              {done > 0 && <button type="button" className="link" onClick={() => void tick('', false)}>Tout décocher</button>}
+            </div>
+          )}
+          {groups.map((g) => {
+            const items = list.filter((p) => groupOf(p) === g).sort((a, b) => Number(checked.has(a.key)) - Number(checked.has(b.key)));
             const sub = items.every((p) => p.cost != null) ? items.reduce((t, p) => t + (p.cost ?? 0), 0) : null;
             return (
-              <Section key={s} title={s} right={money && sub != null ? <span className="num">{fmtEuro(sub)}</span> : undefined}>
-                <div className="list">
-                  {items.map((p) => (
-                    <div className="row" key={p.ingredient} data-buy={p.ingredient}>
-                      <span className="grow">
-                        <span className="t">{p.ingredient}</span>
-                        {money && p.price != null && <span className="sub">{fmtEuro(p.price)} le {p.unit === 'pièce' ? 'pièce' : p.unit}</span>}
-                      </span>
-                      <span className="end">
-                        <strong className="num">{fmtQty(p.qty, p.unit)}</strong>
-                        {money && <span className="num sub">{fmtEuro(p.cost)}</span>}
-                      </span>
-                    </div>
-                  ))}
+              <Section key={g} title={g} right={money && sub != null ? <span className="num">{fmtEuro(sub)}</span> : undefined}>
+                <div className="list" data-family={g}>
+                  {items.map((p) => {
+                    const on = checked.has(p.key);
+                    return (
+                      <label className={`row shop-row${on ? ' done' : ''}`} key={p.key} data-buy={p.ingredient}>
+                        {!checks.error && <input type="checkbox" className="shop-box" checked={on} onChange={(e) => void tick(p.key, e.target.checked)} aria-label={`${p.ingredient} dans le panier`} />}
+                        <span className="grow">
+                          <span className="t">{p.ingredient}</span>
+                          <span className="sub">{[by === 'family' ? p.supplier : p.family, money && p.price != null ? `${fmtEuro(p.price)} le ${p.unit === 'pièce' ? 'pièce' : p.unit}` : ''].filter(Boolean).join(' · ')}</span>
+                        </span>
+                        <span className="end">
+                          <strong className="num">{fmtQty(p.qty, p.unit)}</strong>
+                          {money && <span className="num sub">{fmtEuro(p.cost)}</span>}
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
               </Section>
             );
           })}
+          {checks.error && <p className="note">Les cases à cocher arrivent avec la mise à jour 0020 de la base.</p>}
           {money && total != null && <p className="note">Coût total estimé : <strong>{fmtEuro(total)}</strong> HT.</p>}
           <p className="note">Pertes comprises, comme dans la mercuriale. Les achats à la pièce sont arrondis à la pièce supérieure.</p>
-          <button type="button" className="btn" onClick={() => void copy()}><Icon name="copy" />Copier la liste</button>
+          <button type="button" className="btn" onClick={() => void copy()}><Icon name="copy" />Copier ce qui reste à acheter</button>
         </>
       )}
     </>

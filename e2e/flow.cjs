@@ -1062,6 +1062,11 @@ async function main() {
   await theo.getByRole('button', { name: /^Liste de courses du/ }).click();
   await theo.locator('[data-buy="Beurre"]').getByText('2,57 kg').waitFor();   // (10 × 0,85 × 100 + 200 ÷ 10 × 80) × 1,05 = 2 572,5 g
   await theo.locator('[data-buy="Oeufs"]').getByText('42 pièces').waitFor();
+  // Classée par famille ; une case cochée sur le téléphone l'est aussi sur les autres appareils.
+  await theo.locator('[data-family="Crèmerie"] [data-buy="Beurre"]').waitFor();
+  await theo.locator('[data-family="Fruits et légumes"] [data-buy="Patate douce"]').waitFor();
+  await theo.getByLabel('Beurre dans le panier').check();
+  await theo.getByTestId('courses-progression').getByText(/^1 sur \d+ dans le panier$/).waitFor();
   assert.equal(await theo.locator('[data-buy="Semoule"]').count(), 0, "le taboulé du Comptoir est livré un autre jour");
   await noOverflow(theo, 'production');
   await shot(theo, '13zc-production-courses');
@@ -1070,6 +1075,10 @@ async function main() {
   await boss.goto(APP + '#/production');
   await boss.getByRole('button', { name: 'Liste de courses', exact: true }).first().click();
   await see(boss, 'Coût total estimé');
+  await boss.locator('input[aria-label="Beurre dans le panier"]:checked').waitFor();   // la case cochée par Théo l'est aussi pour le gérant
+  await boss.getByRole('button', { name: 'Par fournisseur' }).click();
+  await boss.locator('[data-family="Metro"] [data-buy="Beurre"]').waitFor();
+  await boss.getByRole('button', { name: 'Par famille' }).click();
   await boss.locator('[data-buy="Patate douce"]').getByText(/42,50/).waitFor();   // 21,25 kg × 2 €
   await boss.getByRole('button', { name: 'Fiches', exact: true }).click();
   await boss.locator('[data-merc-recipe="Brownie"]').click();
@@ -1260,7 +1269,33 @@ async function main() {
   await shot(theo, '13zd-numeros');
   step("les numéros utiles s'appellent d'un geste ; seuls gérant et responsables les modifient");
 
-  // 13 duodecies. Accès comptable : elle ne voit que les heures travaillées.
+  // 13 undecies bis. Documents : Théo envoie son arrêt de travail depuis son téléphone.
+  const sick = new Date();
+  const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  await theo.goto(APP + '#/compte');
+  await theo.getByTestId('mes-documents').getByText('Aucun document envoyé.').waitFor();
+  await theo.getByRole('button', { name: 'Envoyer un document' }).click();
+  await theo.selectOption('#doc-category', 'arret');
+  await theo.setInputFiles('#doc-file', { name: 'arret.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 arrêt de test') });
+  await theo.fill('#doc-start', ymd(sick));
+  await theo.fill('#doc-end', ymd(sick));
+  await shot(theo, '13zg-envoyer-arret');
+  await theo.getByRole('dialog').getByRole('button', { name: 'Envoyer', exact: true }).click();
+  await see(theo, 'Arrêt envoyé');
+  await theo.getByTestId('mes-documents').getByText('Arrêt de travail (maladie)').waitFor();
+  await theo.goto(APP + '#/planning');
+  await theo.getByText(/Théo Martin · Arrêt maladie/).first().waitFor();
+  await ines.goto(APP + '#/planning');
+  await ines.reload();
+  await ines.locator('.week [data-away]').first().waitFor();
+  // L'équipe sait qui est absent ; le motif, seulement les responsables et le gérant.
+  await boss.goto(APP + '#/equipe');
+  await boss.locator('button.row', { hasText: 'Théo Martin' }).click();
+  await boss.getByTestId('membre-documents').getByText('Arrêt de travail (maladie)').waitFor();
+  await boss.getByRole('button', { name: 'Fermer' }).click();
+  step("un employé envoie son arrêt de travail depuis l'appli : noté dans le planning, rangé dans ses documents");
+
+  // 13 duodecies. Accès comptable : récap du mois, documents de l'équipe, caisse.
   await boss.goto(APP + '#/reglages');
   await boss.getByRole('button', { name: 'Ajouter', exact: true }).click();
   await boss.fill('#acc-name', 'Cabinet Durand');
@@ -1270,20 +1305,38 @@ async function main() {
   await boss.locator('[data-accountant="compta@cabinet.test"]').getByText("En attente d'inscription").waitFor();
   const compta = await open('comptable', { width: 1180, height: 820 });
   await signup(compta, 'Claire', 'compta@cabinet.test');
-  await compta.getByRole('heading', { name: 'Heures travaillées' }).waitFor();
+  await compta.getByRole('heading', { name: 'Espace comptable' }).waitFor();
   await compta.getByRole('button', { name: 'Ce mois', exact: true }).click();
   await compta.locator('[data-person="Théo Martin"]').waitFor();
+  await compta.locator('[data-person="Théo Martin"] summary').click();
+  await compta.locator('[data-absences="Théo Martin"]').getByText('Arrêt maladie').waitFor();
   assert.equal(await compta.locator('nav.side').count(), 0, "la comptable n'a pas le menu de l'équipe");
-  const [hoursFile] = await Promise.all([compta.waitForEvent('download'), compta.getByRole('button', { name: /Télécharger le fichier/ }).click()]);
+  const [hoursFile] = await Promise.all([compta.waitForEvent('download'), compta.getByRole('button', { name: /Détail des pointages/ }).click()]);
   const hoursCsv = fs.readFileSync(await hoursFile.path(), 'utf8');
-  assert.ok(hoursCsv.includes('Théo Martin') && hoursCsv.includes('Total par personne'), 'le fichier pour la paie');
+  assert.ok(hoursCsv.includes('Théo Martin') && hoursCsv.includes('Total par personne'), 'le détail des pointages');
+  const [recapFile] = await Promise.all([compta.waitForEvent('download'), compta.getByRole('button', { name: /Télécharger le récap/ }).click()]);
+  const recapCsv = fs.readFileSync(await recapFile.path(), 'utf8');
+  assert.ok(recapCsv.includes('Récapitulatif') && recapCsv.includes('Martin') && recapCsv.includes('Arrêt maladie (jours calendaires)'), 'le récap du mois pour la paie');
   await shot(compta, '13ze-comptable');
+  await compta.getByRole('button', { name: 'Documents', exact: true }).click();
+  const recent = compta.getByTestId('docs-recents').locator('[data-doc="Arrêt de travail (maladie)"]');
+  await recent.getByText('Théo Martin').waitFor();
+  // La fenêtre s'ouvre vide au toucher (sinon l'iPhone la bloque), puis reçoit le lien temporaire du fichier.
+  const docRequest = compta.context().waitForEvent('request', (r) => /\/storage\/v1\/object\/sign\/staff-docs\//.test(r.url()) && r.method() === 'GET');
+  const [docTab] = await Promise.all([compta.waitForEvent('popup'), recent.getByRole('button', { name: /Ouvrir/ }).click()]);
+  const docUrl = (await docRequest).url();
+  const fetched = await compta.request.get(docUrl);
+  assert.ok((await fetched.body()).toString().includes('arrêt de test'), 'le lien temporaire donne le fichier envoyé');
+  await docTab.close().catch(() => {});
+  await shot(compta, '13ze-comptable-documents');
+  await compta.getByRole('button', { name: 'Caisse', exact: true }).click();
+  await compta.getByTestId('caisse').getByText("Le gérant n'a pas encore ajouté le lien de la caisse.").waitFor();
   await compta.goto(APP + '#/planning');
-  await compta.getByRole('heading', { name: 'Heures travaillées' }).waitFor();
+  await compta.getByRole('heading', { name: 'Espace comptable' }).waitFor();
   assert.equal(await compta.getByText('Bonjour').count(), 0, "aucun autre écran de l'appli");
   await boss.reload();
   await boss.locator('[data-accountant="compta@cabinet.test"]').getByText('Compte créé').waitFor();
-  step('la comptable a son accès : les heures travaillées et le fichier pour la paie, rien d\'autre');
+  step("la comptable a son espace : récap du mois avec les absences, documents de l'équipe, caisse ; rien d'autre");
 
   // 14. Le gérant désactive Théo : il perd l'accès.
   await boss.goto(APP + '#/equipe');

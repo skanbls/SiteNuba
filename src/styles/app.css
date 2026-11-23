@@ -229,6 +229,7 @@ button.shift:hover { background: color-mix(in srgb, var(--c, var(--ink-3)) 28%, 
 .week .add { display: block; width: 100%; min-height: 38px; border: 1px dashed var(--line); border-radius: 8px; background: none; color: var(--ink-3); cursor: pointer; }
 .week .add:hover { background: var(--sunken); color: var(--ink); }
 .week .off { display: block; padding: 5px 7px; color: var(--ink-3); }
+.week .off.away { background: var(--warn-soft); color: var(--warn); border-radius: 6px; font-weight: 600; font-size: 12px; margin-bottom: 4px; }
 .tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
 .tag::before { content: ''; width: 8px; height: 8px; border-radius: 3px; background: var(--c, var(--ink-3)); }
 .a-salle { --c: var(--cat-a); } .a-bar { --c: var(--cat-b); } .a-cuisine { --c: var(--cat-c); } .a-autre { --c: var(--cat-d); }
@@ -403,3 +404,11 @@ button.shift:hover { background: color-mix(in srgb, var(--c, var(--ink-3)) 28%, 
 .chart-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .chart-table th, .chart-table td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
 .chart-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---------- Liste de courses : cases à cocher ---------- */
+.shop-progress { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 14px; color: var(--ink-2); }
+.shop-progress .bar { flex: 1 1 160px; margin: 0; }
+.shop-row { cursor: pointer; }
+.shop-box { width: 24px; height: 24px; flex: none; accent-color: var(--accent); }
+.shop-row.done .t { text-decoration: line-through; color: var(--ink-3); }
+.shop-row.done strong { color: var(--ink-3); font-weight: 500; }

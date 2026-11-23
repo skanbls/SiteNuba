@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { DocRow, DocumentSheet } from '../components/Documents';
 import { Icon } from '../components/Icon';
 import { Chips, Field, Layout, Section, Spinner, useToast } from '../components/ui';
+import { useMyDocuments } from '../lib/data';
 import { useMe, useSession } from '../lib/session';
 import { frError, supabase } from '../lib/supabase';
 import { CONTRACT_LABEL, ROLE_LABEL, fullName } from '../lib/types';
@@ -22,6 +24,8 @@ export default function Account() {
   const [code, setCode] = useState('');
   const [codeErr, setCodeErr] = useState('');
   const [theme, setTheme] = useState<Theme>(readTheme);
+  const docs = useMyDocuments(me.id, !pin);
+  const [docSheet, setDocSheet] = useState(false);
   const chooseTheme = (t: Theme) => {
     setTheme(t);
     saveTheme(t);
@@ -78,6 +82,22 @@ export default function Account() {
             <p className="note">Une erreur dans ces informations ? Seul le gérant peut les modifier.</p>
           </Section>
 
+          <Section title="Mes documents" right={!pin ? <button type="button" className="link" onClick={() => setDocSheet(true)}>Envoyer</button> : undefined}>
+            {pin ? (
+              <p className="note">Tes documents (arrêt de travail, carte Vitale, pièce d'identité…) s'envoient depuis ton téléphone, avec ton compte : pas depuis l'iPad partagé.</p>
+            ) : (
+              <>
+                <div className="list" data-testid="mes-documents">
+                  {docs.isLoading ? <p className="empty"><Spinner /></p> : docs.error ? <p className="empty err">{frError(docs.error)}</p>
+                    : (docs.data ?? []).length === 0 ? <p className="empty">Aucun document envoyé.</p>
+                    : (docs.data ?? []).map((d) => <DocRow key={d.id} doc={d} />)}
+                </div>
+                <button type="button" className="btn" onClick={() => setDocSheet(true)}><Icon name="doc" />Envoyer un document</button>
+                <p className="note">Arrêt de travail, carte Vitale, pièce d'identité, RIB… Seuls le gérant et la comptable les voient. Pour en retirer un, demande au gérant.</p>
+              </>
+            )}
+          </Section>
+
           <Section title="Mon code PIN pour l'iPad">
             <form className="form" onSubmit={savePin}>
               <Field label={me.has_pin ? 'Nouveau code PIN' : 'Choisir mon code PIN'} hint="4 chiffres. Il sert à ouvrir l'appli à ton nom sur l'iPad de la Nuba, et à y pointer.">
@@ -130,6 +150,7 @@ export default function Account() {
           <button type="button" className="btn no" onClick={() => void signOut()}>{pin ? 'Terminer et revenir à la borne' : 'Se déconnecter'}</button>
         </div>
       </div>
+      {docSheet && <DocumentSheet profileId={me.id} category="identite" onClose={() => setDocSheet(false)} />}
     </Layout>
   );
 }

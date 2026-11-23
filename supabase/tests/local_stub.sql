@@ -47,3 +47,29 @@ begin
 end $$;
 create schema vault;
 create table vault.decrypted_secrets (name text primary key, decrypted_secret text);
+
+-- Imitation du stockage de fichiers de Supabase (Storage) : seulement ce que les règles d'accès utilisent.
+-- Le service Storage écrit dans storage.objects avec le rôle de la personne : les règles RLS s'appliquent.
+create schema storage;
+create table storage.buckets (
+  id text primary key, name text not null, public boolean not null default false,
+  file_size_limit bigint, allowed_mime_types text[], created_at timestamptz not null default now()
+);
+create table storage.objects (
+  id uuid primary key default gen_random_uuid(),
+  bucket_id text references storage.buckets (id),
+  name text not null,
+  owner uuid,
+  metadata jsonb,
+  created_at timestamptz not null default now(),
+  unique (bucket_id, name)
+);
+alter table storage.objects enable row level security;
+create function storage.foldername(name text) returns text[] language plpgsql immutable as $$
+declare p text[] := string_to_array(name, '/');
+begin
+  return p[1:array_length(p, 1) - 1];
+end $$;
+grant usage on schema storage to anon, authenticated, service_role;
+grant select, insert, update, delete on storage.objects to anon, authenticated, service_role;
+grant select on storage.buckets to anon, authenticated, service_role;

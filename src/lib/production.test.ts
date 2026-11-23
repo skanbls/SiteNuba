@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Book, components, fmtQty, orderIssues, orderNeeds, shopping, toPurchase, type MercIngredient, type MercLine, type MercOrder, type MercRecipe } from './production';
+import { Book, components, familyOf, familyRank, fmtQty, orderIssues, orderNeeds, shopping, toPurchase, type MercIngredient, type MercLine, type MercOrder, type MercRecipe } from './production';
 
 const R = (name: string, role = '', portions = 1, brand: 'saveurs_nomades' | 'comptoir' = 'saveurs_nomades'): MercRecipe =>
   ({ brand, name, category: '', portions, portion_weight: null, status: 'OK', label: '', allergens: '', role });
@@ -101,5 +101,11 @@ describe('production des commandes', () => {
     expect(fmtQty(1, 'pièce')).toBe('1 pièce');
     expect(fmtQty(0.25, 'pièce')).toBe('0,3 pièce');
     expect(fmtQty(0.945, 'L')).toBe('0,95 L');
+  });
+
+  it('range les ingrédients par famille, comme la mercuriale', () => {
+    expect(['FRUITS / LEGUMES', 'CREMERIE', 'VIANDES / POISSONS', 'EPICERIE', 'SIROPS / JUS', 'CAFE / THE', 'BIERES', 'VINS', 'SPIRITUEUX', 'BOISSONS', 'EMBALLAGES', '', 'Vaisselle jetable', 'Produits d\'entretien'].map(familyOf))
+      .toEqual(['Fruits et légumes', 'Crèmerie', 'Viandes et poissons', 'Épicerie', 'Sirops et jus', 'Café et thé', 'Bières', 'Vins', 'Spiritueux', 'Boissons', 'Emballages', 'Sans famille', 'Emballages', "Produits d'entretien"]);
+    expect(['Fruits et légumes', 'Crèmerie', "Produits d'entretien", 'Sans famille'].map(familyRank)).toEqual([0, 2, 50, 99]);
   });
 });

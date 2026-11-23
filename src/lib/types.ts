@@ -58,6 +58,13 @@ export interface Shift {
 
 export type RequestStatus = 'pending' | 'approved' | 'refused';
 
+/** Motif d'une absence (migration 0020), comme dans les logiciels de planning. */
+export type LeaveReason =
+  | 'conges_payes' | 'recuperation' | 'ferie' | 'maladie' | 'accident_travail' | 'enfant_malade' | 'maternite'
+  | 'paternite' | 'parental' | 'evenement_familial' | 'formation' | 'absence_autorisee' | 'sans_solde'
+  | 'absence_injustifiee' | 'mise_a_pied' | 'autre';
+export type LeavePart = 'full' | 'am' | 'pm';
+
 export interface LeaveRequest {
   id: string;
   profile_id: string;
@@ -67,7 +74,71 @@ export interface LeaveRequest {
   note: string;
   status: RequestStatus;
   created_at: string;
+  /** Absent pour les absences des collègues : le motif ne regarde pas l'équipe. */
+  reason?: LeaveReason;
+  part?: LeavePart;
+  document_id?: string | null;
 }
+
+/** Motifs d'absence : libellé, abréviation du planning, et si chacun peut le demander lui-même. */
+export const ABSENCE_REASONS: { key: LeaveReason; label: string; short: string; ask: boolean }[] = [
+  { key: 'conges_payes', label: 'Congés payés', short: 'CP', ask: true },
+  { key: 'recuperation', label: 'Récupération (repos compensateur)', short: 'Récup', ask: true },
+  { key: 'ferie', label: 'Jour férié chômé', short: 'Férié', ask: false },
+  { key: 'maladie', label: 'Arrêt maladie', short: 'Maladie', ask: false },
+  { key: 'accident_travail', label: 'Accident du travail ou de trajet', short: 'AT', ask: false },
+  { key: 'enfant_malade', label: 'Enfant malade', short: 'Enf. malade', ask: true },
+  { key: 'maternite', label: 'Congé maternité', short: 'Maternité', ask: true },
+  { key: 'paternite', label: "Congé paternité et d'accueil de l'enfant", short: 'Paternité', ask: true },
+  { key: 'parental', label: 'Congé parental', short: 'Parental', ask: true },
+  { key: 'evenement_familial', label: 'Événement familial (mariage, naissance, décès)', short: 'Évén. familial', ask: true },
+  { key: 'formation', label: 'Formation ou école', short: 'Formation', ask: true },
+  { key: 'absence_autorisee', label: 'Absence autorisée', short: 'Abs. autorisée', ask: true },
+  { key: 'sans_solde', label: 'Congé sans solde', short: 'Sans solde', ask: true },
+  { key: 'absence_injustifiee', label: 'Absence injustifiée', short: 'Abs. injustifiée', ask: false },
+  { key: 'mise_a_pied', label: 'Mise à pied', short: 'Mise à pied', ask: false },
+  { key: 'autre', label: 'Autre absence', short: 'Absence', ask: true },
+];
+export const REASON_LABEL = Object.fromEntries(ABSENCE_REASONS.map((r) => [r.key, r.label])) as Record<LeaveReason, string>;
+export const REASON_SHORT = Object.fromEntries(ABSENCE_REASONS.map((r) => [r.key, r.short])) as Record<LeaveReason, string>;
+export const PART_LABEL: Record<LeavePart, string> = { full: 'Journée', am: 'Matin', pm: 'Après-midi' };
+
+/** Documents de l'équipe (migration 0020). */
+export type DocCategory =
+  | 'arret' | 'accident' | 'justificatif' | 'identite' | 'sejour' | 'vitale' | 'rib' | 'mutuelle'
+  | 'medecine' | 'diplome' | 'dpae' | 'contrat' | 'autre';
+export interface StaffDocument {
+  id: string;
+  profile_id: string;
+  category: DocCategory;
+  title: string;
+  file_path: string;
+  file_name: string;
+  mime: string;
+  size_bytes: number | null;
+  start_date: string | null;
+  end_date: string | null;
+  note: string;
+  uploaded_by: string | null;
+  created_at: string;
+}
+/** Catégories : libellé, groupe, et si la personne l'envoie elle-même (sinon le gérant). */
+export const DOC_CATEGORIES: { key: DocCategory; label: string; group: string; self: boolean; dates?: boolean }[] = [
+  { key: 'arret', label: 'Arrêt de travail (maladie)', group: 'Absences', self: true, dates: true },
+  { key: 'accident', label: 'Accident du travail ou de trajet', group: 'Absences', self: true, dates: true },
+  { key: 'justificatif', label: "Justificatif d'absence", group: 'Absences', self: true, dates: true },
+  { key: 'identite', label: "Pièce d'identité (carte ou passeport)", group: 'Identité et embauche', self: true },
+  { key: 'sejour', label: 'Titre de séjour', group: 'Identité et embauche', self: true },
+  { key: 'vitale', label: 'Carte Vitale ou attestation de sécurité sociale', group: 'Identité et embauche', self: true },
+  { key: 'rib', label: 'RIB', group: 'Identité et embauche', self: true },
+  { key: 'mutuelle', label: 'Mutuelle (adhésion ou dispense)', group: 'Identité et embauche', self: true },
+  { key: 'medecine', label: 'Visite médicale (médecine du travail)', group: 'Identité et embauche', self: true },
+  { key: 'diplome', label: 'Diplôme ou attestation de formation', group: 'Identité et embauche', self: true },
+  { key: 'dpae', label: 'DPAE', group: 'Employeur', self: false },
+  { key: 'contrat', label: 'Contrat de travail ou avenant', group: 'Employeur', self: true },
+  { key: 'autre', label: 'Autre document', group: 'Autre', self: true },
+];
+export const DOC_LABEL = Object.fromEntries(DOC_CATEGORIES.map((c) => [c.key, c.label])) as Record<DocCategory, string>;
 
 export interface ShiftSwap {
   id: string;
@@ -453,6 +524,8 @@ export interface EmailSettings {
   confirm_booking: boolean;
   notify_booking: boolean;
   notify_event: boolean;
+  /** Migration 0020 : absent avant. */
+  notify_documents?: boolean;
 }
 
 export interface EmailLogEntry {

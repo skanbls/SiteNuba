@@ -4,7 +4,7 @@ import type { MenuCost, MenuItem, MenuLine, MenuLineCost } from './carte';
 import type { Tabs } from './dashboard';
 import type { DeliverySettings } from './delivery';
 import { supabase } from './supabase';
-import type { BookingSettings, AccountantAccess, Checklist, ColdUnit, Contact, Customer, Deadline, EmailLogEntry, EmailSettings, Issue, Kiosk, NubaEvent, Procedure, ProcedureRead, Recipe, LeaveRequest, OilLog, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftSwap, Site, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
+import type { BookingSettings, AccountantAccess, Checklist, ColdUnit, Contact, Customer, Deadline, EmailLogEntry, EmailSettings, Issue, Kiosk, NubaEvent, Procedure, ProcedureRead, Recipe, LeaveRequest, OilLog, StaffDocument, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftSwap, Site, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
 
 const ENTRY = '*, time_breaks(*), profiles(first_name, last_name), sites(name)';
 
@@ -81,10 +81,24 @@ export function useShifts(from: Date, to: Date, profileId?: string) {
 }
 
 /** Congés et indisponibilités visibles par la personne, qui finissent après `since` (AAAA-MM-JJ). */
+/**
+ * Absences et demandes depuis `since`. La base donne à chacun les siennes (et toutes aux responsables) ;
+ * celles des collègues arrivent par team_absences, sans motif ni note : on sait seulement qui est absent.
+ */
 export function useLeaves(since: string) {
   return useQuery({
     queryKey: ['leaves', since],
-    queryFn: async () => must<LeaveRequest[]>(await supabase.from('leave_requests').select('*').gte('end_date', since).order('start_date')),
+    queryFn: async () => {
+      const own = must<LeaveRequest[]>(await supabase.from('leave_requests').select('*').gte('end_date', since).order('start_date'));
+      const { data, error } = await supabase.rpc('team_absences', { p_since: since });
+      // Base sans la 0020 : seulement ce que la table donne.
+      if (error) return own;
+      const known = new Set(own.map((l) => l.id));
+      const others = ((data ?? []) as Pick<LeaveRequest, 'id' | 'profile_id' | 'start_date' | 'end_date' | 'part'>[])
+        .filter((l) => !known.has(l.id))
+        .map((l) => ({ ...l, kind: 'conge' as const, status: 'approved' as const, note: '', created_at: '' }));
+      return [...own, ...others].sort((a, b) => a.start_date.localeCompare(b.start_date));
+    },
   });
 }
 
@@ -355,6 +369,45 @@ export function useDashboard(enabled: boolean) {
     queryKey: ['dashboard'],
     enabled,
     queryFn: async () => must<DashboardSource | null>(await supabase.from('dashboard_source').select('sheet_url, file_name, synced_at, tabs').maybeSingle()),
+  });
+}
+
+/* ---------- Documents de l'équipe (migration 0020) ---------- */
+/** Mes documents envoyés (la base ne donne que les siens à chacun). */
+export function useMyDocuments(profileId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ['documents', 'mine', profileId],
+    enabled: enabled && !!profileId,
+    queryFn: async () => must<StaffDocument[]>(await supabase.from('staff_documents').select('*').eq('profile_id', profileId!).order('created_at', { ascending: false })),
+  });
+}
+export interface TeamDocuments {
+  people: { id: string; first_name: string; last_name: string; active: boolean; folder_url: string | null }[];
+  documents: StaffDocument[];
+}
+/** Tous les documents, avec les noms : gérant et comptable. */
+export function useTeamDocuments(enabled = true) {
+  return useQuery({
+    queryKey: ['documents', 'team'],
+    enabled,
+    queryFn: async () => must<TeamDocuments>(await supabase.rpc('team_documents')),
+  });
+}
+/** Lien vers la caisse Zelty, pour la comptable (gérant et comptable). */
+export function useAccountingSettings(enabled = true) {
+  return useQuery({
+    queryKey: ['accounting'],
+    enabled,
+    queryFn: async () => must<{ zelty_url: string } | null>(await supabase.from('accounting_settings').select('zelty_url').maybeSingle()),
+  });
+}
+/** Cases cochées de la liste de courses d'un jour, partagées entre tous les appareils. */
+export function useShoppingChecks(day: string) {
+  return useQuery({
+    queryKey: ['shopping', day],
+    enabled: !!day,
+    refetchInterval: 20000,
+    queryFn: async () => must<{ item: string; checked_by: string | null }[]>(await supabase.from('shopping_checks').select('item, checked_by').eq('day', day)),
   });
 }
 
