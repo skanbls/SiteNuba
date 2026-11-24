@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { useChecklists, useRefresh } from '../lib/data';
+import { useSearchParams } from 'react-router-dom';
+import { POSTES, dueLabel, forMeToday, isLate, whenLabel } from '../lib/checklists';
+import { useChecklists, useRefresh, useTodayTasks } from '../lib/data';
 import { frError, supabase } from '../lib/supabase';
-import { fmtTime } from '../lib/time';
-import { FREQUENCY_LABEL, PERIOD_NOW, type Checklist, type Frequency } from '../lib/types';
+import { dayKey, fmtDateShort, fmtTime } from '../lib/time';
+import { FREQUENCY_LABEL, PERIOD_NOW, WEEKDAYS, type Checklist, type Frequency } from '../lib/types';
 import { Icon } from './Icon';
-import { Field, Loading, Sheet, Spinner, useToast } from './ui';
+import { Chips, Field, Loading, Sheet, Spinner, useToast } from './ui';
 import { useCan } from '../lib/rights';
 
 const TICK_ERROR: Record<string, string> = {
@@ -15,7 +17,8 @@ const TICK_ERROR: Record<string, string> = {
 
 /**
  * Les checklists d'un type ('service' ou 'nettoyage') : on choisit une liste, on coche ses cases.
- * Le gérant peut créer et modifier les listes.
+ * Une personne au planning voit d'abord les listes de son poste du jour (« Pour moi aujourd'hui »).
+ * Le gérant et les responsables qui tiennent les checklists créent et modifient les listes.
  */
 export function ChecklistBoard({ kind }: { kind: Checklist['kind'] }) {
   const can = useCan();
@@ -23,16 +26,26 @@ export function ChecklistBoard({ kind }: { kind: Checklist['kind'] }) {
   const toast = useToast();
   const refresh = useRefresh();
   const all = useChecklists();
+  const tasks = useTodayTasks();
+  const today = tasks.data?.day ?? dayKey(new Date());
+  const [params] = useSearchParams();
   const lists = (all.data ?? []).filter((l) => l.kind === kind);
-  const [sel, setSel] = useState('');
+  const onDuty = lists.some((l) => l.mine);
+  const mineLists = lists.filter((l) => forMeToday(l, today));
+  const [scope, setScope] = useState<'' | 'moi' | 'toutes'>('');
+  const [sel, setSel] = useState(params.get('l') ?? '');
   const [busy, setBusy] = useState('');
   const [edit, setEdit] = useState<Checklist | 'new' | null>(null);
   const closeEdit = useCallback(() => setEdit(null), []);
-  const cur = lists.find((l) => l.id === sel) ?? lists[0];
+  // La liste demandée (lien de l'écran Aujourd'hui) passe avant le filtre.
+  const wanted = lists.find((l) => l.id === sel);
+  const view = scope || (onDuty && (!wanted || mineLists.includes(wanted)) ? 'moi' : 'toutes');
+  const shown = view === 'moi' ? mineLists : lists;
+  const cur = shown.find((l) => l.id === sel) ?? shown[0];
 
   useEffect(() => {
-    if (cur && cur.id !== sel) setSel(cur.id);
-  }, [cur, sel]);
+    if (cur && cur.id !== sel && all.data) setSel(cur.id);
+  }, [cur, sel, all.data]);
 
   async function tick(itemId: string, done: boolean) {
     setBusy(itemId);
@@ -52,8 +65,9 @@ export function ChecklistBoard({ kind }: { kind: Checklist['kind'] }) {
 
   return (
     <>
+      {onDuty && <Chips value={view} options={[['moi', "Pour moi aujourd'hui"], ['toutes', 'Toutes les listes']]} onChange={setScope} label="Quelles listes" />}
       <div className="chips" role="group" aria-label="Listes">
-        {lists.map((l) => {
+        {shown.map((l) => {
           const done = l.items.filter((i) => i.done).length;
           return (
             <button key={l.id} type="button" className="chip" aria-pressed={l.id === cur?.id} onClick={() => setSel(l.id)} aria-label={`${l.name}, ${done} sur ${l.items.length}`}>
@@ -64,12 +78,22 @@ export function ChecklistBoard({ kind }: { kind: Checklist['kind'] }) {
         {editor && <button type="button" className="chip" onClick={() => setEdit('new')}><Icon name="plus" size={16} />Nouvelle liste</button>}
       </div>
 
-      {!cur ? <div className="list"><p className="empty">Aucune liste pour l'instant.{editor ? ' Crée la première avec « Nouvelle liste ».' : ''}</p></div> : (
-        <section className="sec">
+      {!cur ? (
+        <div className="list"><p className="empty">{view === 'moi' ? "Rien d'autre à cocher pour ton poste aujourd'hui. Les autres listes sont dans « Toutes les listes »." : `Aucune liste pour l'instant.${editor ? ' Crée la première avec « Nouvelle liste ».' : ''}`}</p></div>
+      ) : (
+        <section className="sec" data-list={cur.name}>
           <div className="sec-h">
             <span className="t">{cur.name} · {PERIOD_NOW[cur.frequency].toLowerCase()}</span>
             <span className="sub num">{d} sur {n}</span>
           </div>
+          {cur.area !== undefined && (
+            <p className="sub" style={{ margin: 0 }}>
+              {whenLabel(cur)}
+              {isLate(cur, today) ? <> <span className="pill bad">En retard : prévue le {fmtDateShort(cur.due!)}</span></>
+                : cur.due_weekday && cur.next_due === today ? <> <span className="pill warn">Prévue aujourd'hui</span></>
+                : cur.due_weekday && cur.due && cur.due > today ? <> <span className="pill">Prévue {dueLabel(cur)}</span></> : null}
+            </p>
+          )}
           <div className={'bar' + (n > 0 && d === n ? ' full' : '')} style={{ marginTop: 0 }}><i style={{ width: `${n ? (d / n) * 100 : 0}%` }} /></div>
           <div className="list">
             {n === 0 && <p className="empty">Cette liste n'a pas encore de case.</p>}
@@ -100,6 +124,10 @@ function ChecklistSheet({ list, kind, onClose, onSaved }: { list: Checklist | 'n
   const old = list === 'new' ? null : list;
   const [name, setName] = useState(old?.name ?? '');
   const [frequency, setFrequency] = useState<Frequency>(old?.frequency ?? 'daily');
+  const [area, setArea] = useState(old?.area ?? '');
+  const [weekday, setWeekday] = useState(old?.due_weekday ? String(old.due_weekday) : '');
+  const [week, setWeek] = useState(old?.due_week ? String(old.due_week) : '1');
+  const planned = old ? old.area !== undefined : true;
   const [items, setItems] = useState<{ id?: string; label: string }[]>(old ? old.items.map((i) => ({ id: i.id, label: i.label })) : [{ label: '' }]);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -118,7 +146,11 @@ function ChecklistSheet({ list, kind, onClose, onSaved }: { list: Checklist | 'n
     e.preventDefault();
     setBusy(true);
     setErr('');
-    const { data, error } = await supabase.rpc('save_checklist', { p_id: old?.id ?? null, p_name: name, p_kind: kind, p_frequency: frequency, p_items: items.filter((i) => i.label.trim()) });
+    const base = { p_id: old?.id ?? null, p_name: name, p_kind: kind, p_frequency: frequency, p_items: items.filter((i) => i.label.trim()) };
+    const wd = frequency === 'daily' || !weekday ? null : Number(weekday);
+    let { data, error } = await supabase.rpc('save_checklist', { ...base, p_area: area, p_due_weekday: wd, p_due_week: frequency === 'monthly' && wd ? Number(week) : null });
+    // Avant la mise à jour 0025, la base ne connaît ni poste ni jour prévu.
+    if (error?.code === 'PGRST202') ({ data, error } = await supabase.rpc('save_checklist', base));
     setBusy(false);
     if (error) return setErr(frError(error));
     await refresh('checklists', 'tasks');
@@ -151,6 +183,33 @@ function ChecklistSheet({ list, kind, onClose, onSaved }: { list: Checklist | 'n
             </select>
           </Field>
         </div>
+        {planned && (
+          <>
+            <Field label="Pour qui" hint="Le jour J, la liste s'affiche sur l'écran des personnes au planning à ce poste.">
+              <select className="in" id="cl-area" value={area} onChange={(e) => setArea(e.target.value)}>
+                <option value="">Toute l'équipe au planning</option>
+                {[...new Set([...POSTES, area].filter(Boolean))].map((a) => (<option key={a} value={a}>{a}</option>))}
+              </select>
+            </Field>
+            {frequency !== 'daily' && (
+              <div className="two">
+                {frequency === 'monthly' && (
+                  <Field label="Quelle semaine">
+                    <select className="in" id="cl-week" value={week} onChange={(e) => setWeek(e.target.value)} disabled={!weekday}>
+                      <option value="1">Le 1er</option><option value="2">Le 2e</option><option value="3">Le 3e</option><option value="4">Le 4e</option><option value="5">Le dernier</option>
+                    </select>
+                  </Field>
+                )}
+                <Field label="Quel jour" hint="Ce jour-là, la liste s'ajoute aux checklists du poste, avec un rappel la veille.">
+                  <select className="in" id="cl-weekday" value={weekday} onChange={(e) => setWeekday(e.target.value)}>
+                    <option value="">{frequency === 'weekly' ? "N'importe quel jour de la semaine" : "N'importe quand dans le mois"}</option>
+                    {WEEKDAYS.map((w, i) => (<option key={w} value={i + 1}>{frequency === 'monthly' ? `${w.toLowerCase()} du mois` : w}</option>))}
+                  </select>
+                </Field>
+              </div>
+            )}
+          </>
+        )}
         <div className="field">
           <span>Cases à cocher</span>
           {items.map((it, i) => (

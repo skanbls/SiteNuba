@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Avatar, Layout, Loading, Section } from '../components/ui';
 import { parseBoard } from '../lib/dashboard';
-import { useDashboard, useEntries, useMyOpenEntry, useOpenEntries, usePendingBookings, useShifts, useSiteWeekly, useTeam, useTodayTasks } from '../lib/data';
+import { useChecklists, useDashboard, useEntries, useMyOpenEntry, useOpenEntries, usePendingBookings, useShifts, useSiteWeekly, useTeam, useTodayTasks } from '../lib/data';
+import { forMeToday, forMeTomorrow, isLate } from '../lib/checklists';
 import { norm } from '../lib/production';
 import { useMe } from '../lib/session';
 import { addDays, dayKey, fmtDayLong, fmtDur, fmtTime, fromDayKey, periodRange, workedMs } from '../lib/time';
@@ -43,6 +44,10 @@ export default function Today() {
   const tasks = useTodayTasks();
   const t = tasks.data;
   const pendingCount = usePendingBookings(t?.day, t?.bookings !== undefined).data?.length ?? 0;
+  // Checklists d'après le planning : celles de mon poste aujourd'hui, et celles prévues demain.
+  const checklists = useChecklists();
+  const myLists = t ? (checklists.data ?? []).filter((l) => forMeToday(l, t.day)) : [];
+  const tomorrowLists = t ? (checklists.data ?? []).filter((l) => forMeTomorrow(l, dayKey(addDays(fromDayKey(t.day), 1)))) : [];
   // Rendez-vous de chaque semaine (fichier du site) qui tombent le jour de service.
   const weekly = useSiteWeekly(!!t);
   const isoDay = t?.day ? ((fromDayKey(t.day).getDay() + 6) % 7) + 1 : 0;
@@ -72,14 +77,41 @@ export default function Today() {
       {t && (
         <Section title="À faire aujourd'hui">
           <div className="list">
-            <Link className="row" to="/checklists">
-              <div className="grow">
-                <span className="t">Checklists du jour</span>
-                <span className="sub num">{t.checks_done} sur {t.checks_total} cases cochées</span>
-                <div className={'bar' + (t.checks_total > 0 && t.checks_done >= t.checks_total ? ' full' : '')}><i style={{ width: `${t.checks_total ? Math.min(100, (t.checks_done / t.checks_total) * 100) : 0}%` }} /></div>
-              </div>
-              <span className="chev"><Icon name="chev" size={18} /></span>
-            </Link>
+            {myLists.length > 0 ? myLists.map((l) => {
+              const done = l.items.filter((i) => i.done).length;
+              const late = isLate(l, t.day);
+              return (
+                <Link className="row" to={`/${l.kind === 'nettoyage' ? 'hygiene' : 'checklists'}?l=${l.id}`} key={l.id} data-my-list={l.name}>
+                  <div className="grow">
+                    <span className="t">{l.name}</span>
+                    <span className="sub num">{done} sur {l.items.length} cases cochées{l.area ? ` · ${l.area}` : ''}</span>
+                    <div className={'bar' + (l.items.length > 0 && done >= l.items.length ? ' full' : '')}><i style={{ width: `${l.items.length ? (done / l.items.length) * 100 : 0}%` }} /></div>
+                  </div>
+                  <div className="end">
+                    {late ? <span className="pill bad">En retard</span> : l.frequency !== 'daily' && l.due_weekday && l.next_due === t.day ? <span className="pill warn">Prévue aujourd'hui</span> : null}
+                    <span className="chev"><Icon name="chev" size={18} /></span>
+                  </div>
+                </Link>
+              );
+            }) : (
+              <Link className="row" to="/checklists">
+                <div className="grow">
+                  <span className="t">Checklists du jour</span>
+                  <span className="sub num">{t.checks_done} sur {t.checks_total} cases cochées</span>
+                  <div className={'bar' + (t.checks_total > 0 && t.checks_done >= t.checks_total ? ' full' : '')}><i style={{ width: `${t.checks_total ? Math.min(100, (t.checks_done / t.checks_total) * 100) : 0}%` }} /></div>
+                </div>
+                <span className="chev"><Icon name="chev" size={18} /></span>
+              </Link>
+            )}
+            {tomorrowLists.length > 0 && (
+              <Link className="row" to={`/${tomorrowLists[0].kind === 'nettoyage' ? 'hygiene' : 'checklists'}?l=${tomorrowLists[0].id}`} data-tomorrow>
+                <div className="grow">
+                  <span className="t">Demain, à ton poste</span>
+                  <span className="sub">{tomorrowLists.map((l) => `${l.name} (${l.items.length} tâche${l.items.length > 1 ? 's' : ''})`).join(' · ')}</span>
+                </div>
+                <div className="end"><span className="pill info">Rappel</span><span className="chev"><Icon name="chev" size={18} /></span></div>
+              </Link>
+            )}
             <Link className="row wrap" to="/hygiene">
               <div className="grow">
                 <span className="t">Hygiène</span>

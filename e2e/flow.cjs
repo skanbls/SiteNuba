@@ -893,6 +893,79 @@ async function main() {
   assert.equal(await ines.getByRole('link', { name: 'Administration' }).count(), 0, "une responsable ne voit pas l'administration");
   step('le gérant confie checklists et stocks à une responsable, qui les tient, et rien de plus');
 
+  // Checklists selon le planning : chaque liste a son poste ; une liste de la semaine a son jour, rappelé la veille.
+  const sd = await boss.evaluate(() => {
+    const p = (x) => String(x).padStart(2, '0');
+    const k = (d) => `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    const n = new Date(Date.now() - 5 * 3600000);
+    const t = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1);
+    return { today: k(n), tomorrow: k(t), wd: ((t.getDay() + 6) % 7) + 1 };
+  });
+  await boss.goto(APP + '#/planning');
+  await boss.getByRole('button', { name: 'Service', exact: true }).click();
+  await boss.selectOption('#shift-who', { label: 'Théo Martin' });
+  await boss.fill('#shift-day', sd.today);
+  await boss.fill('#shift-start', '06:00');
+  await boss.fill('#shift-end', '07:00');
+  await boss.fill('#shift-area', 'Bar');
+  await boss.getByRole('button', { name: 'Enregistrer' }).click();
+  await see(boss, 'Service ajouté');
+  // Inès est en salle le lendemain (jour de service suivant), le matin.
+  await boss.getByRole('button', { name: 'Service', exact: true }).click();
+  await boss.selectOption('#shift-who', { label: 'Inès Durand' });
+  await boss.fill('#shift-day', sd.tomorrow);
+  await boss.fill('#shift-start', '10:00');
+  await boss.fill('#shift-end', '11:00');
+  await boss.fill('#shift-area', 'Salle');
+  await boss.getByRole('button', { name: 'Enregistrer' }).click();
+  await see(boss, 'Service ajouté');
+  await boss.goto(APP + '#/checklists');
+  await boss.reload();
+  for (const [list, poste] of [['Ouverture bar', 'Bar'], ['Ouverture cuisine', 'Cuisine']]) {
+    await boss.getByRole('group', { name: 'Listes' }).getByRole('button', { name: new RegExp(`^${list}`) }).click();
+    await boss.getByRole('button', { name: 'Modifier cette liste' }).click();
+    await boss.selectOption('#cl-area', poste);
+    await boss.getByRole('button', { name: 'Enregistrer' }).click();
+    await see(boss, 'Liste enregistrée');
+  }
+  await boss.getByRole('button', { name: 'Nouvelle liste' }).click();
+  await boss.fill('#cl-name', 'Vitres de la salle');
+  await boss.selectOption('#cl-frequency', 'weekly');
+  await boss.selectOption('#cl-area', 'Salle');
+  await boss.selectOption('#cl-weekday', String(sd.wd));
+  await boss.getByLabel('Case 1').fill('Laver les vitres');
+  await shot(boss, '13zd-checklist-poste-jour');
+  await boss.getByRole('button', { name: 'Enregistrer' }).click();
+  await see(boss, 'Liste créée');
+  await boss.locator('[data-list="Vitres de la salle"]').getByText(/Chaque semaine, le .* · Salle/).waitFor();
+  // Théo, au bar aujourd'hui, voit les listes du bar ; pas celle de la cuisine.
+  await theo.goto(APP + '#/');
+  await theo.reload();
+  await theo.locator('[data-my-list="Ouverture bar"]').waitFor();
+  assert.equal(await theo.locator('[data-my-list="Ouverture cuisine"]').count(), 0, 'pas la liste de la cuisine');
+  await shot(theo, '13ze-mes-checklists');
+  await theo.locator('[data-my-list="Ouverture bar"]').click();
+  await theo.getByRole('button', { name: "Pour moi aujourd'hui", pressed: true }).waitFor();
+  await theo.locator('[data-list="Ouverture bar"]').waitFor();
+  assert.equal(await theo.getByRole('group', { name: 'Listes' }).getByRole('button', { name: /^Ouverture cuisine/ }).count(), 0, 'seulement ses listes du jour');
+  // Inès, en salle demain, voit le rappel ; l'e-mail de la veille part pour elle.
+  await ines.goto(APP + '#/');
+  await ines.reload();
+  await ines.locator('[data-tomorrow]').getByText('Vitres de la salle (1 tâche)').waitFor();
+  const sent = execFileSync('psql', [process.env.DB_URL, '-Atc',
+    // Les e-mails ne sont activés qu'à l'étape suivante : on les ouvre le temps de l'envoi, puis on remet l'état d'avant.
+    `update public.email_settings set enabled = true, sender_email = 'appli@nuba.test' where true;
+     select public.send_task_reminders(('${sd.today}'::date + time '18:00') at time zone 'Europe/Paris');
+     select count(*) from public.email_outbox where kind = 'rappel_taches' and to_email = 'ines@nuba.test' and body like '%Vitres de la salle (Salle) :%- Laver les vitres%';
+     update public.email_settings set enabled = false, sender_email = '' where true;
+     delete from public.email_outbox where kind = 'rappel_taches';`]).toString().trim().split('\n').filter((l) => !/^UPDATE|^DELETE/.test(l));
+  assert.equal(sent[1], '1', `l'e-mail de rappel part pour Inès (${sent.join(' / ')})`);
+  await boss.goto(APP + '#/reglages');
+  await boss.getByRole('button', { name: 'Régler' }).click();
+  assert.ok(await boss.locator('#mail-remind-tasks').isChecked(), 'le rappel des tâches est proposé');
+  await boss.getByRole('button', { name: 'Fermer' }).click();
+  step("checklists selon le planning : chacun voit les listes de son poste du jour ; la liste de la semaine est rappelée la veille, à l'écran et par e-mail");
+
   await boss.goto(APP + '#/equipe');
   await boss.locator('button.row', { hasText: 'Inès Durand' }).getByText('Gère : Checklists, Stocks et commandes').waitFor();
   await boss.locator('button.row', { hasText: 'Théo Martin' }).click();

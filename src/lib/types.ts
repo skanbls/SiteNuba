@@ -171,6 +171,17 @@ export interface Checklist {
   kind: 'service' | 'nettoyage';
   frequency: Frequency;
   items: ChecklistItem[];
+  /** Migration 0025 : poste (Salle, Bar…), '' pour toute l'équipe au planning. */
+  area?: string;
+  /** Jour prévu : 1 = lundi … 7 = dimanche ; pour le mois, rang 1 à 4 ou 5 (le dernier). */
+  due_weekday?: number | null;
+  due_week?: number | null;
+  /** Jour prévu dans la période en cours, et prochain jour prévu à partir d'aujourd'hui (AAAA-MM-JJ). */
+  due?: string | null;
+  next_due?: string | null;
+  /** La liste concerne la personne aujourd'hui, demain (d'après son planning). */
+  mine?: boolean;
+  mine_tomorrow?: boolean;
 }
 
 export interface ColdUnit {
@@ -557,6 +568,8 @@ export interface EmailSettings {
   notify_payslips?: boolean;
   /** Migration 0022 : rappel la veille aux clients. */
   remind_booking?: boolean;
+  /** Migration 0025 : rappel la veille des tâches de la semaine et du mois. */
+  remind_tasks?: boolean;
 }
 
 export interface EmailLogEntry {

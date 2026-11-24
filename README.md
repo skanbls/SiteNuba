@@ -22,6 +22,7 @@ En ligne : https://skanbls.github.io/SiteNuba/ (mise à jour automatique à chaq
 | | Formulaire de réservation du site web relié à l'appli | Fichier du site remis au gérant, à publier avec le site |
 | | E-mails : confirmation au client, alertes à la Nuba | Prêt avec la migration 0010 ; à activer après la mise en route de Brevo (Administration, E-mails) |
 | | E-mails des comptes de l'équipe (inscription, mot de passe oublié) | À régler dans Supabase : SMTP de Brevo (voir plus bas) |
+| | Checklists selon le planning : chaque liste a son poste (salle, bar, cuisine ou toute l'équipe) et s'affiche le jour J sur l'écran des personnes au planning ; les listes de la semaine ou du mois ont leur jour, s'ajoutent ce jour-là et sont rappelées la veille (écran et e-mail) | **En ligne**, une fois la migration 0025 exécutée ; rappels planifiés dans Administration, E-mails |
 | | Fiches process des plats Mijote : étapes de production, dressage, hygiène et photo du dressage, ouvertes depuis chaque commande, imprimables ; import d'un fichier de fiches préparé | **En ligne**, une fois la migration 0023 exécutée et le fichier de fiches importé (Production, Fiches) |
 | | Programmation du site dans Événements : soirées (quiz, DJ set, soirées à thème, concerts…), affiches, exposition et rendez-vous de la semaine, lus dans le fichier « Contenu du site » | **En ligne**, une fois la migration 0024 exécutée et le nouveau script Google installé (Administration, Mercuriales, 5e lien) |
 | | Réservations : demandes à valider au-delà d'un nombre de personnes (« demande reçue » puis « confirmée » ou refus), confirmation par e-mail des réservations prises par l'équipe, rappel la veille, e-mails mis en page avec le logo | **En ligne**, une fois la migration 0022 exécutée ; rappels à planifier dans Administration, E-mails (pg_cron) ; nouveau fichier du site remis au gérant |
@@ -129,7 +130,7 @@ L'appli se met à jour toute seule : elle cherche une nouvelle version à chaque
 
 ## Relier l'appli à Supabase
 
-Pour une base qui a déjà les scripts 0001 à 0003, `supabase/installation/0004-a-0009.sql` regroupe les six suivants en un seul collage, tout ou rien. Les migrations 0010 à 0024 se collent ensuite une par une ; elles aussi passent en entier ou pas du tout.
+Pour une base qui a déjà les scripts 0001 à 0003, `supabase/installation/0004-a-0009.sql` regroupe les six suivants en un seul collage, tout ou rien. Les migrations 0010 à 0025 se collent ensuite une par une ; elles aussi passent en entier ou pas du tout.
 
 1. Créer un projet sur supabase.com, région Europe.
 2. Dans **SQL Editor**, coller et exécuter les fichiers de `supabase/migrations/`, dans l'ordre de leur numéro.

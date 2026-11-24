@@ -680,7 +680,7 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
   const [busy, setBusy] = useState(false);
   const text = (k: 'sender_name' | 'sender_email' | 'notify_email' | 'app_url' | 'signature') =>
     (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF((s) => ({ ...s, [k]: e.target.value }));
-  const flag = (k: 'enabled' | 'confirm_booking' | 'notify_booking' | 'notify_event' | 'notify_documents' | 'notify_payslips' | 'remind_booking') =>
+  const flag = (k: 'enabled' | 'confirm_booking' | 'notify_booking' | 'notify_event' | 'notify_documents' | 'notify_payslips' | 'remind_booking' | 'remind_tasks') =>
     (e: ChangeEvent<HTMLInputElement>) => setF((s) => ({ ...s, [k]: e.target.checked }));
   // Les rappels de la veille partent d'une tâche planifiée de Supabase (pg_cron), créée par la mise à jour 0022.
   const reminders = useQuery({
@@ -689,7 +689,7 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
     queryFn: async () => {
       const { data, error } = await supabase.rpc('reminders_status');
       if (error) throw error;
-      return data as { scheduled: boolean; sent_today: number };
+      return data as { scheduled: boolean; sent_today: number; tasks_sent_today?: number };
     },
   });
 
@@ -700,7 +700,7 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
     if (error) return toast(frError(error), 'bad');
     if (!data) return toast("pg_cron n'est pas activé : dans Supabase, Database, Extensions, active « pg_cron », puis réessaie.", 'bad');
     await refresh('emails');
-    toast('Rappels planifiés : chaque jour à partir de 10 h');
+    toast('Rappels planifiés : réservations à partir de 10 h, tâches de 16 h à 21 h');
   }
 
   async function save(e: FormEvent) {
@@ -719,6 +719,7 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
       ...(f.notify_documents === undefined ? {} : { notify_documents: f.notify_documents }),
       ...(f.notify_payslips === undefined ? {} : { notify_payslips: f.notify_payslips }),
       ...(f.remind_booking === undefined ? {} : { remind_booking: f.remind_booking }),
+      ...(f.remind_tasks === undefined ? {} : { remind_tasks: f.remind_tasks }),
     }).eq('id', true);
     setBusy(false);
     if (error) return setErr(frError(error));
@@ -767,6 +768,16 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
                 <span className="sub" style={{ color: 'var(--bad)' }}>Pas encore planifiés. Si le bouton ci-dessous échoue : dans Supabase, ouvre Database, Extensions, active « pg_cron », puis réessaie.</span>
               )}
               {reminders.data?.scheduled && <span className="sub">Planifiés · {reminders.data.sent_today} rappel{reminders.data.sent_today > 1 ? 's' : ''} envoyé{reminders.data.sent_today > 1 ? 's' : ''} ces dernières 24 heures</span>}
+            </span>
+          </label>
+        )}
+        {f.remind_tasks !== undefined && (
+          <label className="row" style={{ padding: 0, gap: 10 }}>
+            <input id="mail-remind-tasks" type="checkbox" checked={f.remind_tasks} onChange={flag('remind_tasks')} style={box} />
+            <span className="grow">
+              <span className="t">Rappel des tâches la veille</span>
+              <span className="sub">Entre 16 h et 21 h, à chaque personne au planning le lendemain : les listes de la semaine ou du mois prévues à son poste. Toi, si personne n'est prévu.</span>
+              {reminders.data?.scheduled && reminders.data.tasks_sent_today !== undefined && <span className="sub">{reminders.data.tasks_sent_today} rappel{reminders.data.tasks_sent_today > 1 ? 's' : ''} de tâches ces dernières 24 heures</span>}
             </span>
           </label>
         )}

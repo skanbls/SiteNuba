@@ -78,6 +78,8 @@ const PARTS: Part[] = [
     title: 'Checklists',
     body: (
       <ol>
+        <li>Le jour où tu es au planning, tes listes s'affichent sur l'écran <b>Aujourd'hui</b> : celles de ton poste (salle, bar, cuisine) et celles de toute l'équipe. Dans Checklists, <B>Pour moi aujourd'hui</B> les garde seules ; <B>Toutes les listes</B> montre le reste.</li>
+        <li>Les tâches de la semaine ou du mois s'ajoutent le jour prévu. La veille, tu reçois un rappel par e-mail et l'écran Aujourd'hui l'annonce (« Demain, à ton poste »). Pas faites, elles restent marquées « En retard ».</li>
         <li>Choisis la liste en haut : ouverture du bar, fermeture de la cuisine…</li>
         <li>Touche une ligne pour la cocher : ton prénom et l'heure sont enregistrés.</li>
         <li>Une erreur ? Touche de nouveau ta case pour la décocher.</li>
