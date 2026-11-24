@@ -3,10 +3,10 @@ import { Link } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Avatar, Layout, Loading, Section } from '../components/ui';
 import { parseBoard } from '../lib/dashboard';
-import { useDashboard, useEntries, useMyOpenEntry, useOpenEntries, usePendingBookings, useShifts, useTeam, useTodayTasks } from '../lib/data';
+import { useDashboard, useEntries, useMyOpenEntry, useOpenEntries, usePendingBookings, useShifts, useSiteWeekly, useTeam, useTodayTasks } from '../lib/data';
 import { norm } from '../lib/production';
 import { useMe } from '../lib/session';
-import { addDays, dayKey, fmtDayLong, fmtDur, fmtTime, periodRange, workedMs } from '../lib/time';
+import { addDays, dayKey, fmtDayLong, fmtDur, fmtTime, fromDayKey, periodRange, workedMs } from '../lib/time';
 import { EVENT_KIND, fullName, type Shift, type TimeEntry } from '../lib/types';
 
 const startOfToday = () => {
@@ -43,6 +43,10 @@ export default function Today() {
   const tasks = useTodayTasks();
   const t = tasks.data;
   const pendingCount = usePendingBookings(t?.day, t?.bookings !== undefined).data?.length ?? 0;
+  // Rendez-vous de chaque semaine (fichier du site) qui tombent le jour de service.
+  const weekly = useSiteWeekly(!!t);
+  const isoDay = t?.day ? ((fromDayKey(t.day).getDay() + 6) % 7) + 1 : 0;
+  const weeklyToday = (weekly.data ?? []).filter((w) => w.weekday === isoDay);
 
   return (
     <Layout title="Aujourd'hui">
@@ -92,10 +96,20 @@ export default function Today() {
                 <span className="chev"><Icon name="chev" size={18} /></span>
               </div>
             </Link>
+            {weeklyToday.map((w) => (
+              <Link className="row" to="/evenements" key={`w${w.position}`} data-weekly-today={w.title}>
+                <div className="grow">
+                  <span className="tag k-soiree">Chaque {w.day_label.toLowerCase().replace(/s$/, '') || 'semaine'}</span>
+                  <span className="t">{w.title}</span>
+                  {w.schedule && <span className="sub">{w.schedule}</span>}
+                </div>
+                <span className="chev"><Icon name="chev" size={18} /></span>
+              </Link>
+            ))}
             {(t.events_today ?? []).map((ev) => (
               <Link className="row" to="/evenements" key={ev.id}>
                 <div className="grow">
-                  <span className={`tag k-${ev.kind}`}>{EVENT_KIND[ev.kind]}, aujourd'hui</span>
+                  <span className={`tag k-${ev.kind}`}>{EVENT_KIND[ev.kind] ?? 'Événement'}, aujourd'hui</span>
                   <span className="t">{ev.title}</span>
                   <span className="sub">{[ev.start_time, ev.guests ? `${ev.guests} personnes` : ''].filter(Boolean).join(' · ')}</span>
                 </div>

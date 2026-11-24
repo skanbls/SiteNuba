@@ -248,6 +248,40 @@ describe('script Google des mercuriales', () => {
     expect(h[300]).toEqual(['S319', '319']);
   });
 
+  it('envoie le contenu du site : programmation, rendez-vous, exposition et œuvres, tels qu\'ils s\'affichent', () => {
+    const SITE: Record<string, Cell[][]> = {
+      "Mode d'emploi": [['Ne pas lire']],
+      Programmation: [
+        ['Date', 'Type', 'Titre', 'Description', 'Horaire', 'Entrée', 'Visible', 'Titre EN', 'Réf. Titre', 'Affiche'],
+        [{ d: '19/11/2026', v: new Date(Date.UTC(2026, 10, 19)) }, 'Quiz', 'Quiz test', 'Par équipes.', '20h30 → 23h', { d: '5,00 €', v: 5 }, '', 'Test quiz', 'Quiz test', 'https://drive.google.com/file/d/AfficheTest/view'],
+        ['', '', '', '', '', '', '', '', '', ''],
+        ['21/11/2026', 'DJ set', 'Soirée test', '', '22h → 2h', 'Entrée libre', 'NON', '', '', ''],
+      ],
+      'Chaque semaine': [['Jour', 'Rendez-vous', 'Horaire', 'Visible', 'Rendez-vous EN'], ['Jeudi', 'Quiz', 'dès 20h30', 'OUI', 'Quiz']],
+      Exposition: [
+        ['Champ', 'Français', 'English'],
+        ['Afficher l’exposition', 'OUI', ''],
+        ['Titre', 'Expo test', 'Test show'],
+        ['Début', { d: '01/11/2026', v: new Date(Date.UTC(2026, 10, 1)) }, ''],
+      ],
+      'Œuvres': [['Titre', 'Technique', 'Dimensions', 'Image', 'Visible', 'Technique EN'], ['Toile test', 'Acrylique', '80 × 60 cm', '', '', 'Acrylic']],
+    };
+    const { g, sent } = fakeGoogle({ ID_SITE: { name: 'Contenu du site', tabs: SITE } });
+    run(buildAppsScript({ ...opts, saveursNomades: '', comptoir: '', site: 'ID_SITE' }), g).envoyerMaintenant();
+    expect(sent).toHaveLength(1);
+    expect(sent[0].url).toBe('https://projet.supabase.co/rest/v1/rpc/sync_site');
+    expect(sent[0].body.p_payload).toEqual({
+      brand: 'site', file: 'Contenu du site',
+      programme: [
+        { Date: '2026-11-19', Type: 'Quiz', Titre: 'Quiz test', Description: 'Par équipes.', Horaire: '20h30 → 23h', 'Entrée': '5,00 €', Affiche: 'https://drive.google.com/file/d/AfficheTest/view' },
+        { Date: '21/11/2026', Type: 'DJ set', Titre: 'Soirée test', Horaire: '22h → 2h', 'Entrée': 'Entrée libre', Visible: 'NON' },
+      ],
+      weekly: [{ Jour: 'Jeudi', 'Rendez-vous': 'Quiz', Horaire: 'dès 20h30', Visible: 'OUI' }],
+      expo: { "Afficher l'exposition": 'OUI', Titre: 'Expo test', 'Début': '2026-11-01' },
+      works: [{ Titre: 'Toile test', Technique: 'Acrylique', Dimensions: '80 × 60 cm' }],
+    });
+  });
+
   it('une feuille non renseignée est ignorée', () => {
     const { g, sent } = fakeGoogle({ ID_SN: { name: 'SN', tabs: SN } });
     run(buildAppsScript({ ...opts, comptoir: '' }), g).envoyerMaintenant();

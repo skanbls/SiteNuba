@@ -4,7 +4,8 @@ import type { MenuCost, MenuItem, MenuLine, MenuLineCost } from './carte';
 import type { Tabs } from './dashboard';
 import type { DeliverySettings } from './delivery';
 import { supabase } from './supabase';
-import type { BookingSettings, AccountantAccess, Checklist, ColdUnit, Contact, Customer, Deadline, EmailLogEntry, EmailSettings, Issue, Kiosk, NubaEvent, Procedure, ProcedureRead, Recipe, LeaveRequest, OilLog, StaffDocument, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftSwap, Site, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
+import type { MercProcess } from './process';
+import type { BookingSettings, AccountantAccess, Checklist, ColdUnit, Contact, Customer, Deadline, EmailLogEntry, EmailSettings, Issue, Kiosk, NubaEvent, Procedure, ProcedureRead, Recipe, LeaveRequest, OilLog, StaffDocument, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftSwap, Site, SiteWeekly, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
 
 const ENTRY = '*, time_breaks(*), profiles(first_name, last_name), sites(name)';
 
@@ -236,6 +237,20 @@ export function useEvents(from: string, past: boolean) {
   });
 }
 
+/** Rendez-vous de chaque semaine, lus dans le fichier du site (vide avant la mise à jour 0024). */
+export function useSiteWeekly(enabled = true) {
+  return useQuery({
+    queryKey: ['events', 'weekly'],
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('site_weekly').select('*').order('position');
+      // Base pas encore mise à jour : pas de rendez-vous, sans erreur.
+      if (error) return [] as SiteWeekly[];
+      return (data ?? []) as SiteWeekly[];
+    },
+  });
+}
+
 export function useRecipes() {
   return useQuery({
     queryKey: ['recipes'],
@@ -336,6 +351,17 @@ export function useMercLines() {
 }
 export function useMercOrders() {
   return useQuery({ queryKey: ['merc', 'orders'], queryFn: () => selectAll<MercOrder>('merc_orders', '*', ['id']) });
+}
+/** Fiches process des plats Mijote (vide avant la mise à jour 0023). */
+export function useProcesses() {
+  return useQuery({
+    queryKey: ['merc', 'process'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('merc_process').select('*');
+      if (error) return [] as MercProcess[];
+      return (data ?? []) as MercProcess[];
+    },
+  });
 }
 export function useMercIngredients() {
   return useQuery({ queryKey: ['merc', 'ingredients'], queryFn: () => selectAll<MercIngredient>('merc_ingredients', '*', ['name']) });

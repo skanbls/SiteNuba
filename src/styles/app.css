@@ -11,7 +11,7 @@
   --ok: #3b5612; --ok-soft: #dde8bc; --warn: #774500; --warn-soft: #f8deb2; --bad: #8b3e3b; --bad-soft: #f4d3ce;
   /* Graphiques : série principale, série de contexte, grille (palette vérifiée daltonisme) */
   --chart-main: #2f7a4b; --chart-ctx: #8f8f86; --chart-grid: #ece3d6;
-  --cat-a: #113f24; --cat-b: #b64a36; --cat-c: #5f5f1c; --cat-d: #8b3e3b;
+  --cat-a: #113f24; --cat-b: #b64a36; --cat-c: #5f5f1c; --cat-d: #8b3e3b; --cat-e: #8a5a00;
   --qr-bg: #ffffff; --qr-fg: #113f24;
   --logo-sun: #b64a36; --logo-ink: #113f24; --logo-line: #f7ede1; --tagline: #113f24;
   /* Menus (onglets, rail) et carte du jour : vert Nuba dans les deux thèmes. */
@@ -33,7 +33,7 @@
       --terra: #ee8f72; --terra-soft: #4d2c21;
       --ok: #d2e393; --ok-soft: #2b3b16; --warn: #f8c66e; --warn-soft: #45310e; --bad: #ffb0a8; --bad-soft: #4c2421;
       --chart-main: #30ad66; --chart-ctx: #748079; --chart-grid: #24432f;
-      --cat-a: #9cc7a6; --cat-b: #ee8f72; --cat-c: #d4d180; --cat-d: #f0aaa6;
+      --cat-a: #9cc7a6; --cat-b: #ee8f72; --cat-c: #d4d180; --cat-d: #f0aaa6; --cat-e: #f2c46b;
       --qr-bg: #ffffff; --qr-fg: #113f24;
       --logo-sun: #f7ede1; --logo-ink: #113f24; --logo-line: #f7ede1; --tagline: #f7ede1;
       --hero-line: #3a6049;
@@ -47,7 +47,7 @@
   --terra: #ee8f72; --terra-soft: #4d2c21;
   --ok: #d2e393; --ok-soft: #2b3b16; --warn: #f8c66e; --warn-soft: #45310e; --bad: #ffb0a8; --bad-soft: #4c2421;
       --chart-main: #30ad66; --chart-ctx: #748079; --chart-grid: #24432f;
-  --cat-a: #9cc7a6; --cat-b: #ee8f72; --cat-c: #d4d180; --cat-d: #f0aaa6;
+  --cat-a: #9cc7a6; --cat-b: #ee8f72; --cat-c: #d4d180; --cat-d: #f0aaa6; --cat-e: #f2c46b;
   --qr-bg: #ffffff; --qr-fg: #113f24;
   --logo-sun: #f7ede1; --logo-ink: #113f24; --logo-line: #f7ede1; --tagline: #f7ede1;
   --hero-line: #3a6049;
@@ -266,6 +266,11 @@ button.shift:hover { background: color-mix(in srgb, var(--c, var(--ink-3)) 28%, 
 .date b { display: block; font: 700 20px/1 var(--display); }
 .date span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-2); }
 .k-privatisation { --c: var(--cat-b); } .k-concert { --c: var(--cat-a); } .k-exposition { --c: var(--cat-d); } .k-exterieur { --c: var(--cat-c); }
+.k-soiree { --c: var(--cat-e); }
+/* Affiche d'un événement : vignette dans la liste, grande dans la fiche */
+.poster-thumb { width: 48px; height: 64px; flex: none; border-radius: 8px; object-fit: cover; background: var(--surface-2, var(--line)); border: 1px solid var(--line); }
+.poster { display: block; width: 100%; max-height: 70dvh; object-fit: contain; border-radius: var(--r-lg, 14px); background: var(--surface-2, var(--line)); border: 1px solid var(--line); }
+@media print { .poster { max-height: 120mm; } }
 .stats.four { grid-template-columns: repeat(4, 1fr); }
 
 /* Mode d'emploi repliable (mise en route des e-mails…) */
@@ -412,3 +417,19 @@ button.shift:hover { background: color-mix(in srgb, var(--c, var(--ink-3)) 28%, 
 .shop-box { width: 24px; height: 24px; flex: none; accent-color: var(--accent); }
 .shop-row.done .t { text-decoration: line-through; color: var(--ink-3); }
 .shop-row.done strong { color: var(--ink-3); font-weight: 500; }
+
+/* ---------- Fiche process (plats Mijote) : à l'écran et imprimée ---------- */
+.process { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.process-title { font: 800 22px/1.2 var(--display), system-ui, sans-serif; margin: 0 0 4px; color: var(--ink); }
+.process-figure { margin: 0; display: grid; gap: 6px; }
+.process-allergens { margin: 0; padding: 10px 12px; border-radius: var(--r-md); background: var(--bad-soft); color: var(--ink); font-size: 15px; }
+.process-phase h3 { font: 700 13px/1.3 var(--display), system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-2); margin: 10px 0 6px; }
+.steps { margin: 0; padding-left: 24px; display: grid; gap: 8px; font-size: 16px; line-height: 1.45; color: var(--ink); }
+.steps li::marker { font-weight: 700; color: var(--ink-2); }
+@media print {
+  .process { gap: 8px; }
+  .process .poster { max-height: 90mm; width: auto; margin: 0 auto; }
+  .process .list { break-inside: avoid; }
+  .steps { font-size: 12px; gap: 4px; }
+  .process-phase, .process-figure { break-inside: avoid; }
+}

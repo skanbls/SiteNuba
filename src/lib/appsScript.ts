@@ -15,6 +15,9 @@
  * Dans le tableau de bord financier (gérants seulement) : les onglets Tableau de bord,
  * Tréso 13 semaines, Prévisionnel 12 mois et Historique KPI, tels qu'ils s'affichent
  * (texte affiché et valeurs brutes). L'appli les lit elle-même.
+ *
+ * Dans « Contenu du site » (le fichier qui alimente le site web) : Programmation, Chaque semaine,
+ * Exposition et Œuvres, tels qu'ils s'affichent (les dates en AAAA-MM-JJ). La base en fait des événements.
  */
 
 /**
@@ -42,6 +45,8 @@ export interface ScriptOptions {
   nuba?: string;
   /** Tableau de bord financier (gérants seulement), ou chaîne vide. */
   tableau?: string;
+  /** Contenu du site (programmation, exposition), ou chaîne vide. */
+  site?: string;
   /** Date affichée en tête du script. */
   date: string;
 }
@@ -51,13 +56,14 @@ export function buildAppsScript(o: ScriptOptions): string {
     adresse: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/sync_mercuriale`,
     adresseCarte: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/sync_carte`,
     adresseTableau: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/sync_dashboard`,
+    adresseSite: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/sync_site`,
     clePublique: o.publicKey,
     cleSynchro: o.syncKey,
-    mercuriales: { saveurs_nomades: o.saveursNomades, comptoir: o.comptoir, nuba: o.nuba ?? '', tableau: o.tableau ?? '' },
+    mercuriales: { saveurs_nomades: o.saveursNomades, comptoir: o.comptoir, nuba: o.nuba ?? '', tableau: o.tableau ?? '', site: o.site ?? '' },
   };
   return `/**
  * Nuba Gestion : envoie les mercuriales Saveurs Nomades, Comptoir Méditerranéen et Nuba,
- * et le tableau de bord financier, vers l'appli.
+ * le tableau de bord financier et le contenu du site (programmation, exposition) vers l'appli.
  * Généré par l'appli (Administration, Mercuriales) le ${o.date}.
  *
  * Mise en route, une seule fois :
@@ -86,7 +92,7 @@ function envoyerSiChangement() { nubaEnvoyer_(false); }
 function nubaEnvoyer_(force) {
   var props = PropertiesService.getScriptProperties();
   var erreurs = [];
-  ['saveurs_nomades', 'comptoir', 'nuba', 'tableau'].forEach(function (marque) {
+  ['saveurs_nomades', 'comptoir', 'nuba', 'tableau', 'site'].forEach(function (marque) {
     var id = NUBA.mercuriales[marque];
     if (!id) return;
     try {
@@ -97,6 +103,10 @@ function nubaEnvoyer_(force) {
         contenu = { brand: marque, file: ss.getName(), items: carte.items, lines: carte.lines };
       } else if (marque === 'tableau') {
         contenu = { brand: marque, file: ss.getName(), tabs: nubaFinances_(ss) };
+      } else if (marque === 'site') {
+        contenu = nubaSite_(ss);
+        contenu.brand = marque;
+        contenu.file = ss.getName();
       } else {
         contenu = {
           brand: marque,
@@ -113,7 +123,7 @@ function nubaEnvoyer_(force) {
       var dernier = Number(props.getProperty('nuba_envoi_' + marque) || 0);
       // Rien n'a changé : on n'envoie qu'une fois toutes les six heures, pour dire que tout va bien.
       if (!force && props.getProperty('nuba_empreinte_' + marque) === empreinte && Date.now() - dernier < 6 * 3600 * 1000) return;
-      var adresse = marque === 'nuba' ? NUBA.adresseCarte : marque === 'tableau' ? NUBA.adresseTableau : NUBA.adresse;
+      var adresse = marque === 'nuba' ? NUBA.adresseCarte : marque === 'tableau' ? NUBA.adresseTableau : marque === 'site' ? NUBA.adresseSite : NUBA.adresse;
       var rep = UrlFetchApp.fetch(adresse, {
         method: 'post',
         contentType: 'application/json',
@@ -143,7 +153,7 @@ function nubaRaison_(res, code, corps, marque) {
   if (res && res.error === 'too_many') return 'trop d\\'envois en peu de temps, nouvel essai dans 10 minutes.';
   if (res && res.error === 'payload') return 'contenu illisible (onglet renommé ou vidé ?).';
   if (res && res.error === 'db') return 'refusé par la base : ' + res.message;
-  if (code === 404) return "l'appli attend la mise à jour " + ({ nuba: '0017', tableau: '0019' }[marque] || '0011') + ' de sa base.';
+  if (code === 404) return "l'appli attend la mise à jour " + ({ nuba: '0017', tableau: '0019', site: '0024' }[marque] || '0011') + ' de sa base.';
   return 'réponse ' + code + ' : ' + String(corps).slice(0, 200);
 }
 
@@ -404,6 +414,56 @@ function nubaFinances_(ss) {
     };
   });
   return tabs;
+}
+
+// ---------- Contenu du site : programmation, rendez-vous, exposition ----------
+
+/** Un onglet en lignes { titre de colonne : texte affiché } ; une date en AAAA-MM-JJ. Lignes vides retirées. */
+function nubaSiteLignes_(ss, onglet, champs) {
+  var sh = ss.getSheetByName(onglet);
+  if (!sh) return [];
+  var r = sh.getDataRange();
+  var v = r.getValues();
+  var d = r.getDisplayValues();
+  var cle = nubaNorme_(champs[0]);
+  var h = -1;
+  for (var i = 0; i < Math.min(v.length, 5); i++) {
+    if (v[i].some(function (c) { return nubaNorme_(c) === cle; })) { h = i; break; }
+  }
+  if (h === -1) return [];
+  var entetes = v[h].map(nubaNorme_);
+  var col = {};
+  champs.forEach(function (nom) {
+    var n = nubaNorme_(nom);
+    var k = entetes.indexOf(n);
+    if (k === -1) k = entetes.findIndex(function (e) { return e.indexOf(n) === 0 && e.indexOf('réf.') !== 0; });
+    col[nom] = k;
+  });
+  var out = [];
+  for (var j = h + 1; j < v.length && out.length < 500; j++) {
+    var o = {};
+    champs.forEach(function (nom) {
+      var k = col[nom];
+      if (k === -1) return;
+      var x = v[j][k] instanceof Date ? Utilities.formatDate(v[j][k], 'Europe/Paris', 'yyyy-MM-dd') : String(d[j][k]).trim();
+      if (x !== '') o[nom] = x.slice(0, 2000);
+    });
+    if (Object.keys(o).length) out.push(o);
+  }
+  return out;
+}
+
+function nubaSite_(ss) {
+  var expo = {};
+  nubaSiteLignes_(ss, 'Exposition', ['Champ', 'Français']).forEach(function (l) {
+    if (l['Champ']) expo[String(l['Champ']).replace(/’/g, "'")] = l['Français'] || '';
+  });
+  return {
+    programme: nubaSiteLignes_(ss, 'Programmation', ['Date', 'Type', 'Titre', 'Description', 'Horaire', 'Entrée', 'Visible', 'Affiche']),
+    weekly: nubaSiteLignes_(ss, 'Chaque semaine', ['Jour', 'Rendez-vous', 'Horaire', 'Visible']),
+    expo: expo,
+    works: nubaSiteLignes_(ss, 'Œuvres', ['Titre', 'Technique', 'Dimensions', 'Image', 'Visible'])
+  };
 }
 `;
 }

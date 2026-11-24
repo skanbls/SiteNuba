@@ -13,7 +13,7 @@ export const BRANDS: Brand[] = ['saveurs_nomades', 'comptoir'];
 export const BRAND_LABEL: Record<Brand, string> = { saveurs_nomades: 'Saveurs Nomades', comptoir: 'Comptoir Méditerranéen' };
 export const ROLE_LABEL: Record<string, string> = { BASE: 'Base', PROTEINE: 'Protéine', LEGUME: 'Légume', SAUCE: 'Sauce' };
 
-export interface MercSource { brand: Brand | 'nuba'; label: string; sheet_url: string; file_name: string; synced_at: string | null; counts: Record<string, number | null> }
+export interface MercSource { brand: Brand | 'nuba' | 'site'; label: string; sheet_url: string; file_name: string; synced_at: string | null; counts: Record<string, number | null> }
 export interface MercRecipe { brand: Brand; name: string; category: string; portions: number; portion_weight: number | null; status: string; label: string; allergens: string; role: string }
 export interface MercLine { id: number; brand: Brand; recipe: string; position: number; ingredient: string; quantity: number; unit: string; supplier: string; allergens: string; loss: number }
 export interface MercOrder { id: number; brand: Brand; position: number; day: string; formula: string; dish: string; portions: number; check_status: string; factors: Record<string, number> }

@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { Icon } from '../components/Icon';
 import { Chips, Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
-import { useCustomers, useEvents, useRefresh, useSites, useTeam, useTodayTasks } from '../lib/data';
+import { useCustomers, useEvents, useRefresh, useSiteWeekly, useSites, useTeam, useTodayTasks } from '../lib/data';
+import { posterSrc } from '../lib/poster';
 import { appUrl, frError, supabase } from '../lib/supabase';
 import { dayKey, fmtDateShort, fmtTime, fromDayKey } from '../lib/time';
 import { EVENT_KIND, EVENT_PILL, EVENT_STATUS, type Customer, type EventKind, type EventStatus, type NubaEvent, type Site } from '../lib/types';
@@ -12,8 +13,19 @@ const KINDS = Object.keys(EVENT_KIND) as EventKind[];
 const euro = (v: number) => v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 const hhmm = (t: string | null) => (t ?? '').slice(0, 5);
 const live = (e: NubaEvent) => e.status !== 'annule' && e.status !== 'termine';
+const fromSite = (e: NubaEvent | null) => e?.source === 'site';
 
-/** Événements : privatisations, concerts, expositions, prestations extérieures. */
+/** L'affiche d'un événement ; si l'image ne s'ouvre pas (lien privé, page web…), un simple lien. */
+function Poster({ url, title }: { url: string; title: string }) {
+  const [broken, setBroken] = useState(false);
+  const src = posterSrc(url);
+  if (!src) return null;
+  return broken
+    ? <a className="link" href={url} target="_blank" rel="noopener noreferrer">Voir l'affiche</a>
+    : <a href={url} target="_blank" rel="noopener noreferrer" aria-label={`Affiche de ${title}, en grand`}><img className="poster" src={src} alt={`Affiche : ${title}`} loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} /></a>;
+}
+
+/** Événements : privatisations, soirées, concerts, expositions, prestations extérieures. La programmation du site arrive toute seule. */
 export default function Events() {
   const can = useCan();
   const editor = can('evenements');
@@ -23,6 +35,7 @@ export default function Events() {
   const [past, setPast] = useState(false);
   const [filter, setFilter] = useState<Filter>('tous');
   const events = useEvents(today, past);
+  const weekly = useSiteWeekly();
   const customers = useCustomers();
   const sites = useSites();
   const team = useTeam();
@@ -70,12 +83,13 @@ export default function Events() {
                   <button type="button" className="row wrap" key={e.id} data-event={e.title} onClick={() => setOpenId(e.id)} style={live(e) ? undefined : { opacity: 0.65 }}>
                     <span className="date"><b>{d.getDate()}</b><span>{d.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '')}</span></span>
                     <span className="grow">
-                      <span className={`tag k-${e.kind}`}>{EVENT_KIND[e.kind]}</span>
+                      <span className={`tag k-${e.kind}`}>{e.category || EVENT_KIND[e.kind] || e.kind}</span>
                       <span className="t" style={{ display: 'block' }}>{e.title}</span>
                       <span className="sub" style={{ display: 'block' }}>
-                        {[e.end_day ? `jusqu'au ${fmtDateShort(e.end_day)}` : hhmm(e.start_time), e.guests ? `${e.guests} pers.` : '', client.get(e.customer_id ?? '')?.name, e.event_tasks.length ? `préparation ${done}/${e.event_tasks.length}` : ''].filter(Boolean).join(' · ')}
+                        {[e.end_day ? `jusqu'au ${fmtDateShort(e.end_day)}` : e.schedule || hhmm(e.start_time), e.guests ? `${e.guests} pers.` : '', client.get(e.customer_id ?? '')?.name, e.event_tasks.length ? `préparation ${done}/${e.event_tasks.length}` : ''].filter(Boolean).join(' · ')}
                       </span>
                     </span>
+                    {posterSrc(e.poster_url ?? '') && <img className="poster-thumb" src={posterSrc(e.poster_url ?? '', 200)} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(ev) => { ev.currentTarget.style.visibility = 'hidden'; }} />}
                     <span className="end">
                       <span className={`pill ${EVENT_PILL[e.status]}`}>{EVENT_STATUS[e.status]}</span>
                       <span className="chev"><Icon name="chev" size={18} /></span>
@@ -85,6 +99,20 @@ export default function Events() {
               })}
             </div>
           </Section>
+          {!past && (weekly.data ?? []).length > 0 && (
+            <Section title="Chaque semaine">
+              <div className="list" id="weekly">
+                {(weekly.data ?? []).map((w) => (
+                  <div className="row" key={w.position} data-weekly={w.title}>
+                    <span className="grow"><span className="t">{w.title}</span><span className="sub">{[w.day_label, w.schedule].filter(Boolean).join(' · ')}</span></span>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
+          {all.some(fromSite) || (weekly.data ?? []).length > 0 ? (
+            <p className="note">La programmation (soirées, exposition, rendez-vous de la semaine) vient du fichier « Contenu du site », celui du site web : elle se met à jour toute seule. Pour la changer, modifie le fichier.</p>
+          ) : null}
           {editor && (
             <>
               <button type="button" className="btn" onClick={() => void copyLink()}><Icon name="copy" />Copier le lien du formulaire de demande</button>
@@ -138,8 +166,11 @@ function EventSheet({ event, editor, customers, sites, who, onClose }: { event: 
     void run(() => supabase.rpc('save_event', { p_id: old?.id ?? null, p: { ...f, amount: n(f.amount), deposit: n(f.deposit) } }), old ? 'Événement enregistré' : 'Événement créé', true);
   }
 
+  const site = fromSite(old);
   return (
     <Sheet title={old ? old.title : 'Nouvel événement'} onClose={onClose}>
+      {old?.poster_url && <Poster url={old.poster_url} title={old.title} />}
+      {site && <p className="note" data-site-event>Vient du fichier « Contenu du site » : titre, date, horaire, description et affiche se changent là-bas, et l'appli suit toute seule. Ici, l'équipe tient la préparation{editor ? ', le statut et les notes' : ''}.</p>}
       {old && (
         <Section title="À préparer">
           <div className="list">
@@ -168,28 +199,31 @@ function EventSheet({ event, editor, customers, sites, who, onClose }: { event: 
       {!editor && old ? (
         <div className="list">
           <div className="row"><div className="grow"><span className="sub">Quand</span><span className="t">{fromDayKey(old.day).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}{old.end_day ? ` au ${fmtDateShort(old.end_day)}` : ''}{old.start_time ? ` à ${hhmm(old.start_time)}` : ''}</span></div><span className={`pill ${EVENT_PILL[old.status]}`}>{EVENT_STATUS[old.status]}</span></div>
+          {(old.category || old.schedule || old.entry) && (
+            <div className="row"><div className="grow"><span className="sub">{[old.category, old.entry].filter(Boolean).join(' · ') || 'Horaire'}</span><span className="t">{old.schedule || (old.start_time ? hhmm(old.start_time) : '')}</span></div></div>
+          )}
           {old.guests != null && <div className="row"><div className="grow"><span className="sub">Personnes</span><span className="t">{old.guests}</span></div></div>}
           {customer && <div className="row"><div className="grow"><span className="sub">Client</span><span className="t">{customer.name}</span><span className="sub">{[customer.phone, customer.email].filter(Boolean).join(' · ')}</span></div></div>}
-          {old.details && <div className="row"><div className="grow"><span className="sub">Déroulé et formule</span><span className="t" style={{ fontWeight: 500, whiteSpace: 'pre-wrap' }}>{old.details}</span></div></div>}
+          {old.details && <div className="row"><div className="grow"><span className="sub">{site ? 'Description' : 'Déroulé et formule'}</span><span className="t" style={{ fontWeight: 500, whiteSpace: 'pre-wrap' }}>{old.details}</span></div></div>}
           {old.note && <div className="row"><div className="grow"><span className="sub">À savoir</span><span className="t" style={{ fontWeight: 500, whiteSpace: 'pre-wrap' }}>{old.note}</span></div></div>}
         </div>
       ) : (
         <form className="form" onSubmit={save}>
           <div className="two">
             <Field label="Type">
-              <select className="in" id="evt-kind" value={f.kind} onChange={set('kind')}>{KINDS.map((k) => (<option key={k} value={k}>{EVENT_KIND[k]}</option>))}</select>
+              <select className="in" id="evt-kind" value={f.kind} onChange={set('kind')} disabled={site}>{KINDS.map((k) => (<option key={k} value={k}>{EVENT_KIND[k]}</option>))}</select>
             </Field>
             <Field label="Où en est-on ?">
               <select className="in" id="evt-status" value={f.status} onChange={set('status')}>{(Object.keys(EVENT_STATUS) as EventStatus[]).map((s) => (<option key={s} value={s}>{EVENT_STATUS[s]}</option>))}</select>
             </Field>
           </div>
-          <Field label="Titre"><input className="in" id="evt-title" value={f.title} onChange={set('title')} placeholder="Anniversaire de Nadia, vernissage…" required maxLength={100} /></Field>
+          <Field label="Titre"><input className="in" id="evt-title" value={f.title} onChange={set('title')} placeholder="Anniversaire de Nadia, vernissage…" required maxLength={100} readOnly={site} /></Field>
           <div className="two">
-            <Field label="Date"><input className="in" id="evt-day" type="date" value={f.day} onChange={set('day')} required /></Field>
-            <Field label="Heure de début"><input className="in" id="evt-time" type="time" value={f.start_time} onChange={set('start_time')} /></Field>
+            <Field label="Date"><input className="in" id="evt-day" type="date" value={f.day} onChange={set('day')} required readOnly={site} /></Field>
+            <Field label="Heure de début" hint={site && old?.schedule ? `Dans le fichier : ${old.schedule}` : undefined}><input className="in" id="evt-time" type="time" value={f.start_time} onChange={set('start_time')} readOnly={site} /></Field>
           </div>
           <div className="two">
-            <Field label="Dernier jour" hint="Pour une exposition ou un événement sur plusieurs jours."><input className="in" id="evt-end" type="date" value={f.end_day} min={f.day || undefined} onChange={set('end_day')} /></Field>
+            <Field label="Dernier jour" hint="Pour une exposition ou un événement sur plusieurs jours."><input className="in" id="evt-end" type="date" value={f.end_day} min={f.day || undefined} onChange={set('end_day')} readOnly={site} /></Field>
             <Field label="Nombre de personnes"><input className="in" id="evt-guests" inputMode="numeric" value={f.guests} onChange={set('guests')} /></Field>
           </div>
           <Field label="Client, artiste ou prestataire" hint="À créer d'abord dans Clients s'il n'y figure pas.">
@@ -212,13 +246,13 @@ function EventSheet({ event, editor, customers, sites, who, onClose }: { event: 
             <span className="t">Acompte encaissé</span>
           </label>
           <Field label="Déroulé et formule" hint="Menu, horaires, technique, commission… Toute l'équipe le lit.">
-            <textarea className="in" id="evt-details" value={f.details} onChange={set('details')} maxLength={2000} />
+            <textarea className="in" id="evt-details" value={f.details} onChange={set('details')} maxLength={2000} readOnly={site} />
           </Field>
           <Field label="À savoir"><input className="in" id="evt-note" value={f.note} onChange={set('note')} maxLength={1000} placeholder="Allergies, contraintes, message du client…" /></Field>
           {old?.amount != null && <p className="sub">Reste à encaisser : <b className="num">{euro(Math.max(0, old.amount - (old.deposit_paid ? old.deposit ?? 0 : 0)))}</b></p>}
           {err && <p className="err" role="alert">{err}</p>}
           <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : 'Enregistrer'}</button>
-          {old && (confirm ? (
+          {old && !site && (confirm ? (
             <div className="acts">
               <button type="button" className="btn" onClick={() => setConfirm(false)}>Garder</button>
               <button type="button" className="btn no" disabled={busy} onClick={() => void run(() => supabase.from('events').delete().eq('id', old.id), 'Événement supprimé', true)}>Supprimer définitivement</button>

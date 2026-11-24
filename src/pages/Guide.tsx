@@ -146,7 +146,8 @@ const PARTS: Part[] = [
     title: 'Événements',
     body: (
       <ol>
-        <li>Privatisations, concerts, expositions, prestations extérieures : ouvre un événement pour lire son déroulé.</li>
+        <li>Privatisations, soirées, concerts, expositions, prestations extérieures : ouvre un événement pour lire son déroulé et voir son affiche.</li>
+        <li>Les soirées, l'exposition et les rendez-vous de <b>Chaque semaine</b> viennent du fichier du site web : ils arrivent tout seuls et se modifient dans le fichier.</li>
         <li>Coche les choses à préparer au fur et à mesure.</li>
         <li>Un client te parle d'une privatisation : touche <B>Demande</B> pour la noter. Le gérant le rappelle.</li>
       </ol>
@@ -158,7 +159,7 @@ const PARTS: Part[] = [
     title: 'Production (Saveurs Nomades, Comptoir Méditerranéen)',
     body: (
       <ol>
-        <li><b>Commandes</b> : touche une commande pour voir les quantités à peser, fiche par fiche.</li>
+        <li><b>Commandes</b> : touche une commande pour voir les quantités à peser, fiche par fiche. <B>Fiche process : étapes et dressage</B> donne les étapes de production, la photo du dressage à viser et les règles d'hygiène, prêtes à imprimer pour le poste.</li>
         <li><b>Liste de courses</b> : tout ce qu'il faut acheter pour une livraison, par famille (fruits et légumes, crèmerie…) ou par fournisseur, pertes comprises. Coche chaque article mis dans le panier : la case est cochée pour toute l'équipe.</li>
         <li><b>Fiches</b> : chaque recette, à mettre à l'échelle du nombre de portions.</li>
         <li><b>Bon de livraison</b>, sous chaque jour de commandes : le bon de livraison prêt à imprimer, avec lot, DLC et allergènes. Écris la température au départ, corrige une quantité livrée si besoin, puis <B>Imprimer</B>. Le client le signe à la livraison.</li>

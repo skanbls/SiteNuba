@@ -345,7 +345,8 @@ export interface Customer {
   active: boolean;
 }
 
-export type EventKind = 'privatisation' | 'concert' | 'exposition' | 'exterieur';
+/** soiree : migration 0024 (quiz, DJ set, soirée à thème…). */
+export type EventKind = 'privatisation' | 'soiree' | 'concert' | 'exposition' | 'exterieur';
 export type EventStatus = 'demande' | 'devis' | 'acompte' | 'confirme' | 'termine' | 'annule';
 
 export interface EventTask {
@@ -373,8 +374,24 @@ export interface NubaEvent {
   deposit_paid: boolean;
   details: string;
   note: string;
-  source: 'equipe' | 'en_ligne';
+  /** site : vient du fichier « Contenu du site » (migration 0024). */
+  source: 'equipe' | 'en_ligne' | 'site';
+  /** Migration 0024 : type écrit dans le fichier (« DJ set »), horaire, entrée, lien de l'affiche. */
+  category?: string;
+  schedule?: string;
+  entry?: string;
+  poster_url?: string;
   event_tasks: EventTask[];
+}
+
+/** Un rendez-vous de chaque semaine (onglet « Chaque semaine » du fichier du site, migration 0024). */
+export interface SiteWeekly {
+  position: number;
+  /** 1 = lundi … 7 = dimanche, ou null (« Tous les jours »). */
+  weekday: number | null;
+  day_label: string;
+  title: string;
+  schedule: string;
 }
 
 export interface RecipeItem {
@@ -510,7 +527,7 @@ export const PERIOD_NOW: Record<Frequency, string> = { daily: "Aujourd'hui", wee
 export const ALLERGENS = ['gluten', 'crustacés', 'œufs', 'poissons', 'arachides', 'soja', 'lait', 'fruits à coque', 'céleri', 'moutarde', 'sésame', 'sulfites', 'lupin', 'mollusques'];
 export const DEADLINE_LABEL: Record<DeadlineCategory, string> = { controle: 'Contrôle obligatoire', contrat: 'Contrat', document: "Document d'un membre de l'équipe", autre: 'Autre' };
 export const CUSTOMER_KIND: Record<CustomerKind, string> = { particulier: 'Particulier', entreprise: 'Entreprise', artiste: 'Artiste', prestataire: 'Prestataire' };
-export const EVENT_KIND: Record<EventKind, string> = { privatisation: 'Privatisation', concert: 'Concert', exposition: 'Exposition', exterieur: 'Hors les murs' };
+export const EVENT_KIND: Record<EventKind, string> = { privatisation: 'Privatisation', soiree: 'Soirée', concert: 'Concert', exposition: 'Exposition', exterieur: 'Hors les murs' };
 export const EVENT_STATUS: Record<EventStatus, string> = { demande: 'Demande', devis: 'Devis envoyé', acompte: 'Acompte reçu', confirme: 'Confirmé', termine: 'Terminé', annule: 'Annulé' };
 export const EVENT_PILL: Record<EventStatus, string> = { demande: 'info', devis: 'warn', acompte: 'info', confirme: 'ok', termine: '', annule: 'bad' };
 export const SOURCE_LABEL: Record<ReservationSource, string> = { en_ligne: 'En ligne', telephone: 'Téléphone', sur_place: 'Sur place', instagram: 'Instagram', autre: 'Autre' };

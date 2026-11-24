@@ -121,6 +121,12 @@ async function storage(req, url, body) {
     const f = signed.get(url.searchParams.get('token')) === `${m[1]}/${m[2]}` && files.get(`${m[1]}/${m[2]}`);
     return f ? [200, f.data, f.mime] : [400, { error: 'invalid_token' }];
   }
+  // Espace public (photos des plats) : lisible par lien, sans compte.
+  if ((m = /^\/object\/public\/([^/]+)\/(.+)$/.exec(path)) && req.method === 'GET') {
+    const { rows } = await asUser(req, 'select public from storage.buckets where id = $1', [m[1]]);
+    const f = rows[0]?.public && files.get(`${m[1]}/${m[2]}`);
+    return f ? [200, f.data, f.mime] : [400, { error: 'not_found', message: 'Object not found' }];
+  }
   if ((m = /^\/object\/([^/]+)\/(.+)$/.exec(path)) && req.method === 'POST') {
     try {
       await asUser(req, 'insert into storage.objects (bucket_id, name, owner) values ($1, $2, $3)', [m[1], m[2], bearer(req)?.sub ?? null]);

@@ -9,6 +9,7 @@ import {
   type Brand, type Purchase, type MercCost, type MercIngredient, type MercOrder, type MercPrice, type MercRecipe, type MercSource, type Need,
 } from '../lib/production';
 import { useCan } from '../lib/rights';
+import { ProcessImport } from './Process';
 import { useSession } from '../lib/session';
 import { frError, supabase } from '../lib/supabase';
 import { ago, dayKey, fmtDayLong, fromDayKey } from '../lib/time';
@@ -161,6 +162,7 @@ function OrderSheet({ order, book, money, costs, onShopping, onClose }: { order:
   return (
     <Sheet title={order.dish} onClose={onClose}>
       <p className="sub">{[longDay(order.day), BRAND_LABEL[order.brand], `${order.portions} portions`, order.formula].filter(Boolean).join(' · ')}</p>
+      <Link className="btn pri block" to={`/process?o=${order.id}`}><Icon name="list" />Fiche process : étapes et dressage</Link>
       {order.check_status && order.check_status !== 'OK' && <p className="note">Contrôle de la mercuriale : {order.check_status}</p>}
       {issues.map((i) => <p className="err" key={i}>{i} : complète-la dans l'onglet COMPOSITION de la mercuriale.</p>)}
       {comps.filter((c) => c.recipe).map((c) => {
@@ -309,6 +311,8 @@ function Shopping({ orders, book, today, day, setDay, ingredients, prices, money
 /* ---------- Fiches ---------- */
 function Recipes({ recipes, book, money, costs }: { recipes: MercRecipe[]; book: Book; money: boolean; costs: MercCost[] }) {
   const [search, setSearch] = useState('');
+  const [importing, setImporting] = useState(false);
+  const closeImport = useCallback(() => setImporting(false), []);
   const [open, setOpen] = useState<MercRecipe | null>(null);
   const close = useCallback(() => setOpen(null), []);
   const needle = search.trim().toLowerCase();
@@ -346,6 +350,8 @@ function Recipes({ recipes, book, money, costs }: { recipes: MercRecipe[]; book:
         );
       })}
       {open && <RecipeSheet recipe={open} book={book} money={money} cost={costOf(open)} onClose={close} />}
+      {money && <button type="button" className="btn" onClick={() => setImporting(true)}><Icon name="down" />Importer des fiches process</button>}
+      {importing && <ProcessImport onClose={closeImport} />}
     </>
   );
 }
@@ -381,6 +387,7 @@ function RecipeSheet({ recipe, book, money, cost, onClose }: { recipe: MercRecip
         </p>
       )}
       <p className="note">Pour modifier cette fiche : onglet COMPOSITION de la mercuriale. L'appli se met à jour dans les dix minutes.</p>
+      <Link className="btn block" to={`/process?b=${recipe.brand}&d=${encodeURIComponent(recipe.name)}&n=${n || ''}`}><Icon name="list" />Fiche process : étapes et dressage</Link>
     </Sheet>
   );
 }

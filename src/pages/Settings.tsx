@@ -28,7 +28,7 @@ const ADMIN_LINKS: [string, IconName, string, string][] = [
 ];
 
 const plural = (n: number, w: string) => `${n} ${w}${n > 1 ? 's' : ''}`;
-const MERC_ORDER = ['nuba', 'saveurs_nomades', 'comptoir'];
+const MERC_ORDER = ['nuba', 'saveurs_nomades', 'comptoir', 'site'];
 
 const MAIL_STATUS: Record<EmailLogEntry['status'], [string, string]> = {
   queued: ['', 'En attente'],
@@ -252,9 +252,12 @@ export default function Settings() {
                         <span className="t">{m.label}</span>
                         <span className="sub">{!m.synced_at ? 'Jamais reçue' : `Reçue ${fmtDay(m.synced_at)} à ${fmtTime(m.synced_at)} · ${m.brand === 'nuba'
                           ? `${plural(m.counts.plats ?? 0, 'plat')}, ${plural(m.counts.boissons ?? 0, 'boisson')}, ${plural(m.counts.preparations ?? 0, 'préparation')} maison${m.counts.todo ? ` · ${plural(m.counts.todo, 'fiche')} à compléter` : ''}`
-                          : `${plural(m.counts.recipes ?? 0, 'fiche')}, ${plural(m.counts.orders ?? 0, 'commande')}`}`}</span>
+                          : m.brand === 'site'
+                            ? `${plural(m.counts.events ?? 0, 'soirée')}, ${plural(m.counts.weekly ?? 0, 'rendez-vous')} de la semaine${m.counts.expo ? ', une exposition' : ''}`
+                            : `${plural(m.counts.recipes ?? 0, 'fiche')}, ${plural(m.counts.orders ?? 0, 'commande')}`}`}</span>
                         <SyncProblem brand={m.brand} linked={!!m.sheet_url} syncedAt={m.synced_at} log={mercStatus.data?.log ?? []} keyAt={mercStatus.data?.key_created_at ?? null} />
-                        {skipped && <span className="sub" style={{ color: 'var(--warn)' }}>Attention : {skipped.message.replace(/^.*\((.*)\)$/, '$1')}. Vérifie leur date, leur plat et leurs portions dans PRESTATIONS.</span>}
+                        {skipped && m.brand !== 'site' && <span className="sub" style={{ color: 'var(--warn)' }}>Attention : {skipped.message.replace(/^.*\((.*)\)$/, '$1')}. Vérifie leur date, leur plat et leurs portions dans PRESTATIONS.</span>}
+                        {skipped && m.brand === 'site' && <span className="sub" style={{ color: 'var(--warn)' }}>Attention : {skipped.message.replace(/^.*· /, '')}. Dans l'onglet Programmation, chaque soirée a besoin d'une date (JJ/MM/AAAA) et d'un titre.</span>}
                       </div>
                       {m.sheet_url && <div className="end"><a className="btn sm" href={m.sheet_url} target="_blank" rel="noopener noreferrer">Ouvrir</a></div>}
                     </div>
@@ -480,24 +483,34 @@ function MercSheet({ sources, dashboardUrl, keyAt, onClose }: { sources: MercSou
   const [cm, setCm] = useState(urlOf('comptoir'));
   const [nb, setNb] = useState(urlOf('nuba'));
   const [tb, setTb] = useState(dashboardUrl);
+  const [st, setSt] = useState(urlOf('site'));
   const [script, setScript] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function create(e: FormEvent) {
     e.preventDefault();
-    const a = sheetId(sn), b = sheetId(cm), c = sheetId(nb), t = sheetId(tb);
-    const bad = [nb.trim() && !c ? 'Nuba' : '', sn.trim() && !a ? 'Saveurs Nomades' : '', cm.trim() && !b ? 'Comptoir Méditerranéen' : '', tb.trim() && !t ? 'le tableau de bord' : ''].filter(Boolean);
+    const a = sheetId(sn), b = sheetId(cm), c = sheetId(nb), t = sheetId(tb), w = sheetId(st);
+    const bad = [nb.trim() && !c ? 'Nuba' : '', sn.trim() && !a ? 'Saveurs Nomades' : '', cm.trim() && !b ? 'Comptoir Méditerranéen' : '', tb.trim() && !t ? 'le tableau de bord' : '', st.trim() && !w ? 'le contenu du site' : ''].filter(Boolean);
     if (bad.length) return setErr(`Lien non reconnu pour ${bad.join(' et ')}. Ouvre la mercuriale dans Google Sheets et copie l'adresse en haut du navigateur : elle commence par https://docs.google.com/spreadsheets/d/`);
-    if (!a && !b && !c && !t) return setErr('Colle le lien d\'au moins une mercuriale.');
+    if (!a && !b && !c && !t && !w) return setErr('Colle le lien d\'au moins une mercuriale.');
     setBusy(true);
     setErr('');
     const clean = (id: string) => (id ? `https://docs.google.com/spreadsheets/d/${id}/edit` : '');
-    const { data, error } = await supabase.rpc('merc_new_key', { p_sn_url: clean(a), p_cm_url: clean(b), p_nuba_url: clean(c), p_dashboard_url: clean(t) });
+    const args = { p_sn_url: clean(a), p_cm_url: clean(b), p_nuba_url: clean(c), p_dashboard_url: clean(t) };
+    let { data, error } = await supabase.rpc('merc_new_key', { ...args, p_site_url: clean(w) });
+    // Avant la mise à jour 0024, la base ne connaît pas encore le fichier du site.
+    if (error?.code === 'PGRST202') {
+      if (w) {
+        setBusy(false);
+        return setErr("Pour relier le contenu du site, le gérant doit d'abord exécuter la mise à jour 0024 dans Supabase.");
+      }
+      ({ data, error } = await supabase.rpc('merc_new_key', args));
+    }
     setBusy(false);
     if (error) return setErr(frError(error));
-    await refresh('merc', 'dashboard');
-    setScript(buildAppsScript({ url: projectUrl ?? '', publicKey: publicKey ?? '', syncKey: data as string, saveursNomades: a, comptoir: b, nuba: c, tableau: t, date: new Date().toLocaleDateString('fr-FR') }));
+    await refresh('merc', 'dashboard', 'events');
+    setScript(buildAppsScript({ url: projectUrl ?? '', publicKey: publicKey ?? '', syncKey: data as string, saveursNomades: a, comptoir: b, nuba: c, tableau: t, site: w, date: new Date().toLocaleDateString('fr-FR') }));
   }
 
   async function copy() {
@@ -519,6 +532,9 @@ function MercSheet({ sources, dashboardUrl, keyAt, onClose }: { sources: MercSou
           <Field label="Mercuriale Comptoir Méditerranéen"><input className="in" id="merc-cm" inputMode="url" value={cm} onChange={(e) => setCm(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" /></Field>
           <Field label="Tableau de bord financier (gérants seulement)" hint="Ton fichier « Tableau de bord financier » : il ne s'affiche qu'aux gérants.">
             <input className="in" id="merc-tableau" inputMode="url" value={tb} onChange={(e) => setTb(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" />
+          </Field>
+          <Field label="Contenu du site (programmation, exposition)" hint="Le fichier « Nuba · Contenu du site » qui alimente le site web : ses soirées, rendez-vous et exposition arrivent dans Événements.">
+            <input className="in" id="merc-site" inputMode="url" value={st} onChange={(e) => setSt(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" />
           </Field>
           {keyAt ? (
             <p className="err" data-testid="merc-replace">

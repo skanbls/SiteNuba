@@ -944,12 +944,14 @@ async function main() {
   await boss.fill('#merc-cm', 'https://docs.google.com/spreadsheets/d/CM_feuille_test_456/edit');
   await boss.fill('#merc-nuba', 'https://docs.google.com/spreadsheets/d/NB_feuille_test_789/edit');
   await boss.fill('#merc-tableau', 'https://docs.google.com/spreadsheets/d/TB_feuille_test_321/edit');
+  await boss.fill('#merc-site', 'https://docs.google.com/spreadsheets/d/ST_feuille_test_654/edit');
   await boss.getByRole('button', { name: 'Créer le script' }).click();
   const script = await boss.inputValue('#merc-script');
   assert.match(script, /"cleSynchro": "nuba_[0-9a-f]{64}"/);
   assert.match(script, /"saveurs_nomades": "SN_feuille_test_123"/);
   assert.match(script, /"nuba": "NB_feuille_test_789"/);
   assert.match(script, /"tableau": "TB_feuille_test_321"/);
+  assert.match(script, /"site": "ST_feuille_test_654"/);
   await shot(boss, '13za-script-mercuriales');
   await boss.getByRole('button', { name: "C'est fait" }).click();
   // Tant que le script n'est pas collé et lancé, chaque feuille dit qu'elle l'attend.
@@ -1028,6 +1030,19 @@ async function main() {
         'Historique KPI': [['Date', 'Solde retenu', 'Statut 13 semaines'], ['24/11/2026', e(21000), 'VERT'], ['01/12/2026', e(20000), 'ORANGE']],
       };
     })() },
+    // Le contenu du site web : programmation, rendez-vous, exposition (données inventées).
+    ST_feuille_test_654: { name: 'Contenu du site test', tabs: {
+      Programmation: [
+        ['Date', 'Type', 'Titre', 'Description', 'Horaire', 'Entrée', 'Visible', 'Titre EN', 'Réf. Titre', 'Affiche'],
+        [{ d: 'date', v: iso(5) }, 'DJ set', 'Soirée test DJ', 'House et disco.', '22h → 2h', 'Entrée libre', '', 'Test DJ night', 'Soirée test DJ', 'https://drive.google.com/file/d/AfficheTest123456/view?usp=sharing'],
+        [{ d: 'date', v: iso(6) }, 'Concert', 'Concert test', 'Un trio.', '21h → 23h30', '5 €', 'OUI', '', '', ''],
+        [{ d: 'date', v: iso(7) }, 'Quiz', 'Quiz masqué', '', '20h30', '', 'NON', '', '', ''],
+      ],
+      'Chaque semaine': [['Jour', 'Rendez-vous', 'Horaire', 'Visible'], ['Jeudi', 'Quiz test du jeudi', 'dès 20h30', 'OUI'], ['Samedi', 'Caché', '', 'NON']],
+      Exposition: [['Champ', 'Français'], ["Afficher l'exposition", 'OUI'], ['Titre', 'Expo test'], ['Artiste', 'Artiste test, peintures'],
+        ['Début', { d: 'date', v: iso(-2) }], ['Fin', { d: 'date', v: iso(40) }], ['Accès', 'Entrée libre']],
+      'Œuvres': [['Titre', 'Technique', 'Dimensions', 'Image', 'Visible'], ['Toile test', 'Acrylique', '60 × 60 cm', '', '']],
+    } },
     // La mercuriale Nuba : la carte du restaurant, en blocs (données inventées).
     NB_feuille_test_789: { name: 'MERCURIALE NUBA', tabs: {
       'FICHES PLATS': [
@@ -1101,7 +1116,30 @@ async function main() {
   await boss.locator('[data-merc="comptoir"]').getByText('1 fiche, 1 commande').waitFor();
   await boss.locator('[data-merc="nuba"]').getByText('2 plats, 1 boisson, 1 préparation maison · 2 fiches à compléter').waitFor();
   await boss.locator('[data-merc="tableau"]').getByText(/Reçu .* gérants seulement/).waitFor();
+  await boss.locator('[data-merc="site"]').getByText('2 soirées, 1 rendez-vous de la semaine, une exposition').waitFor();
   step('le gérant relie les mercuriales : le script Google généré envoie fiches, commandes et prix');
+
+  // La programmation du site arrive dans Événements, affiche comprise.
+  await theo.goto(APP + '#/evenements');
+  await theo.reload();
+  const dj = theo.locator('[data-event="Soirée test DJ"]');
+  await dj.getByText('DJ set').waitFor();
+  await dj.getByText(/22h → 2h/).waitFor();
+  await theo.locator('[data-event="Concert test"]').waitFor();
+  await theo.locator('[data-event="Expo test"]').waitFor();
+  assert.equal(await theo.locator('[data-event="Quiz masqué"]').count(), 0, 'une soirée masquée dans le fichier ne vient pas');
+  await theo.locator('#weekly [data-weekly="Quiz test du jeudi"]').getByText('Jeudi · dès 20h30').waitFor();
+  await noOverflow(theo, 'programmation');
+  await shot(theo, '13zaa-programmation');
+  await dj.click();
+  const djSheet = theo.getByRole('dialog');
+  await djSheet.locator('[data-site-event]').waitFor();
+  await djSheet.locator('img.poster, a:has-text("Voir l\'affiche")').first().waitFor();
+  await djSheet.getByText('House et disco.').waitFor();
+  await djSheet.getByText('Animateur ou DJ confirmé').waitFor();
+  await shot(theo, '13zab-soiree-du-site');
+  await djSheet.getByRole('button', { name: 'Fermer' }).click();
+  step("la programmation du site arrive toute seule dans Événements : soirées, affiche, exposition, rendez-vous de la semaine");
 
   await theo.goto(APP + '#/production');
   await theo.locator('[data-order="Purée de patate douce + Poulet Moutarde Miel (Mariné)"]').click();
@@ -1122,6 +1160,41 @@ async function main() {
   await noOverflow(theo, 'production');
   await shot(theo, '13zc-production-courses');
   step("l'équipe voit, pour chaque commande, les quantités à produire et la liste de courses par fournisseur");
+
+  // Fiches process : le gérant importe le fichier préparé (étapes, dressage, photo) ; l'équipe l'ouvre depuis la commande.
+  const procFile = 'e2e/.out/fiches-process-test.json';
+  const pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAMCAIAAADkharWAAAAF0lEQVR4nGPc5mXGQApgIkn1qIYRpAEA5BYBTmaiENwAAAAASUVORK5CYII=';
+  fs.writeFileSync(procFile, JSON.stringify({ format: 'nuba-process-1', items: [
+    { brand: 'saveurs_nomades', name: 'Purée de patate douce + Poulet Moutarde Miel (Mariné)', dressing: 'Purée au fond de la barquette.\nPoulet tranché par-dessus.', haccp: 'Fermer et étiqueter aussitôt.', photo: pixel },
+    { brand: 'saveurs_nomades', name: 'Purée de patate douce', steps: '# Cuisson\nÉplucher les patates douces test.\n2. Cuire à l\'eau salée.\n# Finition\nMixer avec le beurre.', haccp: 'Refroidir sous 10 °C en moins de 2 h.' },
+    { brand: 'saveurs_nomades', name: 'Poulet Moutarde Miel (Mariné)', steps: 'Mariner 12 h au froid.\nCuire à cœur à 75 °C.' },
+    { brand: 'nuba', name: 'Ignorée' },
+  ] }));
+  await boss.goto(APP + '#/production');
+  await boss.reload();
+  await boss.getByRole('button', { name: 'Fiches', exact: true }).click();
+  await boss.getByRole('button', { name: 'Importer des fiches process' }).click();
+  await boss.setInputFiles('#process-import', procFile);
+  await boss.getByTestId('process-import-count').getByText('3 fiches dans le fichier, dont 1 avec photo.').waitFor();
+  await boss.getByRole('dialog').getByRole('button', { name: 'Importer', exact: true }).click();
+  await see(boss, '3 fiches process importées');
+  await theo.goto(APP + '#/production');
+  await theo.reload();
+  await theo.locator('[data-order="Purée de patate douce + Poulet Moutarde Miel (Mariné)"]').click();
+  await theo.getByRole('link', { name: 'Fiche process : étapes et dressage' }).click();
+  await see(theo, 'Éplucher les patates douces test.');
+  await theo.locator('.process-phase h3', { hasText: 'Cuisson' }).first().waitFor();
+  await theo.locator('[data-process-qty="Purée de patate douce"]').getByText('17,00 kg').waitFor();
+  await see(theo, 'Cuire à cœur à 75 °C.');
+  await see(theo, 'Poulet tranché par-dessus.');
+  await see(theo, 'Refroidir sous 10 °C en moins de 2 h.');
+  await theo.waitForFunction(() => { const i = document.querySelector('.process-figure img'); return !!i && i.complete && i.naturalWidth > 0; });
+  assert.equal(await theo.getByRole('button', { name: 'Modifier' }).count(), 0, 'un équipier ne modifie pas les fiches process');
+  await noOverflow(theo, 'fiche process');
+  await shot(theo, '13zca-fiche-process');
+  await theo.goto(APP + '#/production');
+  await theo.locator('[data-order="Purée de patate douce + Poulet Moutarde Miel (Mariné)"]').waitFor();
+  step('fiches process : importées par le gérant, ouvertes par l\'équipe depuis la commande, avec étapes, quantités, dressage et photo');
 
   await boss.goto(APP + '#/production');
   await boss.getByRole('button', { name: 'Liste de courses', exact: true }).first().click();

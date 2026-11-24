@@ -20,6 +20,7 @@ import Planning from './pages/Planning';
 import Pointeuse, { PunchFromLink } from './pages/Pointeuse';
 import Procedures from './pages/Procedures';
 import Production from './pages/Production';
+import Process from './pages/Process';
 import Carte from './pages/Carte';
 import DeliveryNote from './pages/DeliveryNote';
 import Dashboard from './pages/Dashboard';
@@ -69,6 +70,7 @@ export default function App({ linkError }: { linkError: string }) {
       <Route path="/commandes" element={<Orders />} />
       <Route path="/fiches" element={<Carte />} />
       <Route path="/production" element={<Production />} />
+      <Route path="/process" element={<Process />} />
       <Route path="/bl/:day" element={<DeliveryNote />} />
       <Route path="/maintenance" element={<Maintenance />} />
       <Route path="/procedures" element={<Procedures />} />
