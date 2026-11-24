@@ -273,7 +273,8 @@ export interface Order {
   order_lines: OrderLine[];
 }
 
-export type ReservationStatus = 'confirmed' | 'seated' | 'no_show' | 'cancelled';
+/** pending : demande à valider (0022) ; declined : demande refusée (0022). */
+export type ReservationStatus = 'pending' | 'confirmed' | 'seated' | 'no_show' | 'cancelled' | 'declined';
 export type ReservationSource = 'en_ligne' | 'telephone' | 'sur_place' | 'instagram' | 'autre';
 
 export interface Reservation {
@@ -291,6 +292,8 @@ export interface Reservation {
   status: ReservationStatus;
   created_by: string | null;
   created_at: string;
+  /** Migration 0022 : rappel de la veille envoyé. */
+  reminded_at?: string | null;
 }
 
 export interface BookingSettings {
@@ -302,6 +305,8 @@ export interface BookingSettings {
   capacity_per_slot: number | null;
   phone: string;
   notice: string;
+  /** Migration 0022 : à partir de combien de personnes une réservation en ligne est une demande à valider (null : jamais). */
+  review_from?: number | null;
 }
 
 export interface OpeningHour {
@@ -323,6 +328,8 @@ export interface BookingInfo {
   notice: string;
   today: string;
   open_weekdays: number[];
+  /** Migration 0022 : seuil des demandes à valider (null : jamais). */
+  review_from?: number | null;
 }
 
 export type CustomerKind = 'particulier' | 'entreprise' | 'artiste' | 'prestataire';
@@ -531,6 +538,8 @@ export interface EmailSettings {
   notify_documents?: boolean;
   /** Migration 0021 : absent avant. */
   notify_payslips?: boolean;
+  /** Migration 0022 : rappel la veille aux clients. */
+  remind_booking?: boolean;
 }
 
 export interface EmailLogEntry {

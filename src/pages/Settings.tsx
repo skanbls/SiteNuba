@@ -664,8 +664,28 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
   const [busy, setBusy] = useState(false);
   const text = (k: 'sender_name' | 'sender_email' | 'notify_email' | 'app_url' | 'signature') =>
     (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF((s) => ({ ...s, [k]: e.target.value }));
-  const flag = (k: 'enabled' | 'confirm_booking' | 'notify_booking' | 'notify_event' | 'notify_documents' | 'notify_payslips') =>
+  const flag = (k: 'enabled' | 'confirm_booking' | 'notify_booking' | 'notify_event' | 'notify_documents' | 'notify_payslips' | 'remind_booking') =>
     (e: ChangeEvent<HTMLInputElement>) => setF((s) => ({ ...s, [k]: e.target.checked }));
+  // Les rappels de la veille partent d'une tâche planifiée de Supabase (pg_cron), créée par la mise à jour 0022.
+  const reminders = useQuery({
+    queryKey: ['emails', 'reminders'],
+    enabled: settings.remind_booking !== undefined,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('reminders_status');
+      if (error) throw error;
+      return data as { scheduled: boolean; sent_today: number };
+    },
+  });
+
+  async function schedule() {
+    setBusy(true);
+    const { data, error } = await supabase.rpc('schedule_booking_reminders');
+    setBusy(false);
+    if (error) return toast(frError(error), 'bad');
+    if (!data) return toast("pg_cron n'est pas activé : dans Supabase, Database, Extensions, active « pg_cron », puis réessaie.", 'bad');
+    await refresh('emails');
+    toast('Rappels planifiés : chaque jour à partir de 10 h');
+  }
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -682,6 +702,7 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
       confirm_booking: f.confirm_booking, notify_booking: f.notify_booking, notify_event: f.notify_event,
       ...(f.notify_documents === undefined ? {} : { notify_documents: f.notify_documents }),
       ...(f.notify_payslips === undefined ? {} : { notify_payslips: f.notify_payslips }),
+      ...(f.remind_booking === undefined ? {} : { remind_booking: f.remind_booking }),
     }).eq('id', true);
     setBusy(false);
     if (error) return setErr(frError(error));
@@ -718,8 +739,24 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
         <Field label="Adresse qui reçoit les alertes" hint="Réservations et demandes en ligne. Vide : pas d'alerte."><input className="in" id="mail-notify" type="email" inputMode="email" value={f.notify_email} onChange={text('notify_email')} /></Field>
         <label className="row" style={{ padding: 0, gap: 10 }}>
           <input id="mail-confirm" type="checkbox" checked={f.confirm_booking} onChange={flag('confirm_booking')} style={box} />
-          <span className="grow"><span className="t">Confirmer au client</span><span className="sub">Chaque réservation en ligne et chaque annulation, s'il a donné son adresse</span></span>
+          <span className="grow"><span className="t">Confirmer au client</span><span className="sub">Chaque réservation (en ligne, ou prise par l'équipe quand elle le demande), chaque réponse à une demande et chaque annulation, s'il a donné son adresse</span></span>
         </label>
+        {f.remind_booking !== undefined && (
+          <label className="row" style={{ padding: 0, gap: 10 }}>
+            <input id="mail-remind" type="checkbox" checked={f.remind_booking} onChange={flag('remind_booking')} style={box} />
+            <span className="grow">
+              <span className="t">Rappel au client la veille</span>
+              <span className="sub">À partir de 10 h, pour chaque réservation du lendemain avec une adresse e-mail.</span>
+              {reminders.data && !reminders.data.scheduled && (
+                <span className="sub" style={{ color: 'var(--bad)' }}>Pas encore planifiés. Si le bouton ci-dessous échoue : dans Supabase, ouvre Database, Extensions, active « pg_cron », puis réessaie.</span>
+              )}
+              {reminders.data?.scheduled && <span className="sub">Planifiés · {reminders.data.sent_today} rappel{reminders.data.sent_today > 1 ? 's' : ''} envoyé{reminders.data.sent_today > 1 ? 's' : ''} ces dernières 24 heures</span>}
+            </span>
+          </label>
+        )}
+        {reminders.data && !reminders.data.scheduled && (
+          <button type="button" className="btn" id="mail-schedule" disabled={busy} onClick={() => void schedule()}><Icon name="cal" />Planifier les rappels</button>
+        )}
         <label className="row" style={{ padding: 0, gap: 10 }}>
           <input id="mail-booking" type="checkbox" checked={f.notify_booking} onChange={flag('notify_booking')} style={box} />
           <span className="grow"><span className="t">M'alerter des réservations en ligne</span><span className="sub">Nouvelle réservation, annulation par le client</span></span>

@@ -22,6 +22,7 @@ En ligne : https://skanbls.github.io/SiteNuba/ (mise à jour automatique à chaq
 | | Formulaire de réservation du site web relié à l'appli | Fichier du site remis au gérant, à publier avec le site |
 | | E-mails : confirmation au client, alertes à la Nuba | Prêt avec la migration 0010 ; à activer après la mise en route de Brevo (Administration, E-mails) |
 | | E-mails des comptes de l'équipe (inscription, mot de passe oublié) | À régler dans Supabase : SMTP de Brevo (voir plus bas) |
+| | Réservations : demandes à valider au-delà d'un nombre de personnes (« demande reçue » puis « confirmée » ou refus), confirmation par e-mail des réservations prises par l'équipe, rappel la veille, e-mails mis en page avec le logo | **En ligne**, une fois la migration 0022 exécutée ; rappels à planifier dans Administration, E-mails (pg_cron) ; nouveau fichier du site remis au gérant |
 | 6. Production | Mercuriales Saveurs Nomades et Comptoir Méditerranéen : fiches, commandes clients, quantités à produire, liste de courses | **En ligne**, une fois les migrations 0011 à 0014 exécutées et le script Google installé (Administration, Mercuriales) |
 | | Numéros utiles : urgences, dépannage, fournisseurs, équipe ; modifiés par le gérant et les responsables | **En ligne**, une fois la migration 0015 exécutée |
 | | Accès de la comptable : heures travaillées seulement, fichier pour la paie | **En ligne**, une fois la migration 0016 exécutée |
@@ -126,7 +127,7 @@ L'appli se met à jour toute seule : elle cherche une nouvelle version à chaque
 
 ## Relier l'appli à Supabase
 
-Pour une base qui a déjà les scripts 0001 à 0003, `supabase/installation/0004-a-0009.sql` regroupe les six suivants en un seul collage, tout ou rien. Les migrations 0010 à 0021 se collent ensuite une par une ; elles aussi passent en entier ou pas du tout.
+Pour une base qui a déjà les scripts 0001 à 0003, `supabase/installation/0004-a-0009.sql` regroupe les six suivants en un seul collage, tout ou rien. Les migrations 0010 à 0022 se collent ensuite une par une ; elles aussi passent en entier ou pas du tout.
 
 1. Créer un projet sur supabase.com, région Europe.
 2. Dans **SQL Editor**, coller et exécuter les fichiers de `supabase/migrations/`, dans l'ordre de leur numéro.

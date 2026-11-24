@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Avatar, Layout, Loading, Section } from '../components/ui';
 import { parseBoard } from '../lib/dashboard';
-import { useDashboard, useEntries, useMyOpenEntry, useOpenEntries, useShifts, useTeam, useTodayTasks } from '../lib/data';
+import { useDashboard, useEntries, useMyOpenEntry, useOpenEntries, usePendingBookings, useShifts, useTeam, useTodayTasks } from '../lib/data';
 import { norm } from '../lib/production';
 import { useMe } from '../lib/session';
 import { addDays, dayKey, fmtDayLong, fmtDur, fmtTime, periodRange, workedMs } from '../lib/time';
@@ -42,6 +42,7 @@ export default function Today() {
   const people = new Map((team.data ?? []).map((p) => [p.id, p]));
   const tasks = useTodayTasks();
   const t = tasks.data;
+  const pendingCount = usePendingBookings(t?.day, t?.bookings !== undefined).data?.length ?? 0;
 
   return (
     <Layout title="Aujourd'hui">
@@ -139,8 +140,9 @@ export default function Today() {
                 <div className="grow">
                   <span className="t">Réservations du jour</span>
                   <span className="sub num">{t.bookings === 0 ? 'Aucune pour l\'instant' : `${t.bookings} réservation${t.bookings > 1 ? 's' : ''} · ${t.covers} couvert${(t.covers ?? 0) > 1 ? 's' : ''}`}</span>
+                  {pendingCount > 0 && <span className="sub">{pendingCount} demande{pendingCount > 1 ? 's' : ''} de réservation à valider</span>}
                 </div>
-                <span className="chev"><Icon name="chev" size={18} /></span>
+                <div className="end">{pendingCount > 0 && <span className="pill warn">À valider</span>}<span className="chev"><Icon name="chev" size={18} /></span></div>
               </Link>
             )}
             {t.low_stock !== undefined && (t.low_stock > 0 || (t.deliveries ?? 0) > 0) && (

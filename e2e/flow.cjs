@@ -650,6 +650,54 @@ async function main() {
   assert.equal(await hours.getByRole('button', { name: '21:30' }).count(), 0, 'le gérant a ramené le dernier créneau du mardi à 21 h');
   step('le gérant règle la capacité et les créneaux ; la page publique suit');
 
+  // Demandes à valider : à partir de 6 personnes, la réservation en ligne attend la réponse de l'équipe.
+  await boss.getByRole('button', { name: 'Réglages et lien de réservation' }).click();
+  await boss.selectOption('#bk-review', '6');
+  await boss.getByRole('button', { name: 'Enregistrer les réglages' }).click();
+  await see(boss, 'Réglages des réservations enregistrés');
+  await client.goto(APP + '#/reserver');
+  await client.reload();
+  await client.getByRole('button', { name: '7 personnes', exact: true }).click();
+  await client.fill('#book-day', bookDay);
+  await hours.getByRole('button', { name: '19:30' }).click();
+  await client.locator('#book-review').getByText("l'équipe confirme chaque réservation").waitFor();
+  await client.fill('#book-name', 'Groupe Lefèvre');
+  await client.fill('#book-phone', '06 22 33 44 55');
+  await client.fill('#book-email', 'lefevre@exemple.fr');
+  await client.getByRole('button', { name: /Demander une table pour 7 personnes/ }).click();
+  await see(client, 'Demande envoyée');
+  await shot(client, '13q2-demande-envoyee');
+  const follow = await client.getByRole('link', { name: 'Suivre ma demande' }).getAttribute('href');
+  await client.goto(follow);
+  await see(client, 'Demande en attente');
+  await theo.goto(APP + '#/reservations');
+  await theo.reload();
+  const ask = theo.locator('#res-pending [data-ask="Groupe Lefèvre"]');
+  await ask.getByText('Groupe Lefèvre · 7 pers.').waitFor();
+  await see(theo, 'Demandes à valider · 1');
+  await noOverflow(theo, 'demandes à valider');
+  await shot(theo, '13q3-demandes-a-valider');
+  await ask.getByRole('button', { name: 'Accepter' }).click();
+  await see(theo, 'Groupe Lefèvre : réservation confirmée');
+  await theo.locator('#res-pending').waitFor({ state: 'detached' });
+  await client.reload();
+  await see(client, 'Votre réservation confirmée');
+  step("à partir de 6 personnes, la réservation en ligne est une demande : l'équipe l'accepte, le client le voit");
+
+  await theo.getByRole('button', { name: 'Réservation', exact: true }).click();
+  await theo.fill('#res-d', bookDay);
+  await theo.fill('#res-name', 'Famille Roche');
+  await theo.fill('#res-party', '3');
+  await theo.fill('#res-slot', '12:30');
+  await theo.fill('#res-email', 'roche@exemple.fr');
+  assert.ok(await theo.locator('#res-notify').isChecked(), 'la confirmation par e-mail est proposée');
+  await shot(theo, '13q4-reservation-telephone');
+  await theo.getByRole('button', { name: 'Enregistrer' }).click();
+  await see(theo, 'Réservation ajoutée, confirmation envoyée par e-mail');
+  await theo.fill('#res-day', bookDay);
+  await theo.locator('[data-res="Famille Roche"]').getByText('Famille Roche · 3 pers.').waitFor();
+  step("une réservation prise au téléphone part avec sa confirmation par e-mail");
+
   // 13 septies. Événements et fichier clients.
   await client.goto(APP + '#/privatiser');
   await see(client, 'Votre événement à la Nuba');
@@ -862,6 +910,9 @@ async function main() {
   await boss.locator('#mail-enabled').check();
   await boss.fill('#mail-from', 'reservations@nuba.test');
   await boss.fill('#mail-notify', 'boss@nuba.test');
+  assert.ok(await boss.locator('#mail-remind').isChecked(), 'le rappel de la veille est proposé');
+  await boss.getByRole('button', { name: 'Planifier les rappels' }).click();
+  await see(boss, "pg_cron n'est pas activé");
   await shot(boss, '13y-emails');
   await boss.getByRole('button', { name: 'Enregistrer' }).click();
   await see(boss, 'Réglages des e-mails enregistrés');

@@ -192,6 +192,16 @@ export function useReservations(day: string) {
   });
 }
 
+/** Demandes de réservation à valider, du jour donné (AAAA-MM-JJ) aux suivants. */
+export function usePendingBookings(from: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ['reservations', 'pending', from],
+    enabled: enabled && !!from,
+    queryFn: async () => must<Reservation[]>(await supabase.from('reservations').select('*').eq('status', 'pending').gte('day', from!).order('day').order('slot')),
+    refetchInterval: 60_000,
+  });
+}
+
 export function useBookingSettings(enabled: boolean) {
   return useQuery({
     queryKey: ['booking', 'settings'],

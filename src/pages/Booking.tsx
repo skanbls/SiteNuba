@@ -42,7 +42,7 @@ export default function Booking() {
   const [trap, setTrap] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<{ id: string; code: string; emailed: boolean } | null>(null);
+  const [done, setDone] = useState<{ id: string; code: string; emailed: boolean; pending: boolean } | null>(null);
 
   useEffect(() => {
     document.title = 'Réserver une table · La Nuba';
@@ -79,8 +79,8 @@ export default function Booking() {
     const { data, error } = await supabase.rpc('book_table', { p_day: day, p_slot: slot, p_party: party, p_name: name, p_phone: phone, p_email: email, p_note: note, p_trap: trap });
     setBusy(false);
     if (error) return setErr(unreachable);
-    const r = data as { ok: boolean; id?: string; code?: string; emailed?: boolean; error?: string };
-    if (r.ok && r.id && r.code) return setDone({ id: r.id, code: r.code, emailed: !!r.emailed });
+    const r = data as { ok: boolean; id?: string; code?: string; emailed?: boolean; status?: string; error?: string };
+    if (r.ok && r.id && r.code) return setDone({ id: r.id, code: r.code, emailed: !!r.emailed, pending: r.status === 'pending' });
     setErr(BOOK_ERROR[r.error ?? ''] ?? 'La réservation n\'a pas pu être enregistrée.');
     if (r.error === 'slot') {
       setSlot('');
@@ -90,6 +90,7 @@ export default function Booking() {
   }
 
   if (loadErr) return <div className="full"><div className="card wide"><BrandHead /><h1 className="vh">La Nuba</h1><p className="err" role="alert">{loadErr}</p></div></div>;
+  const review = !!info && info.review_from != null && party >= info.review_from;
   if (!info) return <div className="full"><Spinner /></div>;
 
   if (done) {
@@ -99,16 +100,18 @@ export default function Booking() {
         <div className="card wide">
           <BrandHead />
           <div>
-            <h1>C'est réservé</h1>
-            <p className="sub">La Nuba vous attend.</p>
+            <h1>{done.pending ? 'Demande envoyée' : "C'est réservé"}</h1>
+            <p className="sub">{done.pending ? "L'équipe vous répond très vite." : 'La Nuba vous attend.'}</p>
           </div>
           <div className="list">
             <div className="row"><div className="grow"><span className="sub">Quand</span><span className="t">{longDay(day)} à {slot.replace(':', ' h ')}</span></div></div>
             <div className="row"><div className="grow"><span className="sub">Pour</span><span className="t">{people(party)}, au nom de {name.trim()}</span></div></div>
           </div>
-          <p>Un empêchement ? Annulez en un geste avec ce lien, à garder précieusement :</p>
-          <a className="btn" href={link}>Voir ou annuler ma réservation</a>
-          <p className="note">{done.emailed ? 'Une confirmation part à votre adresse e-mail, avec ce lien.' : 'Faites une capture d\'écran de cette page ou enregistrez le lien.'} Pour toute question, joignez-nous <Phone phone={info.phone} />.</p>
+          {done.pending ? (
+            <p>Pour un groupe, l'équipe confirme chaque réservation. Votre table vous est gardée en attendant {done.emailed ? 'et vous recevez sa réponse par e-mail.' : ': suivez sa réponse avec ce lien.'}</p>
+          ) : <p>Un empêchement ? Annulez en un geste avec ce lien, à garder précieusement :</p>}
+          <a className="btn" href={link}>{done.pending ? 'Suivre ma demande' : 'Voir ou annuler ma réservation'}</a>
+          <p className="note">{done.emailed ? (done.pending ? 'Un e-mail part à votre adresse, avec ce lien.' : 'Une confirmation part à votre adresse e-mail, avec ce lien.') : 'Faites une capture d\'écran de cette page ou enregistrez le lien.'} Pour toute question, joignez-nous <Phone phone={info.phone} />.</p>
         </div>
       </div>
     );
@@ -187,7 +190,8 @@ export default function Booking() {
                     <div aria-hidden="true" style={{ position: 'absolute', left: -9999, width: 1, height: 1, overflow: 'hidden' }}>
                       <label>Site web<input tabIndex={-1} autoComplete="off" value={trap} onChange={(e) => setTrap(e.target.value)} /></label>
                     </div>
-                    <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : `Réserver pour ${people(party)}, ${fromDayKey(day).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à ${slot}`}</button>
+                    {review && <p className="note" id="book-review">À partir de {people(info.review_from ?? 0)}, l'équipe confirme chaque réservation : vous recevez sa réponse très vite.</p>}
+                    <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : `${review ? 'Demander une table' : 'Réserver'} pour ${people(party)}, ${fromDayKey(day).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à ${slot}`}</button>
                     <p className="note">Vos coordonnées servent uniquement à gérer cette réservation. Seule l'équipe de la Nuba y a accès.</p>
                   </section>
                 )}
@@ -200,6 +204,11 @@ export default function Booking() {
     </div>
   );
 }
+
+const MANAGE_TITLE: Record<string, string> = {
+  cancelled: 'Réservation annulée', pending: 'Demande en attente', declined: 'Demande non retenue',
+  seated: 'Votre réservation', no_show: 'Votre réservation', confirmed: 'Votre réservation confirmée',
+};
 
 /** Voir ou annuler sa réservation, avec le lien reçu à la confirmation. */
 export function BookingManage() {
@@ -237,7 +246,7 @@ export function BookingManage() {
         ) : (
           <>
             <div>
-              <h1>{b.status === 'cancelled' ? 'Réservation annulée' : 'Votre réservation'}</h1>
+              <h1>{MANAGE_TITLE[b.status] ?? 'Votre réservation'}</h1>
               <p className="sub">La Nuba, Toulouse</p>
             </div>
             <div className="list">
@@ -245,12 +254,14 @@ export function BookingManage() {
               <div className="row"><div className="grow"><span className="sub">Pour</span><span className="t">{people(b.party)}, au nom de {b.name}</span></div></div>
             </div>
             {b.status === 'cancelled' && <p>Votre réservation est bien annulée. À une prochaine fois.</p>}
-            {b.status === 'confirmed' && (confirm ? (
+            {b.status === 'pending' && <p>L'équipe n'a pas encore confirmé votre demande : votre table vous est gardée en attendant sa réponse.</p>}
+            {b.status === 'declined' && <p>Nous ne pouvons pas vous accueillir à cette date. Appelez-nous : nous trouverons peut-être une autre solution ensemble.</p>}
+            {(b.status === 'confirmed' || b.status === 'pending') && (confirm ? (
               <div className="acts">
                 <button type="button" className="btn" onClick={() => setConfirm(false)}>Je la garde</button>
                 <button type="button" className="btn no" disabled={busy} onClick={() => void cancel()}>{busy ? <Spinner /> : 'Oui, annuler'}</button>
               </div>
-            ) : <button type="button" className="btn no" onClick={() => setConfirm(true)}>Annuler ma réservation</button>)}
+            ) : <button type="button" className="btn no" onClick={() => setConfirm(true)}>{b.status === 'pending' ? 'Annuler ma demande' : 'Annuler ma réservation'}</button>)}
             {err && <p className="err" role="alert">{err}</p>}
             <p className="note">Pour modifier l'heure ou le nombre de personnes, joignez-nous <Phone phone={b.phone} />.</p>
             <a className="link" href={`${appUrl()}#/reserver`}>Faire une nouvelle réservation</a>

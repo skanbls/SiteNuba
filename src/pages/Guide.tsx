@@ -134,7 +134,8 @@ const PARTS: Part[] = [
     body: (
       <ol>
         <li>Les réservations du jour sont dans <b>Réservations</b>. Celles faites sur le site arrivent toutes seules.</li>
-        <li>Un client réserve par téléphone ou sur place : touche <B>Réservation</B> et note son nom, l'heure, le nombre de personnes et son téléphone.</li>
+        <li>Un client réserve par téléphone ou sur place : touche <B>Réservation</B> et note son nom, l'heure, le nombre de personnes et son téléphone. Note aussi son e-mail s'il le donne : la case <b>Envoyer la confirmation par e-mail</b> lui envoie la confirmation, et il reçoit un rappel la veille.</li>
+        <li>Pour un groupe, une réservation faite en ligne peut arriver en <b>Demandes à valider</b>, en haut de l'écran. Touche <B>Accepter</B> : le client reçoit la confirmation. Ou <B>Refuser</B>, avec un petit mot pour lui.</li>
         <li>Quand les clients arrivent : <B>Arrivés</B>. S'ils ne viennent pas : <B>Absents</B>.</li>
       </ol>
     ),
