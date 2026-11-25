@@ -234,11 +234,12 @@ export default function Planning() {
                     return (
                       <td key={k}>
                         {mine.map((s) => editor ? (
-                          <button type="button" key={s.id} className={`shift ${areaClass(s.area)}`} onClick={() => setEditing({ shift: s })} aria-label={`${p.first_name}, ${shiftLine(s)}`}>
+                          <button type="button" key={s.id} className={`shift ${areaClass(s.area)}${s.source === 'sheet' ? ' from-sheet' : ''}`} onClick={() => setEditing({ shift: s })}
+                            aria-label={`${p.first_name}, ${shiftLine(s)}${s.source === 'sheet' ? ', venu du fichier' : ''}`} data-source={s.source}>
                             {fmtTime(s.starts_at)}–{fmtTime(s.ends_at)}<small>{s.area || 'Poste non précisé'}</small>
                           </button>
                         ) : (
-                          <span key={s.id} className={`shift ${areaClass(s.area)}`}>{fmtTime(s.starts_at)}–{fmtTime(s.ends_at)}<small>{s.area || 'Poste non précisé'}</small></span>
+                          <span key={s.id} className={`shift ${areaClass(s.area)}${s.source === 'sheet' ? ' from-sheet' : ''}`} data-source={s.source}>{fmtTime(s.starts_at)}–{fmtTime(s.ends_at)}<small>{s.area || 'Poste non précisé'}</small></span>
                         ))}
                         {away && <span className="off away" data-away={`${p.first_name} ${k}`}>{leaveTag(away)}</span>}
                         {mine.length === 0 && (away ? null : editor ? (
@@ -253,6 +254,9 @@ export default function Planning() {
           </table>
         </div>
         {editor && <p className="note">Touche une case vide pour ajouter un service, ou un service pour le modifier.</p>}
+        {list.some((s) => s.source === 'sheet') && (
+          <p className="note" data-testid="planning-sheet-note">Les services avec un trait à gauche viennent de l'onglet « Planning équipe » du tableau de bord : ils se mettent à jour tout seuls quand le fichier change. Chacun est prévenu quand son planning change.</p>
+        )}
       </Section>
 
       <div className="cols">
@@ -401,6 +405,12 @@ function ShiftSheet({ editing, team, sites, leaves, onClose }: { editing: Exclud
         <Field label="Note">
           <input className="in" id="shift-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} placeholder="Facultatif" />
         </Field>
+        {old?.source === 'sheet' && (
+          <p className="note" data-testid="shift-from-sheet">
+            Ce service vient de l'onglet « Planning équipe » du tableau de bord. Le poste et la note suivent le fichier.
+            Si tu changes ici l'horaire ou la personne, ou si tu le supprimes, l'appli garde ta version : le fichier ne le remettra pas tant que sa ligne ne change pas.
+          </p>
+        )}
         {away && <p className="err">Cette personne a une absence acceptée ce jour-là.</p>}
         {err && <p className="err" role="alert">{err}</p>}
         <button className="btn pri block" disabled={busy}>{busy ? <Spinner /> : 'Enregistrer'}</button>

@@ -5,6 +5,7 @@ import Account from './pages/Account';
 import { Login, NewPassword, NoAccess, Setup, Splash } from './pages/Gate';
 import Booking, { BookingManage, EventRequest } from './pages/Booking';
 import Checklists from './pages/Checklists';
+import Closing from './pages/Closing';
 import Customers from './pages/Customers';
 import Events from './pages/Events';
 import HoursPreview, { AccountantHome } from './pages/Hours';
@@ -64,6 +65,7 @@ export default function App({ linkError }: { linkError: string }) {
       <Route path="/checklists" element={<Checklists />} />
       <Route path="/reservations" element={<Reservations />} />
       <Route path="/evenements" element={<Events />} />
+      <Route path="/caisse" element={<Closing />} />
       <Route path="/clients" element={<Customers />} />
       <Route path="/hygiene" element={<Hygiene />} />
       <Route path="/stocks" element={<Stocks />} />

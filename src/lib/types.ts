@@ -54,6 +54,23 @@ export interface Shift {
   ends_at: string;
   area: string;
   note: string;
+  /** Migration 0027 : 'sheet' quand le service vient de l'onglet « Planning équipe » du fichier tableau de bord. */
+  source?: 'app' | 'sheet';
+}
+
+/** Migration 0027 : un service ajouté, modifié ou retiré, montré à la personne jusqu'à « C'est noté ». */
+export interface ShiftChange {
+  id: number;
+  kind: 'added' | 'changed' | 'removed';
+  starts_at: string;
+  ends_at: string;
+  area: string;
+  old_starts_at: string | null;
+  old_ends_at: string | null;
+  old_area: string | null;
+  created_at: string;
+  /** L'e-mail récapitulatif est parti (ou a été préparé). */
+  emailed_at: string | null;
 }
 
 export type RequestStatus = 'pending' | 'approved' | 'refused';
@@ -570,6 +587,9 @@ export interface EmailSettings {
   remind_booking?: boolean;
   /** Migration 0025 : rappel la veille des tâches de la semaine et du mois. */
   remind_tasks?: boolean;
+  /** Migrations 0026 et 0027 : récapitulatif de la caisse au gérant, e-mail à chacun quand son planning change. */
+  notify_closing?: boolean;
+  notify_planning?: boolean;
 }
 
 export interface EmailLogEntry {

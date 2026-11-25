@@ -1,14 +1,17 @@
-import { useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon } from '../components/Icon';
-import { Avatar, Layout, Loading, Section } from '../components/ui';
+import { Avatar, Layout, Loading, Section, useToast } from '../components/ui';
 import { parseBoard } from '../lib/dashboard';
-import { useChecklists, useDashboard, useEntries, useMyOpenEntry, useOpenEntries, usePendingBookings, useShifts, useSiteWeekly, useTeam, useTodayTasks } from '../lib/data';
+import { useChecklists, useClosingToday, useDashboard, useEntries, useMyOpenEntry, useOpenEntries, usePendingBookings, useShiftChanges, useShifts, useSiteWeekly, useTeam, useTodayTasks } from '../lib/data';
 import { forMeToday, forMeTomorrow, isLate } from '../lib/checklists';
+import { netChanges } from '../lib/shiftChanges';
 import { norm } from '../lib/production';
 import { useMe } from '../lib/session';
+import { frError, supabase } from '../lib/supabase';
 import { addDays, dayKey, fmtDayLong, fmtDur, fmtTime, fromDayKey, periodRange, workedMs } from '../lib/time';
-import { EVENT_KIND, fullName, type Shift, type TimeEntry } from '../lib/types';
+import { EVENT_KIND, fullName, type Shift, type ShiftChange, type TimeEntry } from '../lib/types';
 
 const startOfToday = () => {
   const d = new Date();
@@ -52,6 +55,9 @@ export default function Today() {
   const weekly = useSiteWeekly(!!t);
   const isoDay = t?.day ? ((fromDayKey(t.day).getDay() + 6) % 7) + 1 : 0;
   const weeklyToday = (weekly.data ?? []).filter((w) => w.weekday === isoDay);
+  // Fermeture de caisse du soir, et mes services changés depuis ma dernière visite.
+  const closing = useClosingToday().data;
+  const changes = netChanges(useShiftChanges().data ?? []);
 
   return (
     <Layout title="Aujourd'hui">
@@ -73,6 +79,8 @@ export default function Today() {
           {e ? 'Ouvrir la pointeuse' : 'Pointer mon arrivée'}
         </Link>
       </div>
+
+      {changes.length > 0 && <PlanningChanged changes={changes} />}
 
       {t && (
         <Section title="À faire aujourd'hui">
@@ -191,6 +199,20 @@ export default function Today() {
                 <div className="end">{pendingCount > 0 && <span className="pill warn">À valider</span>}<span className="chev"><Icon name="chev" size={18} /></span></div>
               </Link>
             )}
+            {closing && (
+              <Link className="row" to="/caisse" data-testid="today-caisse">
+                <div className="grow">
+                  <span className="t">Fermeture de caisse</span>
+                  <span className="sub num">{closing.closing?.status === 'closed'
+                    ? `Faite${closing.closed_by_name ? ` par ${closing.closed_by_name}` : ''}${closing.closing.z_total !== null ? ` · ${closing.closing.z_total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} TTC` : ''}`
+                    : closing.closing ? 'Brouillon commencé : à finir en fin de journée' : 'En fin de journée : le Z, le comptage, le terminal CB'}</span>
+                </div>
+                <div className="end">
+                  {closing.closing?.status === 'closed' ? <span className="pill ok">Faite</span> : closing.closing ? <span className="pill warn">Brouillon</span> : null}
+                  <span className="chev"><Icon name="chev" size={18} /></span>
+                </div>
+              </Link>
+            )}
             {t.low_stock !== undefined && (t.low_stock > 0 || (t.deliveries ?? 0) > 0) && (
               <Link className="row wrap" to={t.low_stock > 0 ? '/stocks' : '/commandes'}>
                 <div className="grow">
@@ -253,6 +275,40 @@ export default function Today() {
 }
 
 /** Qui est prévu aujourd'hui et où chacun en est : prévu, en retard, en service, en pause, parti. Plus les présents non prévus. */
+const slot = (a: string, b: string, area: string | null) =>
+  `${fmtDayLong(a)}, ${fmtTime(a)} – ${fmtTime(b)}${area ? ` (${area})` : ''}`;
+
+/** Mes services ajoutés, modifiés ou retirés : visibles jusqu'à « C'est noté » (un e-mail part aussi, si le gérant l'a activé). */
+function PlanningChanged({ changes }: { changes: ShiftChange[] }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  async function ack() {
+    setBusy(true);
+    const { error } = await supabase.rpc('ack_shift_changes');
+    setBusy(false);
+    if (error) return toast(frError(error), 'bad');
+    await qc.invalidateQueries({ queryKey: ['shift-changes'] });
+  }
+  return (
+    <Section title="Ton planning a changé" right={<Link className="link" to="/planning">Planning</Link>}>
+      <div className="list" data-testid="planning-changed">
+        {changes.map((c) => (
+          <div className="row" key={c.id} data-change={c.kind}>
+            <div className="grow">
+              <span className="t">{c.kind === 'added' ? 'Nouveau service' : c.kind === 'removed' ? 'Service retiré' : 'Service modifié'}</span>
+              <span className="sub" style={c.kind === 'removed' ? { textDecoration: 'line-through' } : undefined}>{slot(c.starts_at, c.ends_at, c.area)}</span>
+              {c.kind === 'changed' && c.old_starts_at && c.old_ends_at && <span className="sub">Avant : {slot(c.old_starts_at, c.old_ends_at, c.old_area)}</span>}
+            </div>
+            <div className="end"><span className={`pill ${c.kind === 'removed' ? 'bad' : c.kind === 'added' ? 'ok' : 'warn'}`}>{c.kind === 'added' ? 'Ajouté' : c.kind === 'removed' ? 'Retiré' : 'Modifié'}</span></div>
+          </div>
+        ))}
+      </div>
+      <button type="button" className="btn pri" disabled={busy} onClick={() => void ack()}>C'est noté</button>
+    </Section>
+  );
+}
+
 function TeamToday({ shifts, open, entries, name }: { shifts: Shift[]; open: TimeEntry[]; entries: TimeEntry[]; name: (id: string) => { first_name: string; last_name: string } | undefined }) {
   const now = Date.now();
   const planned = new Set(shifts.map((s) => s.profile_id));

@@ -7,7 +7,8 @@ type Plain = string | number | Date;
 /** Une case : sa valeur, ou sa valeur et le texte affiché par la feuille. */
 type Cell = Plain | { d: string; v: Plain };
 const isShown = (c: Cell): c is { d: string; v: Plain } => typeof c === 'object' && !(c instanceof Date);
-function fakeGoogle(files: Record<string, { name: string; tabs: Record<string, Cell[][]> }>, answer = '{"ok":true,"counts":{}}') {
+function fakeGoogle(files: Record<string, { name: string; tabs: Record<string, Cell[][]> }>, answer: string | ((url: string) => string) = '{"ok":true,"counts":{}}') {
+  const notes = new Map<string, string>();
   const sent: { url: string; body: { p_key: string; p_payload: Record<string, unknown> }; headers: Record<string, string> }[] = [];
   const props = new Map<string, string>();
   const triggers: { fn: string }[] = [{ fn: 'envoyerSiChangement' }, { fn: 'autreChose' }];
@@ -23,6 +24,11 @@ function fakeGoogle(files: Record<string, { name: string; tabs: Record<string, C
               getValues: () => f.tabs[n].map((r) => r.map((c) => (isShown(c) ? c.v : c))),
               getDisplayValues: () => f.tabs[n].map((r) => r.map((c) => (isShown(c) ? c.d : String(c)))),
             }),
+            getRange: (r: number, c: number) => ({
+              getNote: () => notes.get(`${n}!${r},${c}`) ?? '',
+              setNote: (x: string) => notes.set(`${n}!${r},${c}`, x),
+              setValue: (v: Plain) => { f.tabs[n][r - 1][c - 1] = v; },
+            }),
           } : null),
         };
       },
@@ -33,7 +39,7 @@ function fakeGoogle(files: Record<string, { name: string; tabs: Record<string, C
     UrlFetchApp: {
       fetch: (url: string, o: { payload: string; headers: Record<string, string> }) => {
         sent.push({ url, body: JSON.parse(o.payload), headers: o.headers });
-        return { getResponseCode: () => 200, getContentText: () => answer };
+        return { getResponseCode: () => 200, getContentText: () => (typeof answer === 'function' ? answer(url) : answer) };
       },
     },
     Utilities: {
@@ -50,7 +56,7 @@ function fakeGoogle(files: Record<string, { name: string; tabs: Record<string, C
     },
     console: { log: () => {} },
   };
-  return { g, sent, props, triggers };
+  return { g, sent, props, triggers, notes };
 }
 
 function run(script: string, g: Record<string, unknown>) {
@@ -280,6 +286,79 @@ describe('script Google des mercuriales', () => {
       expo: { "Afficher l'exposition": 'OUI', Titre: 'Expo test', 'Début': '2026-11-01' },
       works: [{ Titre: 'Toile test', Technique: 'Acrylique', Dimensions: '80 × 60 cm' }],
     });
+  });
+
+  it('lit les semaines types et le calendrier de « Planning équipe », et envoie six semaines de services', () => {
+    const day = (iso: string, n: number) => { const x = new Date(`${iso}T12:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+    const fr = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+    const today = new Date().toISOString().slice(0, 10);
+    const w1 = day(today, 7 - ((new Date(`${today}T12:00:00Z`).getUTCDay() + 6) % 7));   // lundi prochain
+    const w2 = day(w1, 7), w3 = day(w1, 14), w4 = day(w1, 21);
+    const jours = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+    const PLAN: Record<string, Cell[][]> = {
+      'Planning équipe': [
+        ['Planning test'], [],
+        ["Horaires d'ouverture au public"],
+        ['', '', ...jours],
+        ['Lieu test', '', 'Fermé – prod', '12h00 – 00h00', '12h00 – 00h00', '12h00 – 00h00', '12h00 – 02h00', '12h00 – 02h00', '12h00 – 16h00'],
+        [],
+        [`Semaine type A – Test (${fr(w1)} → ${fr(day(w2, 6))})`],
+        ['Personne', 'Poste', ...jours, 'Heures/sem'],
+        ['Léa TEST', 'Cheffe de cuisine', 'Repos', '10:00–14:00 / 18:30–22:30', 'Repos', 'Repos', 'Repos', 'Repos', 'Repos', '8'],
+        ['Sam ESSAI (apprenti)', 'Barmaid – serveuse', '09:30–13:30 · prod Mijote', '17:00–fermeture (pause 30 min)', 'Repos', 'Repos', 'Repos', 'Repos', 'Repos', '11'],
+        ['Inconnu (prestataire)', 'Programmation & bar', '—', 'Soirs d\'événement uniquement', '', '', '', '', ''],
+        ['Heures travaillées par jour'],
+        [`Semaine type B – Test (à partir du ${fr(w3)})`],
+        ['Personne', 'Poste', ...jours],
+        ['Léa TEST', 'Cheffe de cuisine', 'Repos', '09:00–17:00 (pause 30 min)', 'Repos', 'Repos', 'Repos', 'Repos', 'Repos'],
+        [],
+        ['Calendrier hebdomadaire'],
+        ['Semaine du', 'Au', 'Phase', 'Sam', 'Prod Mijote (lundi)', '', 'Jours fériés', '', '', 'Remarques'],
+        [fr(w1), fr(day(w1, 6)), 'A – Test', 'Nuba', 'Sam + gérant'],
+        [fr(w2), fr(day(w2, 6)), 'A – Test', 'X (école)', 'Gérant'],
+        [fr(w3), fr(day(w3, 6)), 'B – Croisière', 'Nuba', 'Sam + gérant'],
+      ],
+    };
+    const { g, sent } = fakeGoogle({ ID_TB: { name: 'TABLEAU', tabs: PLAN } });
+    run(buildAppsScript({ ...opts, saveursNomades: '', comptoir: '', tableau: 'ID_TB' }), g).envoyerMaintenant();
+    const out = sent.find((x) => x.url.endsWith('/sync_planning'))!;
+    const p = out.body.p_payload as { brand: string; from: string; to: string; shifts: { name: string; day: string; start: string; end: string; area: string; note: string }[] };
+    expect(p.brand).toBe('planning');
+    expect(p.from).toBe(today);
+    expect(p.to).toBe(day(today, 41));
+    const at = (name: string, d: string) => p.shifts.filter((x) => x.name === name && x.day === d).map((x) => `${x.start}-${x.end}|${x.area}|${x.note}`);
+    expect(at('Léa TEST', day(w1, 1))).toEqual(['10:00-14:00|Cuisine|', '18:30-22:30|Cuisine|']);
+    expect(at('Sam ESSAI (apprenti)', w1)).toEqual(['09:30-13:30|Bar|prod Mijote']);
+    expect(at('Sam ESSAI (apprenti)', day(w1, 1))).toEqual(['17:00-00:00|Bar|pause 30 min']);
+    expect(p.shifts.filter((x) => x.name.startsWith('Sam') && x.day >= w2 && x.day < w3)).toEqual([]);   // à l'école
+    expect(at('Léa TEST', day(w3, 1))).toEqual(['09:00-17:00|Cuisine|pause 30 min']);
+    expect(at('Léa TEST', day(w4, 1))).toEqual(['09:00-17:00|Cuisine|pause 30 min']);   // la semaine B continue sans calendrier
+    expect(p.shifts.filter((x) => x.day < w1)).toEqual([]);
+    expect(p.shifts.some((x) => x.name.startsWith('Inconnu'))).toBe(false);
+  });
+
+  it('remplit « Saisie hebdo » avec les fermetures de caisse, sans écraser une saisie à la main', () => {
+    const SAISIE: Record<string, Cell[][]> = {
+      'Saisie hebdo': [
+        ['Saisie du lundi'], ['Explications'], [],
+        ['Semaine du (lundi)', 'CA TTC Nuba', 'dont CB', 'Couverts', 'Bière vendue (litres)'],
+        ['16/11/2026', '', '', '', ''],
+        ['23/11/2026', '5000', '', '', ''],
+        ['30/11/2026', '', '', '', ''],
+      ],
+    };
+    const weeks = '{"ok":true,"weeks":[{"week":"2026-11-16","ca_ttc":1200.5,"card":900,"covers":80,"days":3},{"week":"2026-11-23","ca_ttc":7000,"card":5000,"covers":300,"days":6}]}';
+    const { g, sent, notes } = fakeGoogle({ ID_TB: { name: 'TABLEAU', tabs: SAISIE } }, (url) => (url.endsWith('/closings_weekly') ? weeks : '{"ok":true,"counts":{}}'));
+    run(buildAppsScript({ ...opts, saveursNomades: '', comptoir: '', tableau: 'ID_TB' }), g).envoyerMaintenant();
+    expect(sent[0].url).toBe('https://projet.supabase.co/rest/v1/rpc/closings_weekly');
+    expect(sent[0].body).toEqual({ p_key: 'nuba_cle' });
+    const t = SAISIE['Saisie hebdo'];
+    expect(t[4].slice(1, 4)).toEqual([1200.5, 900, 80]);
+    expect(t[5].slice(1, 4)).toEqual(['5000', 5000, 300]);   // le CA tapé à la main reste
+    expect(t[6].slice(1, 4)).toEqual(['', '', '']);
+    expect(notes.get('Saisie hebdo!5,2')).toMatch(/^Nuba Gestion : total des fermetures de caisse \(3 jours\)/);
+    // Le tableau de bord part ensuite, avec les chiffres à jour.
+    expect(sent[1].url).toBe('https://projet.supabase.co/rest/v1/rpc/sync_dashboard');
   });
 
   it('une feuille non renseignée est ignorée', () => {

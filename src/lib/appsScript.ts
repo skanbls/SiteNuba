@@ -57,6 +57,8 @@ export function buildAppsScript(o: ScriptOptions): string {
     adresseCarte: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/sync_carte`,
     adresseTableau: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/sync_dashboard`,
     adresseSite: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/sync_site`,
+    adressePlanning: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/sync_planning`,
+    adresseCaisse: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/closings_weekly`,
     clePublique: o.publicKey,
     cleSynchro: o.syncKey,
     mercuriales: { saveurs_nomades: o.saveursNomades, comptoir: o.comptoir, nuba: o.nuba ?? '', tableau: o.tableau ?? '', site: o.site ?? '' },
@@ -92,6 +94,10 @@ function envoyerSiChangement() { nubaEnvoyer_(false); }
 function nubaEnvoyer_(force) {
   var props = PropertiesService.getScriptProperties();
   var erreurs = [];
+  // D'abord les chiffres de caisse dans « Saisie hebdo » : le tableau de bord part ensuite avec eux.
+  if (NUBA.mercuriales.tableau) {
+    try { nubaCaisseHebdo_(); } catch (e) { erreurs.push('caisse : ' + (e && e.message ? e.message : e)); }
+  }
   ['saveurs_nomades', 'comptoir', 'nuba', 'tableau', 'site'].forEach(function (marque) {
     var id = NUBA.mercuriales[marque];
     if (!id) return;
@@ -145,6 +151,10 @@ function nubaEnvoyer_(force) {
       erreurs.push(marque + ' : ' + (e && e.message ? e.message : e));
     }
   });
+  // Le planning de l'onglet « Planning équipe » du tableau de bord.
+  if (NUBA.mercuriales.tableau) {
+    try { nubaPlanningEnvoyer_(props, force); } catch (e) { erreurs.push('planning : ' + (e && e.message ? e.message : e)); }
+  }
   if (erreurs.length) throw new Error('Envoi vers Nuba incomplet. ' + erreurs.join(' | '));
 }
 
@@ -153,7 +163,7 @@ function nubaRaison_(res, code, corps, marque) {
   if (res && res.error === 'too_many') return 'trop d\\'envois en peu de temps, nouvel essai dans 10 minutes.';
   if (res && res.error === 'payload') return 'contenu illisible (onglet renommé ou vidé ?).';
   if (res && res.error === 'db') return 'refusé par la base : ' + res.message;
-  if (code === 404) return "l'appli attend la mise à jour " + ({ nuba: '0017', tableau: '0019', site: '0024' }[marque] || '0011') + ' de sa base.';
+  if (code === 404) return "l'appli attend la mise à jour " + ({ nuba: '0017', tableau: '0019', site: '0024', caisse: '0026', planning: '0027' }[marque] || '0011') + ' de sa base.';
   return 'réponse ' + code + ' : ' + String(corps).slice(0, 200);
 }
 
@@ -464,6 +474,214 @@ function nubaSite_(ss) {
     expo: expo,
     works: nubaSiteLignes_(ss, 'Œuvres', ['Titre', 'Technique', 'Dimensions', 'Image', 'Visible'])
   };
+}
+
+// ---------- Caisse : les semaines terminées dans « Saisie hebdo » (CA TTC, dont CB, couverts) ----------
+// Une case remplie à la main reste telle quelle ; l'appli ne réécrit que les cases vides ou celles qu'elle a remplies.
+var NUBA_NOTE_CAISSE = 'Nuba Gestion : total des fermetures de caisse';
+
+function nubaCaisseHebdo_() {
+  var ss = SpreadsheetApp.openById(NUBA.mercuriales.tableau);
+  var sh = ss.getSheetByName('Saisie hebdo');
+  if (!sh) return;
+  var rep = UrlFetchApp.fetch(NUBA.adresseCaisse, {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { apikey: NUBA.clePublique }, payload: JSON.stringify({ p_key: NUBA.cleSynchro })
+  });
+  if (rep.getResponseCode() === 404) return;   // base pas encore à jour : rien à écrire
+  var corps = rep.getContentText();
+  var res = null;
+  try { res = JSON.parse(corps); } catch (e) { res = null; }
+  if (rep.getResponseCode() !== 200 || !res || res.ok !== true) throw new Error(nubaRaison_(res, rep.getResponseCode(), corps, 'caisse'));
+  var semaines = {};
+  (res.weeks || []).forEach(function (w) { semaines[w.week] = w; });
+  var d = sh.getDataRange().getDisplayValues();
+  var h = -1, col = {};
+  for (var i = 0; i < Math.min(d.length, 10) && h === -1; i++) {
+    d[i].forEach(function (c, j) {
+      var t = nubaNorme_(c);
+      if (t.indexOf('semaine du') === 0) { h = i; col.semaine = j; }
+      else if (t.indexOf('ca ttc') === 0 && col.ca === undefined) col.ca = j;
+      else if (t.indexOf('dont cb') === 0) col.cb = j;
+      else if (t === 'couverts') col.couverts = j;
+    });
+  }
+  if (h === -1) return;
+  for (var r = h + 1; r < d.length; r++) {
+    var lundi = nubaDateIso_(d[r][col.semaine]);
+    var w = semaines[lundi];
+    if (!w) continue;
+    [['ca', w.ca_ttc], ['cb', w.card], ['couverts', w.covers]].forEach(function (x) {
+      var c = col[x[0]];
+      if (c === undefined || x[1] === null || x[1] === undefined) return;
+      var cell = sh.getRange(r + 1, c + 1);
+      if (String(d[r][c]).trim() !== '' && String(cell.getNote() || '').indexOf(NUBA_NOTE_CAISSE) !== 0) return;
+      cell.setValue(Number(x[1]));
+      cell.setNote(NUBA_NOTE_CAISSE + ' (' + w.days + ' jour' + (w.days > 1 ? 's' : '') + ').');
+    });
+  }
+}
+
+// ---------- Planning : semaines types et calendrier de l'onglet « Planning équipe » ----------
+var NUBA_JOURS = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
+var NUBA_HORIZON = 42;   // jours
+
+function nubaSansAccent_(t) {
+  return nubaNorme_(t).normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+function nubaPad_(n) { n = String(n); return n.length < 2 ? '0' + n : n; }
+/** « 18/12/2026 » → « 2026-12-18 », ou ''. */
+function nubaDateIso_(t) {
+  var m = /(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})/.exec(String(t || ''));
+  return m ? m[3] + '-' + nubaPad_(m[2]) + '-' + nubaPad_(m[1]) : '';
+}
+function nubaJourPlus_(iso, n) {
+  var x = new Date(iso + 'T12:00:00Z');
+  x.setUTCDate(x.getUTCDate() + n);
+  return x.toISOString().slice(0, 10);
+}
+/** 0 pour lundi … 6 pour dimanche. */
+function nubaJourIdx_(iso) { return (new Date(iso + 'T12:00:00Z').getUTCDay() + 6) % 7; }
+
+/** Colonnes des jours d'une ligne de titres (« Lun », « Mar »…), ou null. */
+function nubaColonnesJours_(ligne) {
+  var col = {}, n = 0;
+  ligne.forEach(function (c, j) {
+    var k = NUBA_JOURS.indexOf(nubaSansAccent_(c).slice(0, 3));
+    if (k !== -1 && nubaSansAccent_(c).length <= 9 && col[k] === undefined) { col[k] = j; n++; }
+  });
+  return n >= 5 ? col : null;
+}
+
+/** Les créneaux d'une case : « 10:00–14:00 / 18:30–22:30 », « 18:00–fermeture », « 09:30–13:30 · prod Mijote »… */
+function nubaCreneaux_(cell, fermeture) {
+  var t = String(cell || '').trim();
+  if (!/\\d/.test(t)) return [];
+  var note = '';
+  var m = /·\\s*(.+)$/.exec(t);
+  if (m) { note = m[1].trim(); t = t.slice(0, m.index).trim(); }
+  var out = [];
+  t.split('/').forEach(function (seg) {
+    var r = /(\\d{1,2})\\s*[:hH]\\s*(\\d{2})?\\s*[–—-]\\s*(?:(\\d{1,2})\\s*[:hH]\\s*(\\d{2})?|(fermeture))/i.exec(seg);
+    if (!r) return;
+    var fin = r[5] ? fermeture : nubaPad_(r[3]) + ':' + (r[4] || '00');
+    if (!fin) return;
+    var p = /pause\\s*(\\d+)\\s*min/i.exec(seg);
+    out.push({ start: nubaPad_(r[1]) + ':' + (r[2] || '00'), end: fin, note: [p ? 'pause ' + p[1] + ' min' : '', note].filter(Boolean).join(' · ') });
+  });
+  return out;
+}
+
+/** Le poste de l'appli d'après l'intitulé : Cuisine, Bar ou Salle. */
+function nubaZone_(poste) {
+  var p = nubaSansAccent_(poste);
+  if (/cuisin|chef|commis|apprenti|plong/.test(p)) return 'Cuisine';
+  var s = p.search(/salle|serveu|polyvalent/), b = p.search(/\\bbar/);
+  if (b !== -1 && (s === -1 || b < s)) return 'Bar';
+  return s !== -1 ? 'Salle' : '';
+}
+
+function nubaPlanning_(ss, aujourdhui) {
+  var sh = ss.getSheetByName('Planning équipe');
+  if (!sh) return null;
+  var d = sh.getDataRange().getDisplayValues();
+  var fermeture = {}, types = [], calendrier = {};
+  for (var i = 0; i < d.length; i++) {
+    var a = String(d[i][0] || '').trim();
+    // Horaires d'ouverture : la première ligne après les titres des jours donne l'heure de fermeture.
+    if (/^horaires d.ouverture/i.test(a)) {
+      for (var j = i + 1; j < Math.min(i + 4, d.length); j++) {
+        var cj = nubaColonnesJours_(d[j]);
+        if (cj && d[j + 1]) {
+          Object.keys(cj).forEach(function (k) {
+            var hs = String(d[j + 1][cj[k]] || '').match(/(\\d{1,2})\\s*h\\s*(\\d{2})?/gi);
+            if (hs && hs.length >= 2) {
+              var x = /(\\d{1,2})\\s*h\\s*(\\d{2})?/i.exec(hs[1]);
+              fermeture[k] = nubaPad_(x[1]) + ':' + (x[2] || '00');
+            }
+          });
+          break;
+        }
+      }
+      continue;
+    }
+    // Une semaine type : « Semaine type A – … (18/12/2026 → 17/01/2027) » ou « (à partir du 18/01/2027) ».
+    var st = /^semaine type\\s+([A-Za-z0-9]+)/i.exec(a);
+    if (st) {
+      var dates = a.match(/\\d{1,2}\\/\\d{1,2}\\/\\d{4}/g) || [];
+      var bloc = { lettre: st[1].toUpperCase(), debut: nubaDateIso_(dates[0]), fin: /→/.test(a) ? nubaDateIso_(dates[1]) : '', lignes: [] };
+      var tete = d[i + 1] || [];
+      var cols = nubaColonnesJours_(tete);
+      var cPoste = tete.findIndex(function (c) { return nubaSansAccent_(c) === 'poste'; });
+      if (cols) {
+        for (var r = i + 2; r < d.length; r++) {
+          var nom = String(d[r][0] || '').trim();
+          if (!nom || /^(heures|personne|semaine|calendrier|total|horaires)/i.test(nom)) break;
+          bloc.lignes.push({ nom: nom, poste: cPoste === -1 ? '' : String(d[r][cPoste] || ''), cases: NUBA_JOURS.map(function (_, k) { return cols[k] === undefined ? '' : String(d[r][cols[k]] || ''); }) });
+        }
+        types.push(bloc);
+      }
+      continue;
+    }
+    // Le calendrier : une ligne par semaine (lundi), la phase (lettre de la semaine type) et les absences (« X »).
+    if (nubaSansAccent_(a) === 'semaine du') {
+      var tc = d[i];
+      var cPhase = tc.findIndex(function (c) { return nubaSansAccent_(c) === 'phase'; });
+      var personnes = [];
+      tc.forEach(function (c, k) {
+        var n = nubaSansAccent_(c);
+        if (k > Math.max(cPhase, 1) && n && !/^(au|phase|prod|jours|remarque|ferie)/.test(n) && n.split(' ').length <= 2) personnes.push({ col: k, cle: n.split(' ')[0] });
+      });
+      for (var w = i + 1; w < d.length; w++) {
+        var lundi = nubaDateIso_(d[w][0]);
+        if (!lundi) break;
+        var phase = cPhase === -1 ? '' : String(d[w][cPhase] || '');
+        var lp = /(?:^|→\\s*)([A-Z])(?=\\s*(?:[–—-]|\\(|$))/.exec(phase.trim());
+        calendrier[lundi] = { lettre: lp ? lp[1] : '', absents: personnes.filter(function (p) { return /^x\\b/i.test(String(d[w][p.col] || '').trim()); }).map(function (p) { return p.cle; }) };
+      }
+    }
+  }
+  if (!types.length) return null;
+  var shifts = [];
+  for (var n = 0; n < NUBA_HORIZON; n++) {
+    var jour = nubaJourPlus_(aujourdhui, n);
+    var k = nubaJourIdx_(jour);
+    var cal = calendrier[nubaJourPlus_(jour, -k)];
+    var bloc = null;
+    types.forEach(function (t) {
+      var dans = (!t.debut || jour >= t.debut) && (!t.fin || jour <= t.fin);
+      if (cal ? (cal.lettre === t.lettre && dans) : (dans && t.debut)) bloc = t;
+    });
+    if (!bloc) continue;
+    bloc.lignes.forEach(function (l) {
+      if (cal && cal.absents.indexOf(nubaSansAccent_(l.nom).split(' ')[0]) !== -1) return;
+      nubaCreneaux_(l.cases[k], fermeture[k]).forEach(function (c) {
+        shifts.push({ name: l.nom, day: jour, start: c.start, end: c.end, area: nubaZone_(l.poste), note: c.note });
+      });
+    });
+  }
+  return { brand: 'planning', file: ss.getName(), from: aujourdhui, to: nubaJourPlus_(aujourdhui, NUBA_HORIZON - 1), shifts: shifts };
+}
+
+function nubaPlanningEnvoyer_(props, force) {
+  var ss = SpreadsheetApp.openById(NUBA.mercuriales.tableau);
+  var plan = nubaPlanning_(ss, Utilities.formatDate(new Date(), 'Europe/Paris', 'yyyy-MM-dd'));
+  if (!plan) return;
+  var texte = JSON.stringify(plan);
+  var empreinte = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, texte, Utilities.Charset.UTF_8));
+  var dernier = Number(props.getProperty('nuba_envoi_planning') || 0);
+  if (!force && props.getProperty('nuba_empreinte_planning') === empreinte && Date.now() - dernier < 6 * 3600 * 1000) return;
+  var rep = UrlFetchApp.fetch(NUBA.adressePlanning, {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { apikey: NUBA.clePublique }, payload: JSON.stringify({ p_key: NUBA.cleSynchro, p_payload: plan })
+  });
+  var corps = rep.getContentText();
+  var res = null;
+  try { res = JSON.parse(corps); } catch (e) { res = null; }
+  if (rep.getResponseCode() !== 200 || !res || res.ok !== true) throw new Error(nubaRaison_(res, rep.getResponseCode(), corps, 'planning'));
+  props.setProperty('nuba_empreinte_planning', empreinte);
+  props.setProperty('nuba_envoi_planning', String(Date.now()));
+  console.log('Nuba, planning envoyé : ' + JSON.stringify(res.counts));
 }
 `;
 }

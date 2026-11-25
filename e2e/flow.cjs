@@ -1164,13 +1164,18 @@ async function main() {
     } },
   };
   const props = new Map();
+  const notes = new Map();
   const google = {
     SpreadsheetApp: { openById: (id) => ({ getName: () => sheets[id].name, getSheetByName: (n) => {
       const t = sheets[id].tabs[n];
       if (!t) return null;
       // Une case peut donner sa valeur et son texte affiché, comme Google Sheets.
       const shown = (c) => c !== null && typeof c === 'object' && !(c instanceof Date);
-      return { getDataRange: () => ({ getValues: () => t.map((r) => r.map((c) => (shown(c) ? c.v : c))), getDisplayValues: () => t.map((r) => r.map((c) => (shown(c) ? c.d : String(c)))) }) };
+      return {
+        getDataRange: () => ({ getValues: () => t.map((r) => r.map((c) => (shown(c) ? c.v : c))), getDisplayValues: () => t.map((r) => r.map((c) => (shown(c) ? c.d : String(c)))) }),
+        // Une case : sa note et sa valeur (« Saisie hebdo » reçoit les totaux de la caisse).
+        getRange: (r, c) => ({ getNote: () => notes.get(`${n}!${r},${c}`) ?? '', setNote: (v) => notes.set(`${n}!${r},${c}`, v), setValue: (v) => { t[r - 1][c - 1] = v; } }),
+      };
     } }) },
     PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => props.get(k) ?? null, setProperty: (k, v) => props.set(k, v) }) },
     UrlFetchApp: { fetch: (url, o) => {
@@ -1554,6 +1559,150 @@ async function main() {
   await see(compta, 'Bulletin retiré');
   await slip.waitFor({ state: 'detached' });
   step('la comptable dépose les bulletins de paie du mois ; chaque salarié retrouve le sien dans son compte');
+
+  // 13 terdecies. Fermeture de caisse : Hugo la fait sur l'iPad avec son code PIN, en fin de journée.
+  const psql = (sql) => execFileSync('psql', [process.env.DB_URL, '-Atc', sql]).toString().trim();
+  const cashDay = psql('select public.service_day()');
+  await ipad.getByRole('button', { name: "Utiliser l'appli sur cet appareil" }).click();
+  await ipad.getByRole('dialog').getByRole('button', { name: /Hugo/ }).click();
+  await ipad.fill('#pin-code', '2580');
+  await see(ipad, 'Bonjour Hugo');
+  await ipad.getByTestId('today-caisse').getByText('En fin de journée').waitFor();
+  await ipad.getByTestId('today-caisse').click();
+  await ipad.locator('#z-number').waitFor();
+  assert.equal(await ipad.getByRole('button', { name: 'Historique' }).count(), 0, "l'équipe ne voit pas l'historique de la caisse");
+  for (const [id, v] of [['#z-number', 'Z-0042'], ['#z-total', '1250,50'], ['#z-covers', '42'], ['#z-tickets', '30'], ['#z-cash', '200'], ['#z-card', '1000,50'], ['#z-meal', '50'],
+    ['#float-start', '150'], ['#cnt-5000', '4'], ['#cnt-2000', '5'], ['#cnt-1000', '3'], ['#cnt-500', '1'], ['#cnt-200', '2'], ['#cnt-100', '1']]) await ipad.fill(id, v);
+  await ipad.getByRole('button', { name: 'Ajouter une dépense' }).click();
+  await ipad.fill('#exp-label-0', 'Glaçons');
+  await ipad.fill('#exp-amount-0', '10');
+  await ipad.fill('#float-end', '150');
+  await ipad.getByRole('button', { name: 'Enregistrer le brouillon' }).click();
+  await see(ipad, 'Brouillon enregistré');
+  // La photo du Z, après le brouillon : ce qui est tapé reste à l'écran.
+  await ipad.setInputFiles('#z-photo', { name: 'z.png', mimeType: 'image/png', buffer: Buffer.from(pixel.split(',')[1], 'base64') });
+  await see(ipad, 'Photo du Z enregistrée');
+  await ipad.getByRole('img', { name: 'Photo du ticket Z' }).waitFor();
+  assert.equal(await ipad.inputValue('#float-end'), '150', 'la saisie reste après la photo');
+  await ipad.fill('#card-counted', '1000,50');
+  await ipad.fill('#meal-counted', '45');
+  await ipad.getByTestId('cash-counted').getByText(/340,00\s€/).waitFor();
+  await ipad.locator('[data-gap="Écart espèces"]').getByText(/^0,00\s€$/).waitFor();
+  await ipad.locator('[data-gap="Écart titres-restaurant"]').getByText(/^-5,00\s€$/).waitFor();
+  await ipad.getByTestId('bank-deposit').getByText(/190,00\s€/).waitFor();
+  await noOverflow(ipad, 'fermeture de caisse');
+  await shot(ipad, '13zi-fermeture-caisse');
+  await ipad.getByRole('button', { name: 'Clôturer la caisse' }).click();
+  await ipad.getByRole('alert').getByText("Il y a un écart de plus de 2 €").waitFor();
+  await ipad.fill('#cash-note', 'Un titre-restaurant rendu au client');
+  await ipad.getByRole('button', { name: 'Clôturer la caisse' }).click();
+  await see(ipad, 'Caisse clôturée');
+  await ipad.locator('[data-closed]').getByText('par Hugo').waitFor();
+  assert.equal(await ipad.getByRole('button', { name: /Clôturer|Enregistrer/ }).count(), 0, 'une caisse clôturée ne se corrige plus sans accès');
+  await ipad.getByRole('button', { name: /Terminer/ }).click();
+  assert.equal(psql(`select count(*) from public.email_outbox where kind = 'fermeture_caisse' and to_email = 'boss@nuba.test' and subject like 'Écart de caisse, %'`), '1',
+    'le gérant reçoit le récapitulatif, objet « Écart de caisse »');
+
+  // Le gérant : la ligne du jour, l'historique, l'export, le tableau de bord.
+  await boss.goto(APP + '#/');
+  await boss.getByTestId('today-caisse').getByText(/Faite par Hugo · 1\s250,50\s€ TTC/).waitFor();
+  await boss.goto(APP + '#/caisse');
+  await boss.getByRole('button', { name: 'Historique' }).click();
+  const closingRow = boss.locator(`[data-closing="${cashDay}"]`);
+  await closingRow.getByText(/Écart -5,00\s€/).waitFor();
+  const [cashFile] = await Promise.all([boss.waitForEvent('download'), boss.getByRole('button', { name: /Exporter le mois/ }).click()]);
+  const cashCsv = fs.readFileSync(await cashFile.path(), 'utf8');
+  assert.ok(cashCsv.includes('Z-0042') && cashCsv.includes('1250,5') && cashCsv.includes('Hugo') && cashCsv.includes('Un titre-restaurant rendu au client'), "l'export du mois : " + cashCsv.slice(0, 300));
+  await closingRow.click();
+  await boss.locator('#z-number').waitFor();
+  await boss.fill('#tips', '12');
+  await boss.getByRole('button', { name: 'Enregistrer la correction' }).click();
+  await see(boss, 'Caisse clôturée');
+  assert.equal(psql(`select tips from public.cash_closings where day = '${cashDay}'`), '12.00', 'le gérant corrige une caisse clôturée');
+  await boss.goto(APP + '#/tableau-de-bord');
+  await boss.getByTestId('dash-caisse').getByText(/1\s250,50\s€/).first().waitFor();
+  await boss.getByTestId('chart-caisse').waitFor();
+  await shot(boss, '13zi-tableau-de-bord-caisse');
+  // La comptable voit les fermetures et la photo du Z ; l'équipier ne voit que le jour.
+  await compta.getByRole('button', { name: 'Caisse', exact: true }).click();
+  const comptaRow = compta.locator(`[data-closing="${cashDay}"]`);
+  await comptaRow.getByText(/1\s250,50\s€ TTC · 42 couverts · Hugo/).waitFor();
+  await comptaRow.getByRole('button', { name: 'Z' }).click();
+  await compta.getByRole('dialog').getByRole('img', { name: 'Photo du ticket Z' }).waitFor();
+  await compta.getByRole('button', { name: 'Fermer' }).click();
+  await theo.goto(APP + '#/caisse');
+  await theo.locator('[data-closed]').waitFor();
+  assert.equal(await theo.getByRole('button', { name: 'Historique' }).count(), 0, "un équipier n'a pas l'historique");
+  step("fermeture de caisse : Hugo compte et clôture sur l'iPad ; le gérant reçoit le récapitulatif, corrige, exporte ; tableau de bord et comptable suivent");
+
+  // 13 quaterdecies. Le planning vient de l'onglet « Planning équipe » du tableau de bord ; chacun est prévenu.
+  // Une semaine terminée de fermetures part aussi dans « Saisie hebdo ».
+  const isoDay = (d) => d.toISOString().slice(0, 10);
+  const plusD = (iso, n) => { const x = new Date(`${iso}T12:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return isoDay(x); };
+  const frD = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+  const todayIso = isoDay(new Date());
+  const w1 = plusD(todayIso, 7 - ((new Date(`${todayIso}T12:00:00Z`).getUTCDay() + 6) % 7));   // lundi prochain
+  const lastMonday = plusD(w1, -14);
+  psql(`insert into public.cash_closings (day, status, z_total, z_card, card_counted, z_covers) values ('${lastMonday}', 'closed', 900, 600, 600, 30)`);
+  const days7 = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+  const tb = sheets.TB_feuille_test_321.tabs;
+  tb['Planning équipe'] = [
+    ['Planning test'], [],
+    ["Horaires d'ouverture au public"],
+    ['', '', ...days7],
+    ['Nuba test', '', 'Fermé', '12h00 – 00h00', '12h00 – 00h00', '12h00 – 00h00', '12h00 – 02h00', '12h00 – 03h00', '12h00 – 16h00'],
+    [],
+    [`Semaine type A – Test (${frD(w1)} → ${frD(plusD(w1, 6))})`],
+    ['Personne', 'Poste', ...days7, 'Heures/sem'],
+    ['Théo MARTIN', 'Serveur', 'Repos', '18:00–fermeture (pause 30 min)', 'Repos', 'Repos', 'Repos', 'Repos', 'Repos', '6'],
+    ['Inès DURAND (responsable)', 'Barmaid', 'Repos', 'Repos', '17:00–23:00', 'Repos', 'Repos', 'Repos', 'Repos', '6'],
+    ['Prestataire test', 'Programmation', 'Repos', '20:00–23:00', '', '', '', '', ''],
+    [],
+    ['Calendrier hebdomadaire'],
+    ['Semaine du', 'Au', 'Phase', 'Remarques'],
+    [frD(w1), frD(plusD(w1, 6)), 'A – Test', ''],
+  ];
+  tb['Saisie hebdo'] = [['Saisie du lundi (test)'], [], ['Semaine du (lundi)', 'CA TTC Nuba', 'dont CB', 'Couverts'], [frD(lastMonday), '', '', ''], [frD(plusD(lastMonday, 7)), '4000', '', '']];
+  gs.envoyerSiChangement();
+  assert.deepEqual(tb['Saisie hebdo'][3].slice(1), [900, 600, 30], 'la semaine terminée arrive dans « Saisie hebdo »');
+  assert.deepEqual(tb['Saisie hebdo'][4].slice(1), ['4000', '', ''], "une case tapée à la main n'est pas touchée");
+  assert.match(notes.get('Saisie hebdo!4,2') ?? '', /^Nuba Gestion : total des fermetures de caisse \(1 jour\)/);
+  assert.equal(psql(`select count(*) from public.shifts where source = 'sheet'`), '2', 'deux services venus du fichier');
+  await boss.goto(APP + '#/reglages');
+  const planRow = boss.locator('[data-merc="planning"]');
+  await planRow.getByText(/Reçu .* 2 services à venir · dernier envoi : 2 ajoutés/).waitFor();
+  await planRow.locator('[data-planning-problems]').getByText("Pas dans l'équipe de l'appli : Prestataire test").waitFor();
+  await boss.goto(APP + '#/planning');
+  await boss.getByRole('button', { name: 'Semaine suivante' }).click();
+  await boss.locator('.shift[data-source="sheet"]').first().waitFor();
+  assert.equal(await boss.locator('.shift[data-source="sheet"]').count(), 2, 'les deux services du fichier, marqués');
+  await boss.locator('button.shift[data-source="sheet"]').first().click();
+  await boss.getByTestId('shift-from-sheet').waitFor();
+  await boss.getByRole('button', { name: 'Fermer' }).click();
+  await boss.getByTestId('planning-sheet-note').waitFor();
+  await shot(boss, '13zj-planning-fichier');
+  // Théo voit ce qui change, et le note ; l'e-mail récapitulatif part cinq minutes après.
+  await theo.goto(APP + '#/');
+  await theo.reload();
+  const changed = theo.getByTestId('planning-changed');
+  await changed.locator('[data-change="added"]').getByText(/18:00 – 00:00 \(Salle\)/).first().waitFor();
+  await noOverflow(theo, 'planning changé');
+  await shot(theo, '13zj-planning-change');
+  await theo.getByRole('button', { name: "C'est noté" }).click();
+  await changed.waitFor({ state: 'detached' });
+  // Ici l'envoi réel échoue (pas de pg_net) : on regarde les e-mails préparés.
+  psql(`select public.send_shift_notices(now() + interval '6 minutes')`);
+  assert.equal(psql(`select count(distinct to_email) from public.email_outbox where kind = 'planning' and to_email in ('theo@nuba.test', 'ines@nuba.test')`), '2', 'un e-mail pour Théo, un pour Inès');
+  assert.equal(psql(`select count(*) from public.email_outbox where kind = 'planning' and to_email = 'theo@nuba.test' and body like '%+ Ajouté : %'`), '1', "l'e-mail de Théo");
+  // Le service retiré du fichier disparaît, et Inès en est prévenue.
+  tb['Planning équipe'][9][4] = 'Repos';
+  gs.envoyerSiChangement();
+  await ines.goto(APP + '#/');
+  await ines.reload();
+  await ines.getByTestId('planning-changed').locator('[data-change="removed"]').getByText(/17:00 – 23:00 \(Bar\)/).first().waitFor();
+  assert.equal(psql(`select count(*) from public.shifts where source = 'sheet'`), '1', 'le service retiré du fichier est retiré');
+  psql(`delete from public.cash_closings where day = '${lastMonday}'`);
+  step("planning : l'onglet « Planning équipe » remplit le planning, signale les noms inconnus ; chacun voit ses changements et reçoit un e-mail ; la caisse remplit « Saisie hebdo »");
 
   // 14. Le gérant désactive Théo : il perd l'accès.
   await boss.goto(APP + '#/equipe');

@@ -37,6 +37,7 @@ export const NAV: NavItem[] = [
   { to: '/planning', label: 'Planning', icon: 'cal', tab: true },
   { to: '/reservations', label: 'Réservations', icon: 'book' },
   { to: '/evenements', label: 'Événements', icon: 'star' },
+  { to: '/caisse', label: 'Fermeture de caisse', icon: 'cash' },
   { to: '/clients', label: 'Clients', icon: 'user' },
   { to: '/hygiene', label: 'Hygiène', icon: 'thermo' },
   { to: '/stocks', label: 'Stocks', icon: 'box' },

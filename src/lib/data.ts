@@ -5,7 +5,7 @@ import type { Tabs } from './dashboard';
 import type { DeliverySettings } from './delivery';
 import { supabase } from './supabase';
 import type { MercProcess } from './process';
-import type { BookingSettings, AccountantAccess, Checklist, ColdUnit, Contact, Customer, Deadline, EmailLogEntry, EmailSettings, Issue, Kiosk, NubaEvent, Procedure, ProcedureRead, Recipe, LeaveRequest, OilLog, StaffDocument, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftSwap, Site, SiteWeekly, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
+import type { BookingSettings, AccountantAccess, Checklist, ColdUnit, Contact, Customer, Deadline, EmailLogEntry, EmailSettings, Issue, Kiosk, NubaEvent, Procedure, ProcedureRead, Recipe, LeaveRequest, OilLog, StaffDocument, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftChange, ShiftSwap, Site, SiteWeekly, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
 
 const ENTRY = '*, time_breaks(*), profiles(first_name, last_name), sites(name)';
 
@@ -109,6 +109,34 @@ export function useSwaps() {
     queryKey: ['swaps'],
     queryFn: async () =>
       must<ShiftSwap[]>(await supabase.from('shift_swaps').select('*, shifts(starts_at, ends_at, area)').order('created_at', { ascending: false }).limit(50)),
+  });
+}
+
+/** Mes services ajoutés, modifiés ou retirés que je n'ai pas encore vus (migration 0027). */
+export function useShiftChanges() {
+  return useQuery({
+    queryKey: ['shift-changes'],
+    queryFn: async () => {
+      const r = await supabase.from('shift_changes').select('id, kind, starts_at, ends_at, area, old_starts_at, old_ends_at, old_area, created_at, emailed_at')
+        .is('seen_at', null).order('starts_at').limit(20);
+      // Base pas encore mise à jour : rien à montrer.
+      if (r.error) return [] as ShiftChange[];
+      return r.data as ShiftChange[];
+    },
+    refetchInterval: 120_000,
+  });
+}
+
+/** La fermeture de caisse du jour de service (migration 0026) ; null si la base n'est pas à jour. */
+export function useClosingToday() {
+  return useQuery({
+    queryKey: ['caisse', 'aujourdhui'],
+    queryFn: async () => {
+      const r = await supabase.rpc('cash_closing_get', { p_day: null });
+      if (r.error) return null;
+      return r.data as { day: string; closing: { status: 'draft' | 'closed'; z_total: number | null } | null; closed_by_name: string | null };
+    },
+    refetchInterval: 120_000,
   });
 }
 

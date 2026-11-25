@@ -1,12 +1,14 @@
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { LineChart, type RefLine } from '../components/LineChart';
 import { Layout, Loading, Section } from '../components/ui';
+import { GAP_LIMIT, cashStats, type CashClosing } from '../lib/cash';
 import { parseBoard, parseHistory, parseSeries, type Kpi, type Tone } from '../lib/dashboard';
 import { useDashboard } from '../lib/data';
 import { norm } from '../lib/production';
-import { frError } from '../lib/supabase';
-import { ago, fmtDateShort, fromDayKey } from '../lib/time';
+import { frError, supabase } from '../lib/supabase';
+import { addDays, ago, dayKey, fmtDateShort, fmtDayLong, fromDayKey } from '../lib/time';
 
 const euro2 = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
 
@@ -33,6 +35,74 @@ function KpiRow({ k }: { k: Kpi }) {
         {k.status && <Status text={k.status} tone={k.tone} />}
       </span>
     </div>
+  );
+}
+
+const pct = (a: number, b: number) => (b > 0 ? Math.round(((a - b) / b) * 100) : null);
+function Trend({ now, before, what }: { now: number; before: number; what: string }) {
+  const p = pct(now, before);
+  if (p === null) return null;
+  return <span className={`pill ${p > 0 ? 'ok' : p < 0 ? 'bad' : ''}`} title={`Par rapport ${what} : ${euro2.format(before)}`}>{p > 0 ? '+' : ''}{p} %</span>;
+}
+
+/**
+ * Les chiffres des fermetures de caisse (migration 0026) : saisis chaque soir par l'équipe, lus ici par le gérant.
+ * Le script Google en recopie aussi les totaux de chaque semaine dans « Saisie hebdo » du fichier.
+ */
+function CashSection() {
+  // Journée de service : de 5 h à 5 h.
+  const today = dayKey(new Date(Date.now() - 5 * 3600_000));
+  const q = useQuery({
+    queryKey: ['caisse', 'tableau', today],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('cash_closings').select('*').gte('day', dayKey(addDays(fromDayKey(today), -70))).order('day');
+      if (error) throw error;
+      return (data ?? []) as CashClosing[];
+    },
+  });
+  if (q.isLoading) return null;
+  if (q.error) {
+    return /cash_closings|schema cache|does not exist/i.test(String((q.error as Error).message))
+      ? <Section title="Caisse"><p className="note">Les chiffres de la caisse arriveront avec la mise à jour 0026 de la base.</p></Section>
+      : <Section title="Caisse"><p className="empty err">{frError(q.error)}</p></Section>;
+  }
+  const st = cashStats(q.data ?? [], today);
+  const m = st.month;
+  const parts = [['Carte bancaire', m.card], ['Espèces', m.cash], ['Titres-restaurant', m.meal], ['Chèques et autres', m.other]] as const;
+  const paid = parts.reduce((t, [, v]) => t + v, 0);
+  const monthName = fromDayKey(today).toLocaleDateString('fr-FR', { month: 'long' });
+  return (
+    <Section title="Caisse" right={<Link className="link" to="/caisse">Fermetures</Link>}>
+      {!st.last ? (
+        <p className="note" data-testid="dash-caisse-vide">Pas encore de fermeture de caisse. Chaque soir, l'équipe la fait dans « Fermeture de caisse » : les chiffres arrivent ici aussitôt.</p>
+      ) : (
+        <div className="form" data-testid="dash-caisse">
+          <div className="stats four">
+            <div className="stat"><div className="v num">{euro2.format(st.last.z_total ?? 0)}</div><div className="k">{fmtDayLong(fromDayKey(st.last.day))}{st.last.z_covers ? ` · ${st.last.z_covers} couverts` : ''}</div></div>
+            <div className="stat"><div className="v num">{euro2.format(st.week.ca)}</div><div className="k">7 derniers jours <Trend now={st.week.ca} before={st.week.previous} what="aux 7 jours d'avant" /></div></div>
+            <div className="stat"><div className="v num">{euro2.format(m.ca)}</div><div className="k">{monthName}, {m.days} jour{m.days > 1 ? 's' : ''} <Trend now={m.ca} before={m.previousSamePeriod} what="à la même période du mois dernier" /></div></div>
+            <div className="stat"><div className="v num">{m.covers ? euro2.format(m.ca / m.covers) : '–'}</div><div className="k">ticket moyen par couvert ({m.covers} couverts)</div></div>
+          </div>
+          <LineChart testId="chart-caisse" label="Chiffre d'affaires TTC de chaque jour sur 30 jours" labels={st.series.labels}
+            series={[{ name: 'CA TTC du jour', values: st.series.ca, kind: 'main' }]} />
+          {paid > 0 && (
+            <div className="list">
+              {parts.filter(([, v]) => v > 0).map(([label, v]) => (
+                <div className="row" key={label} data-pay={label}>
+                  <span className="grow t" style={{ fontWeight: 500 }}>{label}</span>
+                  <span className="end"><span className="sub num">{Math.round((v / paid) * 100)} %</span><strong className="num">{euro2.format(v)}</strong></span>
+                </div>
+              ))}
+              <div className="row">
+                <span className="grow t" style={{ fontWeight: 500 }}>Écarts d'espèces du mois</span>
+                <span className="end"><span className={`pill ${Math.abs(m.gaps) > GAP_LIMIT ? 'bad' : 'ok'}`}>{m.gaps > 0 ? '+' : ''}{euro2.format(m.gaps)}</span></span>
+              </div>
+            </div>
+          )}
+          <p className="note">Les totaux de chaque semaine terminée vont aussi dans l'onglet « Saisie hebdo » du fichier (CA TTC, dont CB, couverts), sauf là où un chiffre a été écrit à la main.</p>
+        </div>
+      )}
+    </Section>
   );
 }
 
@@ -72,7 +142,9 @@ export default function Dashboard() {
             « Mercuriales Google Sheets », colle le lien du fichier dans « Tableau de bord financier », puis installe le nouveau script.
           </p>
         </div>
-      ) : (
+      ) : null}
+      {!q.isLoading && !q.error && !src?.synced_at && <CashSection />}
+      {src?.synced_at && (
         <>
           {board.subtitle && <p className="note">{board.subtitle}</p>}
           {balance && (
@@ -98,6 +170,8 @@ export default function Dashboard() {
               </div>
             </Section>
           )}
+
+          <CashSection />
 
           {t13 && week && (
             <Section title="Trésorerie sur 13 semaines">

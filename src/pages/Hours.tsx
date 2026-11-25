@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { TeamDocumentsView } from '../components/Documents';
 import { Icon } from '../components/Icon';
 import { BrandHead } from '../components/Logo';
+import { History } from './Closing';
 import { Chips, Field, Layout, Loading, Section } from '../components/ui';
 import { useAccountingSettings } from '../lib/data';
 import { downloadCsv, hoursRows, totalsOf } from '../lib/hours';
@@ -140,7 +141,7 @@ function HoursBody() {
   );
 }
 
-/** Caisse : lien vers Zelty en attendant que l'appli lise elle-même les Z de caisse. */
+/** Caisse : les fermetures de caisse faites par l'équipe (Z, comptage, écarts, photo du Z) et le lien vers Zelty. */
 function Cash() {
   const q = useAccountingSettings(true);
   const url = q.data?.zelty_url ?? '';
@@ -155,7 +156,10 @@ function Cash() {
           {url && <span className="end"><a className="btn sm pri" href={url} target="_blank" rel="noopener noreferrer">Ouvrir Zelty</a></span>}
         </div>
       </div>
-      <p className="note">Bientôt ici : les Z de caisse de chaque jour, les encaissements par moyen de paiement et la TVA, lus directement dans Zelty, dès que l'abonnement et son accès seront activés.</p>
+      <Section title="Fermetures de caisse">
+        <p className="note">Chaque soir, l'équipe recopie le Z, compte les espèces et le terminal CB. Choisis le mois ; l'export s'ouvre dans Excel.</p>
+        <History accountant />
+      </Section>
     </>
   );
 }
@@ -194,7 +198,7 @@ export function AccountantHome() {
 export default function HoursPreview() {
   return (
     <Layout title="Vue de la comptable">
-      <p className="note">C'est exactement ce que voit la comptable avec son accès : le récap du mois (heures et absences), les documents de l'équipe (elle y dépose les bulletins de paie) et la caisse. Rien d'autre.</p>
+      <p className="note">C'est exactement ce que voit la comptable avec son accès : le récap du mois (heures et absences), les documents de l'équipe (elle y dépose les bulletins de paie) et la caisse (fermetures de chaque soir, lien Zelty). Rien d'autre.</p>
       <AccountantTabs />
     </Layout>
   );

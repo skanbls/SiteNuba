@@ -68,7 +68,8 @@ const PARTS: Part[] = [
     body: (
       <p>
         L'écran d'accueil rassemble ce qui t'attend : cases de checklists, relevés de température, dates limites, produits à commander,
-        livraisons attendues, réservations et événements du jour, procédures à lire. Touche une ligne pour y aller.
+        livraisons attendues, réservations et événements du jour, fermeture de caisse, procédures à lire. Touche une ligne pour y aller.
+        Quand ton planning change, la carte <b>Ton planning a changé</b> te montre quoi ; touche <B>C'est noté</B> une fois lu.
       </p>
     ),
   },
@@ -113,6 +114,22 @@ const PARTS: Part[] = [
         <li>Tes bulletins de paie arrivent dans <b>Mon compte</b>, rubrique « Mes bulletins de paie ». Un e-mail te prévient à chaque nouveau bulletin.</li>
         <li>Pour donner un de tes services à un collègue : <B>Céder un service</B>, choisis qui le reprend. Le gérant valide, et le planning se met à jour.</li>
         <li>Tes heures travaillées sont dans <b>Pointeuse</b>.</li>
+        <li>Quand un de tes services est ajouté, déplacé ou retiré, tu reçois un e-mail quelques minutes après, et l'écran Aujourd'hui l'affiche jusqu'à ce que tu touches <B>C'est noté</B>.</li>
+      </ol>
+    ),
+  },
+  {
+    id: 'caisse',
+    icon: 'cash',
+    title: 'Fermeture de caisse',
+    body: (
+      <ol>
+        <li>En fin de journée, ouvre <b>Fermeture de caisse</b> (sur l'iPad ou ton téléphone). Fais d'abord la checklist de fermeture si elle existe : elle s'affiche en haut.</li>
+        <li><b>1. Le ticket Z</b> : imprime le Z de Zelty, recopie son numéro, le CA TTC, les couverts et chaque moyen de paiement. Prends-le en photo avec <B>Photo du Z</B>.</li>
+        <li><b>2. Les espèces</b> : le fond de départ est déjà rempli (celui laissé la veille). Compte les billets et les pièces, note les dépenses payées en espèces, puis le fond que tu laisses pour demain.</li>
+        <li><b>3. Carte bancaire</b> : recopie le total du ticket de fin de journée du terminal CB, puis les titres-restaurant et les chèques.</li>
+        <li><b>4. Le bilan</b> montre les écarts en direct. Au-delà de 2 €, explique l'écart dans la note (rendu de monnaie, ticket annulé…).</li>
+        <li><B>Enregistrer le brouillon</B> pour reprendre plus tard, sur n'importe quel appareil ; <B>Clôturer la caisse</B> quand tout est juste. Le gérant reçoit le récapitulatif. Une fois clôturée, seuls le gérant et le responsable de la caisse peuvent corriger.</li>
       </ol>
     ),
   },
@@ -259,10 +276,11 @@ const PARTS: Part[] = [
         <li><b>Administration</b> : accès des responsables, e-mails, bornes, mercuriales (Nuba, Saveurs Nomades, Comptoir), en-tête des bons de livraison, liens publics.</li>
         <li><b>Tableau de bord</b> (gérants seulement) : solde, alertes, trésorerie sur 13 semaines, prévisionnel sur 12 mois et échéances, repris du fichier « Tableau de bord financier ». Les chiffres se modifient dans Google Sheets.</li>
         <li><b>Fiches techniques</b>, avec l'accès « fiches techniques » : coût matière, marge, coefficient et prix conseillé de chaque fiche, en rouge au-dessus de l'objectif.</li>
-        <li><b>Accès comptable</b>, dans Administration : ajoute l'adresse e-mail de la comptable. Elle crée son compte avec cette adresse. Son espace : le récap du mois (heures et absences par motif, à télécharger pour la paie), les documents de l'équipe (elle y dépose les bulletins de paie de chacun : <B>Déposer les bulletins de paie</B>), et la caisse Zelty. Elle reçoit un e-mail à chaque document envoyé.</li>
+        <li><b>Accès comptable</b>, dans Administration : ajoute l'adresse e-mail de la comptable. Elle crée son compte avec cette adresse. Son espace : le récap du mois (heures et absences par motif, à télécharger pour la paie), les documents de l'équipe (elle y dépose les bulletins de paie de chacun : <B>Déposer les bulletins de paie</B>), et la caisse (fermetures de chaque soir avec la photo du Z, export du mois, lien Zelty). Elle reçoit un e-mail à chaque document envoyé.</li>
         <li><b>Équipe</b> : dans la fiche de chacun, ses documents ; <B>Ajouter un document</B> pour la DPAE ou le contrat.</li>
         <li><b>Pointeuse</b>, vue Équipe : corriger un pointage, <B>Exporter pour le comptable</B>.</li>
-        <li><b>Planning</b> : <B>Service</B> pour planifier, <B>Recopier la semaine précédente</B>, et les demandes de congé et d'échange à accepter.</li>
+        <li><b>Planning</b> : <B>Service</B> pour planifier, <B>Recopier la semaine précédente</B>, et les demandes de congé et d'échange à accepter. Le planning peut aussi venir de l'onglet « Planning équipe » de ton fichier tableau de bord : le script Google l'envoie toutes les dix minutes, et chacun est prévenu des changements.</li>
+        <li><b>Fermeture de caisse</b> : rubrique <B>Historique</B> pour revoir chaque soir, corriger une fermeture et exporter le mois. Le tableau de bord montre le CA, les couverts, le ticket moyen et les écarts ; les totaux de chaque semaine vont aussi dans « Saisie hebdo » du fichier. L'accès « Caisse » se confie à un responsable.</li>
       </ul>
     ),
   },

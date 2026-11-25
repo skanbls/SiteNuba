@@ -14,6 +14,7 @@ export const AREAS = [
   ['pointages', 'Pointages', 'Corriger les heures, ajouter un pointage, exporter'],
   ['reservations', 'Réservations', 'Horaires, créneaux et règles de la réservation en ligne'],
   ['evenements', 'Événements et clients', 'Créer, chiffrer et confirmer les événements'],
+  ['caisse', 'Caisse', 'Fermetures de caisse : corriger tous les jours, historique et export'],
 ] as const;
 
 export type Area = (typeof AREAS)[number][0];

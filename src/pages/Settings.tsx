@@ -61,6 +61,15 @@ export default function Settings() {
   const accounting = useAccountingSettings(true);
   const [zeltySheet, setZeltySheet] = useState(false);
   const dashboard = useDashboard(true);
+  // Onglet « Planning équipe » du tableau de bord (migration 0027).
+  const planningSync = useQuery({
+    queryKey: ['merc', 'planning'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('planning_sync').select('synced_at, date_from, date_to, counts, problems').maybeSingle();
+      if (error) return null;
+      return data as { synced_at: string | null; date_from: string | null; date_to: string | null; counts: Record<string, number>; problems: string[] } | null;
+    },
+  });
   const [blSheet, setBlSheet] = useState(false);
   const closeBl = useCallback(() => setBlSheet(false), []);
   const accountants = useAccountants(true);
@@ -280,10 +289,29 @@ export default function Settings() {
                       {d?.sheet_url && <a className="btn sm" href={d.sheet_url} target="_blank" rel="noopener noreferrer">Ouvrir</a>}
                     </div>
                   </div>
+                  {planningSync.data && (() => {
+                    const p = planningSync.data;
+                    const c = p.counts ?? {};
+                    return (
+                      <div className="row wrap" data-merc="planning">
+                        <div className="grow">
+                          <span className="t">Planning équipe (onglet du tableau de bord)</span>
+                          <span className="sub">{p.synced_at
+                            ? `Reçu ${fmtDay(p.synced_at)} à ${fmtTime(p.synced_at)} · ${plural(c.total ?? 0, 'service')} à venir${c.added || c.updated || c.removed ? ` · dernier envoi : ${[c.added ? `${c.added} ajouté${c.added > 1 ? 's' : ''}` : '', c.updated ? `${c.updated} modifié${c.updated > 1 ? 's' : ''}` : '', c.removed ? `${c.removed} retiré${c.removed > 1 ? 's' : ''}` : ''].filter(Boolean).join(', ')}` : ''}`
+                            : "Jamais reçu : le script lit l'onglet « Planning équipe » du fichier tableau de bord, s'il existe."}</span>
+                          <SyncProblem brand="planning" linked={!!d?.sheet_url} syncedAt={p.synced_at} log={mercStatus.data?.log ?? []} keyAt={mercStatus.data?.key_created_at ?? null} />
+                          {(p.problems ?? []).length > 0 && (
+                            <span className="sub" style={{ color: 'var(--warn)' }} data-planning-problems>À vérifier dans le fichier : {p.problems.slice(0, 5).join(' · ')}{p.problems.length > 5 ? ` (et ${p.problems.length - 5} autres)` : ''}</span>
+                          )}
+                        </div>
+                        {p.synced_at && <div className="end"><Link className="btn sm" to="/planning">Voir</Link></div>}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })()}
-            <p className="note">Un petit script Google, installé une fois, envoie les mercuriales toutes les dix minutes : la carte Nuba dans Fiches techniques, Saveurs Nomades et Comptoir dans Production, et le tableau de bord financier (gérants seulement).</p>
+            <p className="note">Un petit script Google, installé une fois, envoie les mercuriales toutes les dix minutes : la carte Nuba dans Fiches techniques, Saveurs Nomades et Comptoir dans Production, le tableau de bord financier (gérants seulement) et son onglet « Planning équipe » dans le Planning. En retour, il écrit les totaux des fermetures de caisse dans « Saisie hebdo ».</p>
             {mercStatus.data?.key_created_at && (
               <p className="note" data-testid="merc-key">
                 Script actuel créé {fmtDay(mercStatus.data.key_created_at)} à {fmtTime(mercStatus.data.key_created_at)} : c'est celui-là qui doit être collé dans Google. Chaque « Créer le script » en fait un nouveau et arrête le précédent.
@@ -530,7 +558,7 @@ function MercSheet({ sources, dashboardUrl, keyAt, onClose }: { sources: MercSou
           <Field label="Mercuriale Nuba (la carte du restaurant)"><input className="in" id="merc-nuba" inputMode="url" value={nb} onChange={(e) => setNb(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" /></Field>
           <Field label="Mercuriale Saveurs Nomades"><input className="in" id="merc-sn" inputMode="url" value={sn} onChange={(e) => setSn(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" /></Field>
           <Field label="Mercuriale Comptoir Méditerranéen"><input className="in" id="merc-cm" inputMode="url" value={cm} onChange={(e) => setCm(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" /></Field>
-          <Field label="Tableau de bord financier (gérants seulement)" hint="Ton fichier « Tableau de bord financier » : il ne s'affiche qu'aux gérants.">
+          <Field label="Tableau de bord financier (gérants seulement)" hint="Ton fichier « Tableau de bord financier » : il ne s'affiche qu'aux gérants. Son onglet « Planning équipe » remplit le Planning, et « Saisie hebdo » reçoit les totaux de la caisse.">
             <input className="in" id="merc-tableau" inputMode="url" value={tb} onChange={(e) => setTb(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" />
           </Field>
           <Field label="Contenu du site (programmation, exposition)" hint="Le fichier « Nuba · Contenu du site » qui alimente le site web : ses soirées, rendez-vous et exposition arrivent dans Événements.">
@@ -680,7 +708,7 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
   const [busy, setBusy] = useState(false);
   const text = (k: 'sender_name' | 'sender_email' | 'notify_email' | 'app_url' | 'signature') =>
     (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF((s) => ({ ...s, [k]: e.target.value }));
-  const flag = (k: 'enabled' | 'confirm_booking' | 'notify_booking' | 'notify_event' | 'notify_documents' | 'notify_payslips' | 'remind_booking' | 'remind_tasks') =>
+  const flag = (k: 'enabled' | 'confirm_booking' | 'notify_booking' | 'notify_event' | 'notify_documents' | 'notify_payslips' | 'remind_booking' | 'remind_tasks' | 'notify_closing' | 'notify_planning') =>
     (e: ChangeEvent<HTMLInputElement>) => setF((s) => ({ ...s, [k]: e.target.checked }));
   // Les rappels de la veille partent d'une tâche planifiée de Supabase (pg_cron), créée par la mise à jour 0022.
   const reminders = useQuery({
@@ -689,7 +717,7 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
     queryFn: async () => {
       const { data, error } = await supabase.rpc('reminders_status');
       if (error) throw error;
-      return data as { scheduled: boolean; sent_today: number; tasks_sent_today?: number };
+      return data as { scheduled: boolean; sent_today: number; tasks_sent_today?: number; planning_sent_today?: number };
     },
   });
 
@@ -700,7 +728,7 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
     if (error) return toast(frError(error), 'bad');
     if (!data) return toast("pg_cron n'est pas activé : dans Supabase, Database, Extensions, active « pg_cron », puis réessaie.", 'bad');
     await refresh('emails');
-    toast('Rappels planifiés : réservations à partir de 10 h, tâches de 16 h à 21 h');
+    toast('Rappels planifiés : réservations à partir de 10 h, tâches de 16 h à 21 h, planning toutes les 10 minutes');
   }
 
   async function save(e: FormEvent) {
@@ -720,6 +748,8 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
       ...(f.notify_payslips === undefined ? {} : { notify_payslips: f.notify_payslips }),
       ...(f.remind_booking === undefined ? {} : { remind_booking: f.remind_booking }),
       ...(f.remind_tasks === undefined ? {} : { remind_tasks: f.remind_tasks }),
+      ...(f.notify_closing === undefined ? {} : { notify_closing: f.notify_closing }),
+      ...(f.notify_planning === undefined ? {} : { notify_planning: f.notify_planning }),
     }).eq('id', true);
     setBusy(false);
     if (error) return setErr(frError(error));
@@ -781,6 +811,16 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
             </span>
           </label>
         )}
+        {f.notify_planning !== undefined && (
+          <label className="row" style={{ padding: 0, gap: 10 }}>
+            <input id="mail-planning" type="checkbox" checked={f.notify_planning} onChange={flag('notify_planning')} style={box} />
+            <span className="grow">
+              <span className="t">Prévenir l'équipe quand son planning change</span>
+              <span className="sub">Service ajouté, déplacé ou retiré, dans l'appli ou dans l'onglet « Planning équipe » : un e-mail récapitulatif à la personne, 5 minutes après le dernier changement. Elle le voit aussi sur Aujourd'hui.</span>
+              {reminders.data?.scheduled && reminders.data.planning_sent_today !== undefined && <span className="sub">{reminders.data.planning_sent_today} e-mail{reminders.data.planning_sent_today > 1 ? 's' : ''} de planning ces dernières 24 heures</span>}
+            </span>
+          </label>
+        )}
         {reminders.data && !reminders.data.scheduled && (
           <button type="button" className="btn" id="mail-schedule" disabled={busy} onClick={() => void schedule()}><Icon name="cal" />Planifier les rappels</button>
         )}
@@ -802,6 +842,12 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
           <label className="row" style={{ padding: 0, gap: 10 }}>
             <input id="mail-payslips" type="checkbox" checked={f.notify_payslips} onChange={flag('notify_payslips')} style={box} />
             <span className="grow"><span className="t">Prévenir chaque salarié de son bulletin de paie</span><span className="sub">Dès qu'il est déposé, à l'adresse e-mail de sa fiche. Sans pièce jointe.</span></span>
+          </label>
+        )}
+        {f.notify_closing !== undefined && (
+          <label className="row" style={{ padding: 0, gap: 10 }}>
+            <input id="mail-closing" type="checkbox" checked={f.notify_closing} onChange={flag('notify_closing')} style={box} />
+            <span className="grow"><span className="t">M'envoyer la fermeture de caisse</span><span className="sub">Chaque soir à la clôture : CA TTC, couverts, paiements, écarts et remise en banque. L'objet signale un écart de plus de 2 €.</span></span>
           </label>
         )}
         <Field label="Signature"><textarea className="in" id="mail-signature" value={f.signature} onChange={text('signature')} maxLength={300} rows={2} /></Field>

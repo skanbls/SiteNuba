@@ -77,6 +77,8 @@ export function LineChart({ labels, series, refs = [], extra, label, testId }: {
   const mainVals = main?.values ?? [];
   const lowest = mainVals.reduce<number>((k, v, i) => (ok(v) && (!ok(mainVals[k]) || v < (mainVals[k] as number)) ? i : k), 0);
   const last = mainVals.reduce<number>((k, v, i) => (ok(v) ? i : k), -1);
+  // « Plus bas » n'a de sens qu'à partir de deux points.
+  const several = mainVals.filter(ok).length >= 2;
 
   function move(e: PointerEvent<SVGRectElement>) {
     const r = e.currentTarget.getBoundingClientRect();
@@ -121,7 +123,7 @@ export function LineChart({ labels, series, refs = [], extra, label, testId }: {
           {at != null && <line className="cross" x1={x(at)} x2={x(at)} y1={m.t} y2={m.t + ph} />}
           {series.filter((s) => s.kind === 'context').map((s) => (<path key={s.name} className="line is-ctx" d={path(s.values)} />))}
           {main && <path className="line is-main" d={path(main.values)} />}
-          {main && ok(mainVals[lowest]) && (
+          {main && several && ok(mainVals[lowest]) && (
             <g>
               <circle className="dot is-main" cx={x(lowest)} cy={y(mainVals[lowest] as number)} r={4.5} />
               <text className="point-label" x={x(lowest)} y={y(mainVals[lowest] as number) + (y(mainVals[lowest] as number) + 22 > m.t + ph ? -12 : 18)} textAnchor={lowest === 0 ? 'start' : lowest === n - 1 ? 'end' : 'middle'}>
@@ -129,7 +131,7 @@ export function LineChart({ labels, series, refs = [], extra, label, testId }: {
               </text>
             </g>
           )}
-          {main && last >= 0 && last !== lowest && (
+          {main && last >= 0 && (last !== lowest || !several) && (
             <g>
               <circle className="dot is-main" cx={x(last)} cy={y(mainVals[last] as number)} r={4.5} />
               <text className="point-label" x={x(last)} y={y(mainVals[last] as number) - 10} textAnchor="end">{fmtEuro0(mainVals[last])}</text>
