@@ -2,9 +2,10 @@ import { useState, type FormEvent } from 'react';
 import { Icon } from './Icon';
 import { Field, Section, Sheet, Spinner, useToast } from './ui';
 import { documentUrl, fileProblem, lastMonth, monthLabel, removePayslip, sendDocument } from '../lib/documents';
-import { useRefresh, useTeamDocuments, type TeamDocuments } from '../lib/data';
+import { useDriveFiles, useDriveSource, useRefresh, useTeamDocuments, type TeamDocuments } from '../lib/data';
+import { driveTree, fmtSize, type DriveFile, type DriveNode } from '../lib/driveTree';
 import { frError, supabase } from '../lib/supabase';
-import { fmtDate } from '../lib/time';
+import { ago, fmtDate } from '../lib/time';
 import { DOC_CATEGORIES, DOC_LABEL, type DocCategory, type StaffDocument } from '../lib/types';
 
 const day = (d: string) => d.split('-').reverse().join('/');
@@ -28,6 +29,89 @@ export function OpenButton({ doc }: { doc: StaffDocument }) {
   return link
     ? <a className="btn sm pri" href={link} target="_blank" rel="noopener noreferrer" onClick={() => setLink('')}>Afficher</a>
     : <button type="button" className="btn sm" onClick={() => void open()} aria-label={`Ouvrir ${DOC_LABEL[doc.category]}`}><Icon name="doc" size={16} />Ouvrir</button>;
+}
+
+/* ---------- Dossier des salariés : la copie du Drive, même arborescence ---------- */
+
+/** Télécharge un fichier sous son nom d'origine (lien valable deux minutes). */
+function DriveDownload({ file }: { file: DriveFile }) {
+  const toast = useToast();
+  const [link, setLink] = useState('');
+  async function go() {
+    // Fenêtre ouverte tout de suite, au toucher : sinon l'iPhone la bloque.
+    const w = window.open('', '_blank');
+    try {
+      // Le nom d'origine, encodé une seule fois (supabase-js l'encode deux fois : les accents seraient abîmés).
+      const url = `${await documentUrl(file.storage_path!)}&download=${encodeURIComponent(file.name)}`;
+      if (w) w.location.href = url;
+      else setLink(url);
+    } catch (e) {
+      w?.close();
+      toast(frError(e), 'bad');
+    }
+  }
+  return link
+    ? <a className="btn sm pri" href={link} target="_blank" rel="noopener noreferrer" onClick={() => setLink('')}>Enregistrer</a>
+    : <button type="button" className="btn sm" onClick={() => void go()} aria-label={`Télécharger ${file.name}`}><Icon name="down" size={16} />Télécharger</button>;
+}
+
+function DriveFileRow({ file }: { file: DriveFile }) {
+  return (
+    <div className="row wrap" data-drive-file={file.name}>
+      <span className="drive-ico"><Icon name="doc" size={18} /></span>
+      <span className="grow">
+        <span className="t" style={{ overflowWrap: 'anywhere' }}>{file.name}</span>
+        <span className="sub">{[`modifié le ${fmtDate(file.modified_at)}`, fmtSize(file.size)].filter(Boolean).join(' · ')}</span>
+      </span>
+      <span className="end">
+        {file.storage_path ? <DriveDownload file={file} /> : <span className="pill warn">Copie en cours</span>}
+      </span>
+    </div>
+  );
+}
+
+function DriveItems({ node }: { node: DriveNode }) {
+  return (
+    <>
+      {node.folders.map((f) => (
+        <details className="drive-folder" key={f.name} data-folder={f.path.join(' / ')}>
+          <summary className="row">
+            <span className="drive-ico"><Icon name="folder" size={18} /></span>
+            <span className="grow t">{f.name}</span>
+            <span className="end"><span className="sub num">{f.count} fichier{f.count > 1 ? 's' : ''}</span><span className="chev"><Icon name="chev" size={16} /></span></span>
+          </summary>
+          <div className="drive-in"><DriveItems node={f} /></div>
+        </details>
+      ))}
+      {node.files.map((f) => <DriveFileRow key={f.id} file={f} />)}
+    </>
+  );
+}
+
+/**
+ * Le dossier des salariés, copié du Drive avec la même arborescence (gérant et comptable).
+ * Avec `profileId` : le dossier de cette personne seulement, sans répéter son nom.
+ */
+export function DriveTree({ profileId }: { profileId?: string }) {
+  const q = useDriveFiles(true);
+  const src = useDriveSource(true);
+  if (q.isLoading) return <div className="list"><p className="empty"><Spinner /></p></div>;
+  const files = (q.data ?? []).filter((f) => !profileId || f.profile_id === profileId);
+  if (profileId && files.length === 0) return null;
+  if (!src.data?.synced_at && files.length === 0) {
+    return <p className="note" data-testid="drive-vide">Le dossier des salariés du Drive n'est pas encore copié ici : le gérant le relie dans Administration.</p>;
+  }
+  const tree = driveTree(files, profileId ? 1 : 0);
+  return (
+    <>
+      <div className="list" data-testid={profileId ? 'drive-personne' : 'drive-tree'}>
+        {tree.count === 0 ? <p className="empty">Aucun fichier dans le dossier.</p> : <DriveItems node={tree} />}
+      </div>
+      {!profileId && src.data?.synced_at && (
+        <p className="note">Copie du Drive, mise à jour {ago(src.data.synced_at)} et toute seule ensuite (toutes les dix minutes). Un fichier ajouté, modifié ou retiré dans le Drive l'est ici aussi.</p>
+      )}
+    </>
+  );
 }
 
 /** Une ligne de document : catégorie, dates, date d'envoi. */
@@ -137,8 +221,15 @@ export function DocumentSheet({ profileId, name, forOther = false, category: fir
 }
 
 /** Tous les documents de l'équipe, par personne : pour la comptable (et le gérant, qui voit la même chose). */
+/** Ce qui, dans le dossier Drive d'une personne, tient lieu d'un document attendu. */
+const DRIVE_HINT: Partial<Record<DocCategory, RegExp>> = {
+  identite: /identite|passeport|\bcni\b|sejour/, vitale: /vitale|securite sociale/, rib: /\brib\b|bancaire/, dpae: /dpae/, contrat: /contrat|avenant/,
+};
+const plain = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
 export function TeamDocumentsView({ accountantId }: { accountantId?: string }) {
   const q = useTeamDocuments(true);
+  const drive = useDriveFiles(true);
   const toast = useToast();
   const refresh = useRefresh();
   const [who, setWho] = useState('');
@@ -157,6 +248,7 @@ export function TeamDocumentsView({ accountantId }: { accountantId?: string }) {
     toast('Bulletin retiré');
   };
   const own = (d: StaffDocument) => !!accountantId && d.category === 'paie' && d.accountant_id === accountantId ? remove(d) : undefined;
+  const inDrive = (profileId: string, c: DocCategory) => (drive.data ?? []).some((f) => f.profile_id === profileId && DRIVE_HINT[c]?.test(plain([...f.folder, f.name].join(' '))));
   return (
     <>
       <div className="acts">
@@ -174,22 +266,33 @@ export function TeamDocumentsView({ accountantId }: { accountantId?: string }) {
           {people.map((p) => (<option key={p.id} value={p.id}>{p.first_name} {p.last_name}{p.active ? '' : ' (ancien membre)'}</option>))}
         </select>
       </Field>
+      <Section title={who ? `Dossier Drive de ${name.get(who) ?? ''}` : 'Dossier des salariés (Drive)'}>
+        <DriveTree key={who} profileId={who || undefined} />
+        {who && <DrivePersonEmpty profileId={who} />}
+      </Section>
       {shown.map((p) => {
         const mine = docs.filter((d) => d.profile_id === p.id);
-        const missing = ['identite', 'vitale', 'rib', 'dpae', 'contrat'].filter((c) => !mine.some((d) => d.category === c)) as DocCategory[];
+        const missing = (['identite', 'vitale', 'rib', 'dpae', 'contrat'] as DocCategory[]).filter((c) => !mine.some((d) => d.category === c) && !inDrive(p.id, c));
         return (
           <Section key={p.id} title={`${p.first_name} ${p.last_name}`} right={p.folder_url ? <a className="link" href={p.folder_url} target="_blank" rel="noopener noreferrer">Dossier Drive</a> : undefined}>
             <div className="list" data-person-docs={`${p.first_name} ${p.last_name}`}>
               {mine.length === 0 && <p className="empty">Aucun document dans l'appli.</p>}
               {mine.map((d) => <DocRow key={d.id} doc={d} onDelete={own(d)} />)}
             </div>
-            {p.active && missing.length > 0 && <p className="note">Pas encore dans l'appli : {missing.map((c) => DOC_LABEL[c].split(' (')[0].toLowerCase()).join(', ')}.</p>}
+            {p.active && missing.length > 0 && <p className="note">Ni dans l'appli ni dans son dossier Drive : {missing.map((c) => DOC_LABEL[c].split(' (')[0].toLowerCase()).join(', ')}.</p>}
           </Section>
         );
       })}
-      <p className="note">Les documents s'ouvrent dans un nouvel onglet ; le lien ne dure que deux minutes. Le dossier Drive s'ouvre seulement si le gérant te l'a partagé.</p>
+      <p className="note">Les documents s'ouvrent ou se téléchargent dans un nouvel onglet ; le lien ne dure que deux minutes. Le lien « Dossier Drive » ouvre le Drive lui-même, seulement si le gérant te l'a partagé.</p>
     </>
   );
+}
+
+/** Rien dans le Drive pour cette personne : on le dit, plutôt qu'une rubrique vide. */
+function DrivePersonEmpty({ profileId }: { profileId: string }) {
+  const q = useDriveFiles(true);
+  if (q.isLoading || (q.data ?? []).some((f) => f.profile_id === profileId)) return null;
+  return <p className="note">Aucun dossier Drive reconnu pour cette personne : son dossier doit porter son prénom et son nom, ou son lien doit être dans sa fiche.</p>;
 }
 
 /** Supprimer un document (gérant) : la fiche, puis le fichier. */

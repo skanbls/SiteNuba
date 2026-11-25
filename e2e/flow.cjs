@@ -1018,8 +1018,13 @@ async function main() {
   await boss.fill('#merc-nuba', 'https://docs.google.com/spreadsheets/d/NB_feuille_test_789/edit');
   await boss.fill('#merc-tableau', 'https://docs.google.com/spreadsheets/d/TB_feuille_test_321/edit');
   await boss.fill('#merc-site', 'https://docs.google.com/spreadsheets/d/ST_feuille_test_654/edit');
+  await boss.fill('#merc-docs', 'https://docs.google.com/spreadsheets/d/pas_un_dossier_123/edit');
+  await boss.getByRole('button', { name: 'Créer le script' }).click();
+  await see(boss, 'Lien du dossier des salariés non reconnu');
+  await boss.fill('#merc-docs', 'https://drive.google.com/drive/folders/DS_dossier_test_987?usp=sharing');
   await boss.getByRole('button', { name: 'Créer le script' }).click();
   const script = await boss.inputValue('#merc-script');
+  assert.match(script, /"dossierSalaries": "DS_dossier_test_987"/);
   assert.match(script, /"cleSynchro": "nuba_[0-9a-f]{64}"/);
   assert.match(script, /"saveurs_nomades": "SN_feuille_test_123"/);
   assert.match(script, /"nuba": "NB_feuille_test_789"/);
@@ -1165,6 +1170,27 @@ async function main() {
   };
   const props = new Map();
   const notes = new Map();
+  // Faux Google Drive : le dossier des salariés, un dossier par personne (noms et fichiers inventés).
+  const driveAt = new Date(Date.UTC(2026, 9, 1, 9));
+  const driveRoot = { id: 'DS_dossier_test_987', name: 'DOSSIER SALARIES TEST', files: [], folders: [
+    { id: 'DS_theo_dossier_01', name: 'THÉO MARTIN', files: [], folders: [
+      { id: 'DS_theo_dpae_0001', name: 'DPAE', folders: [], files: [{ id: 'DS_fichier_dpae_01', name: 'DPAE Théo.pdf', mime: 'application/pdf', size: 12, modified: driveAt, data: 'dpae de test' }] },
+      { id: 'DS_theo_contrat_01', name: 'CONTRATS DE TRAVAIL (SIGNES)', folders: [], files: [{ id: 'DS_fichier_contrat', name: 'Contrat Théo', mime: 'application/vnd.google-apps.document', size: 0, modified: driveAt, data: 'contrat de test' }] },
+      { id: 'DS_theo_paie_00001', name: 'BULLETINS DE PAIE', folders: [], files: [] },
+    ] },
+    { id: 'DS_fiches_poste_01', name: 'FICHES DE POSTE', folders: [], files: [
+      { id: 'DS_fichier_fiche_1', name: 'Serveur.pdf', mime: 'application/pdf', size: 20, modified: driveAt, data: 'fiche de poste' },
+      { id: 'DS_fichier_video_1', name: 'Formation.mp4', mime: 'video/mp4', size: 60 * 1024 * 1024, modified: driveAt, data: '' },
+    ] },
+  ] };
+  const driveIter = (xs) => { let i = 0; return { hasNext: () => i < xs.length, next: () => xs[i++] }; };
+  const driveFiles = new Map();
+  const driveFolder = (f) => ({ getId: () => f.id, getName: () => f.name, getFiles: () => driveIter(f.files.map(driveFile)), getFolders: () => driveIter(f.folders.map(driveFolder)) });
+  const driveFile = (x) => {
+    driveFiles.set(x.id, x);
+    return { getId: () => x.id, getName: () => x.name, getMimeType: () => x.mime, getSize: () => x.size, getLastUpdated: () => x.modified,
+      getBlob: () => ({ getBytes: () => [...Buffer.from(x.data)] }), getAs: () => ({ getBytes: () => [...Buffer.from(`PDF ${x.data}`)] }) };
+  };
   const google = {
     SpreadsheetApp: { openById: (id) => ({ getName: () => sheets[id].name, getSheetByName: (n) => {
       const t = sheets[id].tabs[n];
@@ -1179,10 +1205,19 @@ async function main() {
     } }) },
     PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => props.get(k) ?? null, setProperty: (k, v) => props.set(k, v) }) },
     UrlFetchApp: { fetch: (url, o) => {
-      const out = execFileSync('curl', ['-s', '-w', '\n%{http_code}', '-X', 'POST', url, '-H', 'Content-Type: application/json', ...Object.entries(o.headers).flatMap(([k, v]) => ['-H', `${k}: ${v}`]), '--data-binary', '@-'], { input: o.payload }).toString();
+      // Comme UrlFetchApp : méthode, type du contenu, et un contenu en texte ou en octets (un fichier).
+      const body = o.payload === undefined ? null : Array.isArray(o.payload) ? Buffer.from(o.payload) : o.payload;
+      const out = execFileSync('curl', ['-s', '-w', '\n%{http_code}', '-X', (o.method || 'post').toUpperCase(), url,
+        ...(body === null ? [] : ['-H', `Content-Type: ${o.contentType || 'application/json'}`]),
+        ...Object.entries(o.headers).flatMap(([k, v]) => ['-H', `${k}: ${v}`]), ...(body === null ? [] : ['--data-binary', '@-'])],
+      body === null ? {} : { input: body }).toString();
       const i = out.lastIndexOf('\n');
       return { getResponseCode: () => Number(out.slice(i + 1)), getContentText: () => out.slice(0, i) };
     } },
+    DriveApp: {
+      getFolderById: (id) => { if (id !== driveRoot.id) throw new Error('dossier introuvable'); return driveFolder(driveRoot); },
+      getFileById: (id) => { const x = driveFiles.get(id); if (!x) throw new Error('fichier introuvable'); return driveFile(x); },
+    },
     Utilities: { formatDate: (d) => d.toISOString().slice(0, 10), computeDigest: (_a, t) => [...createHash('sha256').update(t).digest()], base64Encode: (b) => Buffer.from(b).toString('base64'), DigestAlgorithm: { SHA_256: 1 }, Charset: { UTF_8: 1 } },
     ScriptApp: { getProjectTriggers: () => [], deleteTrigger: () => {}, newTrigger: () => ({ timeBased: () => ({ everyMinutes: () => ({ create: () => {} }) }) }) },
     console: { log: () => {} },
@@ -1195,6 +1230,9 @@ async function main() {
   await boss.locator('[data-merc="nuba"]').getByText('2 plats, 1 boisson, 1 préparation maison · 2 fiches à compléter').waitFor();
   await boss.locator('[data-merc="tableau"]').getByText(/Reçu .* gérants seulement/).waitFor();
   await boss.locator('[data-merc="site"]').getByText('2 soirées, 1 rendez-vous de la semaine, une exposition').waitFor();
+  // Le dossier des salariés : trois fichiers copiés (le Google Doc en PDF), Théo reconnu, la vidéo trop lourde signalée.
+  await boss.locator('[data-merc="documents"]').getByText(/Reçu .* 3 fichiers, 1 personne reconnue · gérant et comptable seulement/).waitFor();
+  await boss.locator('[data-merc="documents"] [data-drive-problems]').getByText(/Trop lourd pour l.appli \(plus de 45 Mo\) : FICHES DE POSTE \/ Formation\.mp4/).waitFor();
   step('le gérant relie les mercuriales : le script Google généré envoie fiches, commandes et prix');
 
   // La programmation du site arrive dans Événements, affiche comprise.
@@ -1539,6 +1577,41 @@ async function main() {
   await boss.reload();
   await boss.locator('[data-accountant="compta@cabinet.test"]').getByText('Compte créé').waitFor();
   step("la comptable a son espace : récap du mois avec les absences, documents de l'équipe, caisse ; rien d'autre");
+
+  // Le dossier des salariés, copié du Drive : même arborescence, téléchargé sans passer par le Drive.
+  await compta.getByRole('button', { name: 'Documents', exact: true }).click();
+  const tree = compta.getByTestId('drive-tree');
+  await tree.locator('[data-folder="THÉO MARTIN"] > summary').click();
+  await tree.locator('[data-folder="THÉO MARTIN / DPAE"] > summary').click();
+  await tree.locator('[data-folder="THÉO MARTIN / CONTRATS DE TRAVAIL (SIGNES)"] > summary').click();
+  await tree.locator('[data-drive-file="Contrat Théo.pdf"]').waitFor();
+  await shot(compta, '13zk-dossier-salaries');
+  const dlRequest = compta.context().waitForEvent('request', (r) => /\/storage\/v1\/object\/sign\/staff-docs\/drive\//.test(r.url()) && r.method() === 'GET');
+  const [dlTab] = await Promise.all([compta.waitForEvent('popup'), tree.locator('[data-drive-file="DPAE Théo.pdf"]').getByRole('button', { name: /Télécharger/ }).click()]);
+  const dlUrl = (await dlRequest).url();
+  assert.match(decodeURIComponent(dlUrl), /download=DPAE Théo\.pdf/, 'enregistré sous son nom : ' + dlUrl);
+  assert.equal((await (await compta.request.get(dlUrl)).body()).toString(), 'dpae de test', 'le fichier du Drive');
+  await dlTab.close().catch(() => {});
+  // Le Drive change : un bulletin ajouté, une fiche retirée, la DPAE remplacée. L'appli suit toute seule.
+  const theoDrive = driveRoot.folders[0];
+  theoDrive.folders[2].files.push({ id: 'DS_fichier_paie_01', name: 'Bulletin octobre.pdf', mime: 'application/pdf', size: 30, modified: new Date(), data: 'paie de test' });
+  driveRoot.folders[1].files.splice(0, 1);
+  theoDrive.folders[0].files[0] = { ...theoDrive.folders[0].files[0], modified: new Date(), data: 'dpae signée' };
+  gs.envoyerSiChangement();
+  await compta.reload();
+  await compta.getByRole('button', { name: 'Documents', exact: true }).click();
+  await tree.locator('[data-folder="THÉO MARTIN"] > summary').click();
+  await tree.locator('[data-folder="THÉO MARTIN / BULLETINS DE PAIE"] > summary').click();
+  await tree.locator('[data-drive-file="Bulletin octobre.pdf"]').getByRole('button', { name: /Télécharger/ }).waitFor();
+  await tree.locator('[data-folder="FICHES DE POSTE"]').waitFor({ state: 'detached' });
+  assert.equal(execFileSync('psql', [process.env.DB_URL, '-Atc', "select count(*) from storage.objects where name like 'drive/DS_fichier_dpae_01/%'"]).toString().trim(), '1',
+    "l'ancienne version de la DPAE est retirée");
+  // Le gérant retrouve le dossier de Théo dans sa fiche ; un équipier n'y a pas accès.
+  await boss.goto(APP + '#/equipe');
+  await boss.locator('button.row', { hasText: 'Théo Martin' }).click();
+  await boss.getByTestId('drive-personne').locator('[data-folder="DPAE"]').waitFor();
+  await boss.getByRole('button', { name: 'Fermer' }).click();
+  step("le dossier des salariés du Drive est copié dans l'appli, même arborescence : la comptable télécharge sans passer par le Drive, et l'appli suit les changements");
 
   // Bulletins de paie : la comptable dépose celui de Théo, qui le retrouve dans son compte.
   const payMonth = ymd(new Date()).slice(0, 7);

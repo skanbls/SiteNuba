@@ -18,11 +18,11 @@ update t_plan set theo = (select id from public.profiles where email = 'theo@nub
 
 -- 0. Les noms
 do $$ begin
-  assert public._name_key('Margo SALVA (apprentie)') = 'margo salva' and public._name_key('Luce CAMUS--MIZZI') = 'luce camus mizzi'
+  assert public._name_key('Léa TEST (apprentie)') = 'lea test' and public._name_key('Zoé DUPONT--MARTIN') = 'zoe dupont martin'
      and public._name_key(' Inès  Durand ') = 'ines durand', 'noms réduits';
   assert public._profile_by_name('Théo MARTIN (serveur)') = (select theo from t_plan), 'nom complet';
   assert public._profile_by_name('INES') = (select ines from t_plan), 'prénom seul, unique';
-  assert public._profile_by_name('Commis soir (Hayder ou remplaçant)') is null, 'inconnu';
+  assert public._profile_by_name('Commis soir (Sam ou remplaçant)') is null, 'inconnu';
 end $$;
 
 -- 1. Le script envoie le planning
@@ -40,7 +40,7 @@ begin
     jsonb_build_object('name', 'Théo MARTIN', 'day', d, 'start', '18:30', 'end', '00:30', 'area', 'Salle', 'note', 'pause 30 min'),
     jsonb_build_object('name', 'Inès DURAND (responsable)', 'day', d + 1, 'start', '17:00', 'end', '23:00', 'area', 'Bar', 'note', ''),
     jsonb_build_object('name', 'Inès DURAND (responsable)', 'day', d + 2, 'start', '17:00', 'end', '23:00', 'area', 'Bar', 'note', ''),
-    jsonb_build_object('name', 'Commis soir (Hayder ou remplaçant)', 'day', d, 'start', '18:00', 'end', '23:00', 'area', 'Cuisine', 'note', ''),
+    jsonb_build_object('name', 'Commis soir (Sam ou remplaçant)', 'day', d, 'start', '18:00', 'end', '23:00', 'area', 'Cuisine', 'note', ''),
     jsonb_build_object('name', 'Théo MARTIN', 'day', d + 30, 'start', '10:00', 'end', '14:00', 'area', 'Salle', 'note', ''))));
   assert (r ->> 'ok')::boolean and (r -> 'counts' ->> 'added')::int = 4 and (r -> 'counts' ->> 'problems')::int = 1, 'premier envoi : ' || r::text;
 end $$;

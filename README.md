@@ -23,6 +23,7 @@ En ligne : https://skanbls.github.io/SiteNuba/ (mise à jour automatique à chaq
 | | E-mails : confirmation au client, alertes à la Nuba | Prêt avec la migration 0010 ; à activer après la mise en route de Brevo (Administration, E-mails) |
 | | E-mails des comptes de l'équipe (inscription, mot de passe oublié) | À régler dans Supabase : SMTP de Brevo (voir plus bas) |
 | | Checklists selon le planning : chaque liste a son poste (salle, bar, cuisine ou toute l'équipe) et s'affiche le jour J sur l'écran des personnes au planning ; les listes de la semaine ou du mois ont leur jour, s'ajoutent ce jour-là et sont rappelées la veille (écran et e-mail) | **En ligne**, une fois la migration 0025 exécutée ; rappels planifiés dans Administration, E-mails |
+| | Dossier des salariés : copie du dossier Google Drive (un dossier par personne, contrats, pièces d'identité, DPAE, bulletins, dossiers communs), même arborescence, téléchargeable par le gérant et la comptable sans passer par le Drive ; mise à jour toute seule (fichiers ajoutés, modifiés, retirés) | **En ligne**, une fois la migration 0028 exécutée, le lien du dossier collé dans Administration (Mercuriales, Nouveau script) et le nouveau script Google installé |
 | | Fermeture de caisse : le Z de Zelty, le comptage des espèces par coupure, le fond de caisse, les dépenses, le terminal CB, les titres-restaurant et les chèques, les écarts calculés en direct (explication obligatoire au-delà de 2 €), la photo du Z, un récapitulatif au gérant ; historique et export CSV ; chiffres dans le tableau de bord et dans « Saisie hebdo » du fichier ; consultation par la comptable | **En ligne**, une fois la migration 0026 exécutée ; accès « Caisse » à confier dans Administration ; nouveau script Google pour « Saisie hebdo » |
 | | Planning depuis l'onglet « Planning équipe » du tableau de bord (semaines types et calendrier, six semaines à l'avance) ; chacun prévenu de tout changement de son planning (écran Aujourd'hui et e-mail récapitulatif) | **En ligne**, une fois la migration 0027 exécutée et le nouveau script Google installé ; e-mails planifiés dans Administration, E-mails (pg_cron) |
 | | Fiches process des plats Mijote : étapes de production, dressage, hygiène et photo du dressage, ouvertes depuis chaque commande, imprimables ; import d'un fichier de fiches préparé | **En ligne**, une fois la migration 0023 exécutée et le fichier de fiches importé (Production, Fiches) |
@@ -132,7 +133,7 @@ L'appli se met à jour toute seule : elle cherche une nouvelle version à chaque
 
 ## Relier l'appli à Supabase
 
-Pour une base qui a déjà les scripts 0001 à 0003, `supabase/installation/0004-a-0009.sql` regroupe les six suivants en un seul collage, tout ou rien. Les migrations 0010 à 0027 se collent ensuite une par une ; elles aussi passent en entier ou pas du tout.
+Pour une base qui a déjà les scripts 0001 à 0003, `supabase/installation/0004-a-0009.sql` regroupe les six suivants en un seul collage, tout ou rien. Les migrations 0010 à 0028 se collent ensuite une par une ; elles aussi passent en entier ou pas du tout.
 
 1. Créer un projet sur supabase.com, région Europe.
 2. Dans **SQL Editor**, coller et exécuter les fichiers de `supabase/migrations/`, dans l'ordre de leur numéro.

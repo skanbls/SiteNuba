@@ -60,7 +60,7 @@ alter table public.planning_skips enable row level security;
 revoke all on public.planning_skips from anon, authenticated;
 
 -- Un nom réduit à ses lettres : sans accents, sans majuscules, sans ce qui est entre parenthèses.
--- « Margo SALVA (apprentie) » → « margo salva » ; « Luce CAMUS--MIZZI » → « luce camus mizzi ».
+-- « Léa TEST (apprentie) » → « lea test » ; « Zoé DUPONT--MARTIN » → « zoe dupont martin ».
 create function public._name_key(t text) returns text
 language sql immutable set search_path = '' as $$
   select btrim(regexp_replace(regexp_replace(

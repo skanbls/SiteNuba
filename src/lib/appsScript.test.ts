@@ -1,15 +1,40 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { buildAppsScript, sheetId } from './appsScript';
+import { buildAppsScript, folderId, sheetId } from './appsScript';
 
 /* Un faux Google : feuilles en mémoire, envois notés, déclencheurs comptés. */
 type Plain = string | number | Date;
 /** Une case : sa valeur, ou sa valeur et le texte affiché par la feuille. */
 type Cell = Plain | { d: string; v: Plain };
 const isShown = (c: Cell): c is { d: string; v: Plain } => typeof c === 'object' && !(c instanceof Date);
-function fakeGoogle(files: Record<string, { name: string; tabs: Record<string, Cell[][]> }>, answer: string | ((url: string) => string) = '{"ok":true,"counts":{}}') {
+/** Un faux Drive : des dossiers et des fichiers en mémoire. */
+interface FakeFile { id: string; name: string; mime: string; size: number; modified: Date; data: string }
+interface FakeFolder { id: string; name: string; files: FakeFile[]; folders: FakeFolder[] }
+const iter = <T,>(xs: T[]) => { let i = 0; return { hasNext: () => i < xs.length, next: () => xs[i++] }; };
+function driveApp(root: FakeFolder) {
+  const all = new Map<string, FakeFile>();
+  const wrapFolder = (f: FakeFolder): unknown => ({
+    getId: () => f.id, getName: () => f.name,
+    getFiles: () => iter(f.files.map(wrapFile)), getFolders: () => iter(f.folders.map(wrapFolder)),
+  });
+  const wrapFile = (x: FakeFile) => {
+    all.set(x.id, x);
+    return {
+      getId: () => x.id, getName: () => x.name, getMimeType: () => x.mime, getSize: () => x.size, getLastUpdated: () => x.modified,
+      getBlob: () => ({ getBytes: () => [...Buffer.from(x.data)] }),
+      getAs: (m: string) => ({ getBytes: () => [...Buffer.from(`${m}:${x.data}`)] }),
+    };
+  };
+  return {
+    getFolderById: (id: string) => { if (id !== root.id) throw new Error('dossier introuvable'); return wrapFolder(root); },
+    getFileById: (id: string) => { const x = all.get(id); if (!x) throw new Error('fichier introuvable'); return wrapFile(x); },
+  };
+}
+
+type Sent = { url: string; method: string; body: { p_key: string; p_payload: Record<string, unknown>; p_done?: unknown }; bytes?: string; contentType?: string; headers: Record<string, string> };
+function fakeGoogle(files: Record<string, { name: string; tabs: Record<string, Cell[][]> }>, answer: string | ((url: string, method: string) => string) = '{"ok":true,"counts":{}}', drive?: FakeFolder) {
   const notes = new Map<string, string>();
-  const sent: { url: string; body: { p_key: string; p_payload: Record<string, unknown> }; headers: Record<string, string> }[] = [];
+  const sent: Sent[] = [];
   const props = new Map<string, string>();
   const triggers: { fn: string }[] = [{ fn: 'envoyerSiChangement' }, { fn: 'autreChose' }];
   const g = {
@@ -37,11 +62,18 @@ function fakeGoogle(files: Record<string, { name: string; tabs: Record<string, C
       getScriptProperties: () => ({ getProperty: (k: string) => props.get(k) ?? null, setProperty: (k: string, v: string) => props.set(k, v) }),
     },
     UrlFetchApp: {
-      fetch: (url: string, o: { payload: string; headers: Record<string, string> }) => {
-        sent.push({ url, body: JSON.parse(o.payload), headers: o.headers });
-        return { getResponseCode: () => 200, getContentText: () => (typeof answer === 'function' ? answer(url) : answer) };
+      fetch: (url: string, o: { method?: string; contentType?: string; payload?: string | number[]; headers: Record<string, string> }) => {
+        const method = o.method ?? 'get';
+        const json = !o.contentType || o.contentType === 'application/json';
+        sent.push({
+          url, method, headers: o.headers, contentType: o.contentType,
+          body: json && typeof o.payload === 'string' ? JSON.parse(o.payload) : null,
+          bytes: Array.isArray(o.payload) ? Buffer.from(o.payload).toString() : undefined,
+        });
+        return { getResponseCode: () => 200, getContentText: () => (typeof answer === 'function' ? answer(url, method) : answer) };
       },
     },
+    ...(drive ? { DriveApp: driveApp(drive) } : {}),
     Utilities: {
       formatDate: (d: Date) => d.toISOString().slice(0, 10),
       computeDigest: (_a: string, s: string) => [...createHash('sha256').update(s).digest()],
@@ -359,6 +391,60 @@ describe('script Google des mercuriales', () => {
     expect(notes.get('Saisie hebdo!5,2')).toMatch(/^Nuba Gestion : total des fermetures de caisse \(3 jours\)/);
     // Le tableau de bord part ensuite, avec les chiffres à jour.
     expect(sent[1].url).toBe('https://projet.supabase.co/rest/v1/rpc/sync_dashboard');
+  });
+
+  it('copie le dossier des salariés : même arborescence, fichiers nouveaux ou modifiés, Google Docs en PDF', () => {
+    const at = new Date(Date.UTC(2026, 10, 20, 9));
+    const ROOT: FakeFolder = { id: 'RacineTest0001', name: 'DOSSIER TEST', files: [], folders: [
+      { id: 'DossierLea0001', name: 'LÉA TEST', files: [], folders: [
+        { id: 'DossierDpae001', name: 'DPAE', folders: [], files: [{ id: 'FichierDpae001', name: 'DPAE Léa.pdf', mime: 'application/pdf', size: 12, modified: at, data: 'pdf-dpae' }] },
+        { id: 'DossierContr01', name: 'CONTRATS DE TRAVAIL (SIGNES)', folders: [], files: [{ id: 'FichierDoc0001', name: 'Avenant', mime: 'application/vnd.google-apps.document', size: 0, modified: at, data: 'doc' }] },
+      ] },
+      { id: 'DossierFiche01', name: 'FICHES DE POSTE', folders: [], files: [
+        { id: 'FichierForm001', name: 'Questionnaire', mime: 'application/vnd.google-apps.form', size: 0, modified: at, data: '' },
+        { id: 'FichierVideo01', name: 'Vidéo.mp4', mime: 'video/mp4', size: 60 * 1024 * 1024, modified: at, data: '' },
+      ] },
+    ] };
+    const answer = (url: string, method: string) => {
+      if (url.endsWith('/drive_plan')) return JSON.stringify({ ok: true, counts: {}, remove: ['drive/FichierVieux01/1'],
+        upload: [{ id: 'FichierDpae001', path: 'drive/FichierDpae001/111', mime: 'application/pdf' }, { id: 'FichierDoc0001', path: 'drive/FichierDoc0001/222', mime: 'application/pdf' }] });
+      if (url.endsWith('/drive_done')) return '{"ok":true,"copied":2,"remove":["drive/FichierDpae001/100"]}';
+      if (url.includes('/storage/')) return method === 'delete' ? '{"message":"Successfully deleted"}' : '{"Key":"staff-docs/x"}';
+      return '{"ok":true,"counts":{}}';
+    };
+    const { g, sent } = fakeGoogle({}, answer, ROOT);
+    const gs = run(buildAppsScript({ ...opts, saveursNomades: '', comptoir: '', documents: 'RacineTest0001' }), g);
+    gs.envoyerMaintenant();
+    const plan = sent[0];
+    expect(plan.url).toBe('https://projet.supabase.co/rest/v1/rpc/drive_plan');
+    expect(plan.body.p_payload).toEqual({
+      brand: 'documents', root: 'DOSSIER TEST',
+      tops: [{ id: 'DossierLea0001', name: 'LÉA TEST' }, { id: 'DossierFiche01', name: 'FICHES DE POSTE' }],
+      files: [
+        { id: 'FichierDoc0001', folder: ['LÉA TEST', 'CONTRATS DE TRAVAIL (SIGNES)'], name: 'Avenant.pdf', mime: 'application/pdf', size: null, modified: '2026-11-20T09:00:00.000Z' },
+        { id: 'FichierDpae001', folder: ['LÉA TEST', 'DPAE'], name: 'DPAE Léa.pdf', mime: 'application/pdf', size: 12, modified: '2026-11-20T09:00:00.000Z' },
+      ],
+      problems: ['Trop lourd pour l\'appli (plus de 45 Mo) : FICHES DE POSTE / Vidéo.mp4'],
+    });
+    const storage = sent.filter((x) => x.url.includes('/storage/v1/'));
+    expect(storage.map((x) => `${x.method} ${x.url.replace('https://projet.supabase.co/storage/v1/object/staff-docs/', '')}`)).toEqual([
+      'delete drive/FichierVieux01/1', 'post drive/FichierDpae001/111', 'post drive/FichierDoc0001/222', 'delete drive/FichierDpae001/100',
+    ]);
+    expect(storage[1]).toMatchObject({ contentType: 'application/pdf', bytes: 'pdf-dpae', headers: { apikey: 'sb_publishable_x' } });
+    expect(storage[2].bytes).toBe('application/pdf:doc');   // le Google Doc, exporté en PDF
+    expect(sent.find((x) => x.url.endsWith('/drive_done'))!.body.p_done).toEqual([
+      { id: 'FichierDpae001', path: 'drive/FichierDpae001/111' }, { id: 'FichierDoc0001', path: 'drive/FichierDoc0001/222' }]);
+    // Rien n'a changé dans le Drive : la liste ne repart pas.
+    sent.length = 0;
+    gs.envoyerSiChangement();
+    expect(sent).toHaveLength(0);
+  });
+
+  it("retrouve l'identifiant d'un dossier Drive dans son lien", () => {
+    expect(folderId('https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz_012345?usp=sharing')).toBe('1AbCdEfGhIjKlMnOpQrStUvWxYz_012345');
+    expect(folderId('https://drive.google.com/drive/u/0/folders/1AbCdEfGhIjKlMnOp')).toBe('1AbCdEfGhIjKlMnOp');
+    expect(folderId('https://drive.google.com/open?id=1AbCdEfGhIjKlMnOp')).toBe('1AbCdEfGhIjKlMnOp');
+    expect(folderId('https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOp/edit')).toBe('');
   });
 
   it('une feuille non renseignée est ignorée', () => {

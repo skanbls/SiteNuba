@@ -4,8 +4,8 @@ import { Icon, type IconName } from '../components/Icon';
 import { RightsPicker } from '../components/Rights';
 import { Avatar, Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
 import { useQuery } from '@tanstack/react-query';
-import { buildAppsScript, sheetId } from '../lib/appsScript';
-import { useAccountants, useAccountingSettings, useAllRights, useDashboard, useDeliverySettings, useEmailLog, useEmailSettings, useKiosks, useMercSources, useRefresh, useSites, useTeam } from '../lib/data';
+import { buildAppsScript, folderId, sheetId } from '../lib/appsScript';
+import { useAccountants, useAccountingSettings, useAllRights, useDashboard, useDeliverySettings, useDriveSource, useEmailLog, useEmailSettings, useKiosks, useMercSources, useRefresh, useSites, useTeam } from '../lib/data';
 import { EMPTY_DELIVERY, type DeliverySettings } from '../lib/delivery';
 import type { MercSource } from '../lib/production';
 import { AREAS, type Area } from '../lib/rights';
@@ -61,6 +61,8 @@ export default function Settings() {
   const accounting = useAccountingSettings(true);
   const [zeltySheet, setZeltySheet] = useState(false);
   const dashboard = useDashboard(true);
+  // Dossier Drive des salariés, copié dans l'appli (migration 0028).
+  const driveSrc = useDriveSource(true);
   // Onglet « Planning équipe » du tableau de bord (migration 0027).
   const planningSync = useQuery({
     queryKey: ['merc', 'planning'],
@@ -308,10 +310,32 @@ export default function Settings() {
                       </div>
                     );
                   })()}
+                  {driveSrc.data && (() => {
+                    const ds = driveSrc.data;
+                    const c = ds.counts ?? {};
+                    return (
+                      <div className="row wrap" data-merc="documents">
+                        <div className="grow">
+                          <span className="t">Dossier des salariés (Drive)</span>
+                          <span className="sub">{!ds.folder_url ? 'Pas encore relié : colle le lien du dossier dans « Nouveau script ».'
+                            : ds.synced_at ? `Reçu ${fmtDay(ds.synced_at)} à ${fmtTime(ds.synced_at)} · ${plural(c.files ?? 0, 'fichier')}, ${plural(c.people ?? 0, 'personne')} reconnue${(c.people ?? 0) > 1 ? 's' : ''}${c.pending ? ` · ${c.pending} en cours de copie` : ''} · gérant et comptable seulement`
+                            : 'Jamais reçu · gérant et comptable seulement'}</span>
+                          <SyncProblem brand="documents" linked={!!ds.folder_url} syncedAt={ds.synced_at} log={mercStatus.data?.log ?? []} keyAt={mercStatus.data?.key_created_at ?? null} />
+                          {(ds.problems ?? []).length > 0 && (
+                            <span className="sub" style={{ color: 'var(--warn)' }} data-drive-problems>Non copié : {ds.problems.slice(0, 5).join(' · ')}{ds.problems.length > 5 ? ` (et ${ds.problems.length - 5} autres)` : ''}</span>
+                          )}
+                        </div>
+                        <div className="end">
+                          {ds.synced_at && <Link className="btn sm" to="/heures">Voir</Link>}
+                          {ds.folder_url && <a className="btn sm" href={ds.folder_url} target="_blank" rel="noopener noreferrer">Ouvrir</a>}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })()}
-            <p className="note">Un petit script Google, installé une fois, envoie les mercuriales toutes les dix minutes : la carte Nuba dans Fiches techniques, Saveurs Nomades et Comptoir dans Production, le tableau de bord financier (gérants seulement) et son onglet « Planning équipe » dans le Planning. En retour, il écrit les totaux des fermetures de caisse dans « Saisie hebdo ».</p>
+            <p className="note">Un petit script Google, installé une fois, envoie les mercuriales toutes les dix minutes : la carte Nuba dans Fiches techniques, Saveurs Nomades et Comptoir dans Production, le tableau de bord financier (gérants seulement) et son onglet « Planning équipe » dans le Planning, et une copie du dossier Drive des salariés (gérant et comptable). En retour, il écrit les totaux des fermetures de caisse dans « Saisie hebdo ».</p>
             {mercStatus.data?.key_created_at && (
               <p className="note" data-testid="merc-key">
                 Script actuel créé {fmtDay(mercStatus.data.key_created_at)} à {fmtTime(mercStatus.data.key_created_at)} : c'est celui-là qui doit être collé dans Google. Chaque « Créer le script » en fait un nouveau et arrête le précédent.
@@ -390,7 +414,7 @@ export default function Settings() {
       {pair && <PairCodeSheet label={pair.label} code={pair.code} onClose={closePair} />}
       {rightsFor && <RightsSheet key={rightsFor.id} person={rightsFor} areas={areasOf(rightsFor.id)} onClose={closeRights} />}
       {mailSheet && mail.data && <MailSheet settings={mail.data} onClose={closeMail} />}
-      {mercSheet && <MercSheet sources={merc.data ?? []} dashboardUrl={dashboard.data?.sheet_url ?? ''} keyAt={mercStatus.data?.key_created_at ?? null} onClose={closeMerc} />}
+      {mercSheet && <MercSheet sources={merc.data ?? []} dashboardUrl={dashboard.data?.sheet_url ?? ''} docsUrl={driveSrc.data?.folder_url ?? ''} keyAt={mercStatus.data?.key_created_at ?? null} onClose={closeMerc} />}
       {blSheet && <DeliverySheet settings={delivery.data ?? EMPTY_DELIVERY} onClose={closeBl} />}
       {zeltySheet && <ZeltySheet url={accounting.data?.zelty_url ?? ''} onClose={() => setZeltySheet(false)} />}
       {accSheet && <AccountantSheet access={accSheet} onClose={closeAcc} />}
@@ -503,7 +527,7 @@ function SyncProblem({ brand, linked, syncedAt, log, keyAt }: {
   return null;
 }
 
-function MercSheet({ sources, dashboardUrl, keyAt, onClose }: { sources: MercSource[]; dashboardUrl: string; keyAt: string | null; onClose: () => void }) {
+function MercSheet({ sources, dashboardUrl, docsUrl, keyAt, onClose }: { sources: MercSource[]; dashboardUrl: string; docsUrl: string; keyAt: string | null; onClose: () => void }) {
   const toast = useToast();
   const refresh = useRefresh();
   const urlOf = (b: string) => sources.find((s) => s.brand === b)?.sheet_url ?? '';
@@ -512,21 +536,31 @@ function MercSheet({ sources, dashboardUrl, keyAt, onClose }: { sources: MercSou
   const [nb, setNb] = useState(urlOf('nuba'));
   const [tb, setTb] = useState(dashboardUrl);
   const [st, setSt] = useState(urlOf('site'));
+  const [dc, setDc] = useState(docsUrl);
   const [script, setScript] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function create(e: FormEvent) {
     e.preventDefault();
-    const a = sheetId(sn), b = sheetId(cm), c = sheetId(nb), t = sheetId(tb), w = sheetId(st);
+    const a = sheetId(sn), b = sheetId(cm), c = sheetId(nb), t = sheetId(tb), w = sheetId(st), d = folderId(dc);
     const bad = [nb.trim() && !c ? 'Nuba' : '', sn.trim() && !a ? 'Saveurs Nomades' : '', cm.trim() && !b ? 'Comptoir Méditerranéen' : '', tb.trim() && !t ? 'le tableau de bord' : '', st.trim() && !w ? 'le contenu du site' : ''].filter(Boolean);
     if (bad.length) return setErr(`Lien non reconnu pour ${bad.join(' et ')}. Ouvre la mercuriale dans Google Sheets et copie l'adresse en haut du navigateur : elle commence par https://docs.google.com/spreadsheets/d/`);
-    if (!a && !b && !c && !t && !w) return setErr('Colle le lien d\'au moins une mercuriale.');
+    if (dc.trim() && !d) return setErr("Lien du dossier des salariés non reconnu. Ouvre le dossier dans Google Drive et copie l'adresse en haut du navigateur : elle contient /folders/.");
+    if (!a && !b && !c && !t && !w && !d) return setErr('Colle le lien d\'au moins une mercuriale.');
     setBusy(true);
     setErr('');
     const clean = (id: string) => (id ? `https://docs.google.com/spreadsheets/d/${id}/edit` : '');
     const args = { p_sn_url: clean(a), p_cm_url: clean(b), p_nuba_url: clean(c), p_dashboard_url: clean(t) };
-    let { data, error } = await supabase.rpc('merc_new_key', { ...args, p_site_url: clean(w) });
+    let { data, error } = await supabase.rpc('merc_new_key', { ...args, p_site_url: clean(w), p_docs_url: d ? `https://drive.google.com/drive/folders/${d}` : '' });
+    // Avant la mise à jour 0028, la base ne connaît pas encore le dossier des salariés.
+    if (error?.code === 'PGRST202') {
+      if (d) {
+        setBusy(false);
+        return setErr("Pour copier le dossier des salariés, le gérant doit d'abord exécuter la mise à jour 0028 dans Supabase.");
+      }
+      ({ data, error } = await supabase.rpc('merc_new_key', { ...args, p_site_url: clean(w) }));
+    }
     // Avant la mise à jour 0024, la base ne connaît pas encore le fichier du site.
     if (error?.code === 'PGRST202') {
       if (w) {
@@ -537,8 +571,8 @@ function MercSheet({ sources, dashboardUrl, keyAt, onClose }: { sources: MercSou
     }
     setBusy(false);
     if (error) return setErr(frError(error));
-    await refresh('merc', 'dashboard', 'events');
-    setScript(buildAppsScript({ url: projectUrl ?? '', publicKey: publicKey ?? '', syncKey: data as string, saveursNomades: a, comptoir: b, nuba: c, tableau: t, site: w, date: new Date().toLocaleDateString('fr-FR') }));
+    await refresh('merc', 'dashboard', 'events', 'drive');
+    setScript(buildAppsScript({ url: projectUrl ?? '', publicKey: publicKey ?? '', syncKey: data as string, saveursNomades: a, comptoir: b, nuba: c, tableau: t, site: w, documents: d, date: new Date().toLocaleDateString('fr-FR') }));
   }
 
   async function copy() {
@@ -564,6 +598,9 @@ function MercSheet({ sources, dashboardUrl, keyAt, onClose }: { sources: MercSou
           <Field label="Contenu du site (programmation, exposition)" hint="Le fichier « Nuba · Contenu du site » qui alimente le site web : ses soirées, rendez-vous et exposition arrivent dans Événements.">
             <input className="in" id="merc-site" inputMode="url" value={st} onChange={(e) => setSt(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" />
           </Field>
+          <Field label="Dossier des salariés (Google Drive)" hint="Le dossier qui contient un dossier par personne (contrats, pièces d'identité, DPAE, bulletins de paie…). L'appli en garde une copie, même arborescence, pour toi et la comptable.">
+            <input className="in" id="merc-docs" inputMode="url" value={dc} onChange={(e) => setDc(e.target.value)} placeholder="https://drive.google.com/drive/folders/…" />
+          </Field>
           {keyAt ? (
             <p className="err" data-testid="merc-replace">
               Tu as déjà un script, créé {fmtDay(keyAt)} à {fmtTime(keyAt)}. En créer un nouveau l'arrête : continue seulement si tu vas coller le nouveau tout de suite, à la place de l'ancien.
@@ -578,7 +615,7 @@ function MercSheet({ sources, dashboardUrl, keyAt, onClose }: { sources: MercSou
             <li>Copie le script ci-dessous. Il contient ta clé : il ne s'affichera plus.</li>
             <li>Sur ton ordinateur, ouvre script.google.com avec ton compte Google. Si tu as déjà un projet Nuba, ouvre-le ; sinon « Nouveau projet ».</li>
             <li>Efface tout le texte déjà présent, colle le script, et enregistre (icône disquette).</li>
-            <li>En haut, choisis la fonction « installer », puis « Exécuter ». Google demande d'autoriser l'accès à tes feuilles : accepte (s'il parle d'application non validée : « Paramètres avancés », puis « Accéder »).</li>
+            <li>En haut, choisis la fonction « installer », puis « Exécuter ». Google demande d'autoriser l'accès à tes feuilles (et à ton Drive, pour le dossier des salariés) : accepte (s'il parle d'application non validée : « Paramètres avancés », puis « Accéder »).</li>
             <li>Reviens ici : la date de réception s'affiche sous chaque mercuriale. Ensuite, tout se met à jour seul, toutes les dix minutes.</li>
             <li>Ne crée plus de nouveau script ensuite : chaque « Créer le script » change la clé et arrête celui que tu viens de coller.</li>
           </ol>

@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { DocRow, DocumentSheet, deleteDocument } from '../components/Documents';
+import { DocRow, DocumentSheet, DriveTree, deleteDocument } from '../components/Documents';
 import { Icon } from '../components/Icon';
 import { RightsPicker } from '../components/Rights';
 import { Avatar, Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
-import { useAllRights, useFolders, useRefresh, useTeam, useTeamDocuments } from '../lib/data';
+import { useAllRights, useDriveFiles, useFolders, useRefresh, useTeam, useTeamDocuments } from '../lib/data';
 import { AREAS, type Area } from '../lib/rights';
 import { useMe } from '../lib/session';
 import { appUrl, frError, supabase } from '../lib/supabase';
@@ -226,6 +226,8 @@ function MemberDocuments({ member }: { member: Profile }) {
   const q = useTeamDocuments(true);
   const [adding, setAdding] = useState(false);
   const docs = (q.data?.documents ?? []).filter((d) => d.profile_id === member.id);
+  const drive = useDriveFiles(true);
+  const inDrive = (drive.data ?? []).some((f) => f.profile_id === member.id);
   return (
     <div className="field">
       <span>Ses documents dans l'appli</span>
@@ -237,6 +239,12 @@ function MemberDocuments({ member }: { member: Profile }) {
       <button type="button" className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={() => setAdding(true)}><Icon name="plus" size={16} />Ajouter un document</button>
       <small>Arrêts de travail, pièce d'identité, carte Vitale, DPAE, contrat… La comptable les voit aussi ; les responsables, non.</small>
       {adding && <DocumentSheet profileId={member.id} name={fullName(member)} forOther category="dpae" onClose={() => setAdding(false)} />}
+      {inDrive && (
+        <>
+          <span style={{ marginTop: 8 }}>Son dossier Drive (copie, à jour toute seule)</span>
+          <DriveTree profileId={member.id} />
+        </>
+      )}
     </div>
   );
 }

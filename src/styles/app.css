@@ -325,6 +325,15 @@ button.shift:hover { background: color-mix(in srgb, var(--c, var(--ink-3)) 28%, 
 .row-details > summary::-webkit-details-marker { display: none; }
 .row-details + .row-details { border-top: 1px solid var(--line); }
 
+/* Dossier des salariés (copie du Drive) : dossiers dépliables, même arborescence que le Drive */
+.drive-folder > summary { list-style: none; cursor: pointer; }
+.drive-folder > summary::-webkit-details-marker { display: none; }
+.drive-folder > summary .chev { transition: transform 0.15s; }
+.drive-folder[open] > summary .chev { transform: rotate(90deg); }
+.drive-folder + .drive-folder, .drive-folder + .row, .row + .drive-folder { border-top: 1px solid var(--line); }
+.drive-in { margin-left: 14px; border-left: 2px solid var(--line); }
+.drive-ico { flex: none; color: var(--ink-3); display: inline-flex; }
+
 /* ---------- Bon de livraison (A4, imprimé) : un document papier, noir sur blanc dans les deux thèmes ---------- */
 .bl-page { min-height: 100dvh; padding: calc(16px + env(safe-area-inset-top, 0px)) var(--gut-r) 32px var(--gut-l); display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .bl-bar { width: 100%; max-width: 210mm; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }

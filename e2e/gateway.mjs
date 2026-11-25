@@ -119,7 +119,9 @@ async function storage(req, url, body) {
   }
   if ((m = /^\/object\/sign\/([^/]+)\/(.+)$/.exec(path)) && req.method === 'GET') {
     const f = signed.get(url.searchParams.get('token')) === `${m[1]}/${m[2]}` && files.get(`${m[1]}/${m[2]}`);
-    return f ? [200, f.data, f.mime] : [400, { error: 'invalid_token' }];
+    // « download » : le navigateur enregistre le fichier sous ce nom, comme avec Supabase.
+    const dl = url.searchParams.get('download');
+    return f ? [200, f.data, f.mime, dl !== null ? { 'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(dl)}` } : undefined] : [400, { error: 'invalid_token' }];
   }
   // Espace public (photos des plats) : lisible par lien, sans compte.
   if ((m = /^\/object\/public\/([^/]+)\/(.+)$/.exec(path)) && req.method === 'GET') {
@@ -131,10 +133,18 @@ async function storage(req, url, body) {
     try {
       await asUser(req, 'insert into storage.objects (bucket_id, name, owner) values ($1, $2, $3)', [m[1], m[2], bearer(req)?.sub ?? null]);
     } catch (e) {
+      if (/duplicate key/.test(String(e.message))) return [400, { statusCode: '409', error: 'Duplicate', message: 'The resource already exists' }];
       return [403, { statusCode: '403', error: 'Unauthorized', message: String(e.message) }];
     }
     files.set(`${m[1]}/${m[2]}`, { mime: req.headers['content-type'] || 'application/octet-stream', data: body });
     return [200, { Key: `${m[1]}/${m[2]}`, Id: crypto.randomUUID() }];
+  }
+  // Retrait d'un seul fichier : DELETE /object/<espace>/<chemin>.
+  if ((m = /^\/object\/([^/]+)\/(.+)$/.exec(path)) && req.method === 'DELETE') {
+    const { rows } = await asUser(req, 'delete from storage.objects where bucket_id = $1 and name = $2 returning name', [m[1], m[2]]);
+    if (!rows.length) return [400, { statusCode: '404', error: 'not_found', message: 'Object not found' }];
+    files.delete(`${m[1]}/${m[2]}`);
+    return [200, { message: 'Successfully deleted' }];
   }
   if ((m = /^\/object\/([^/]+)$/.exec(path)) && req.method === 'DELETE') {
     const names = JSON.parse(body.toString() || '{}').prefixes || [];
@@ -160,8 +170,8 @@ http.createServer(async (req, res) => {
       return res.end(json === null ? undefined : JSON.stringify(json));
     }
     if (url.pathname.startsWith('/storage/v1')) {
-      const [status, out, mime] = await storage(req, url, body);
-      res.writeHead(status, { ...cors, 'content-type': mime || 'application/json' });
+      const [status, out, mime, extra] = await storage(req, url, body);
+      res.writeHead(status, { ...cors, 'content-type': mime || 'application/json', ...(extra || {}) });
       return res.end(Buffer.isBuffer(out) ? out : JSON.stringify(out));
     }
     if (url.pathname.startsWith('/rest/v1')) {

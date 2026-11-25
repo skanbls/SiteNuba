@@ -3,6 +3,7 @@ import type { MercCost, MercIngredient, MercLine, MercOrder, MercPrice, MercReci
 import type { MenuCost, MenuItem, MenuLine, MenuLineCost } from './carte';
 import type { Tabs } from './dashboard';
 import type { DeliverySettings } from './delivery';
+import type { DriveFile } from './driveTree';
 import { supabase } from './supabase';
 import type { MercProcess } from './process';
 import type { BookingSettings, AccountantAccess, Checklist, ColdUnit, Contact, Customer, Deadline, EmailLogEntry, EmailSettings, Issue, Kiosk, NubaEvent, Procedure, ProcedureRead, Recipe, LeaveRequest, OilLog, StaffDocument, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftChange, ShiftSwap, Site, SiteWeekly, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
@@ -457,6 +458,31 @@ export function useTeamDocuments(enabled = true) {
     queryFn: async () => must<TeamDocuments>(await supabase.rpc('team_documents')),
   });
 }
+/** Le dossier des salariés copié depuis le Drive (migration 0028) : gérant et comptable. Vide avant la mise à jour. */
+export function useDriveFiles(enabled = true) {
+  return useQuery({
+    queryKey: ['drive', 'files'],
+    enabled,
+    queryFn: async () => {
+      const r = await supabase.from('drive_files').select('id, folder, name, mime, size, modified_at, profile_id, storage_path, pending_path').limit(5000);
+      if (r.error) return [] as DriveFile[];
+      return r.data as DriveFile[];
+    },
+  });
+}
+export interface DriveSource { folder_url: string; synced_at: string | null; counts: Record<string, number>; problems: string[] }
+export function useDriveSource(enabled = true) {
+  return useQuery({
+    queryKey: ['drive', 'source'],
+    enabled,
+    queryFn: async () => {
+      const r = await supabase.from('drive_source').select('folder_url, synced_at, counts, problems').maybeSingle();
+      if (r.error) return null;
+      return r.data as DriveSource | null;
+    },
+  });
+}
+
 /** Lien vers la caisse Zelty, pour la comptable (gérant et comptable). */
 export function useAccountingSettings(enabled = true) {
   return useQuery({

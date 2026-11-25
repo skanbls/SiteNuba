@@ -32,6 +32,16 @@ export function sheetId(url: string): string {
   return m?.[1] ?? '';
 }
 
+/**
+ * Identifiant d'un dossier Google Drive à partir de son lien (« Copier le lien », barre d'adresse,
+ * ordinateur ou téléphone), ou de l'identifiant seul ; chaîne vide sinon.
+ */
+export function folderId(url: string): string {
+  const t = url.trim();
+  const m = /\/folders\/([A-Za-z0-9_-]{10,})/.exec(t) ?? /[?&]id=([A-Za-z0-9_-]{10,})/.exec(t) ?? /^([A-Za-z0-9_-]{25,})$/.exec(t);
+  return m?.[1] ?? '';
+}
+
 export interface ScriptOptions {
   /** Adresse du projet Supabase. */
   url: string;
@@ -47,6 +57,8 @@ export interface ScriptOptions {
   tableau?: string;
   /** Contenu du site (programmation, exposition), ou chaîne vide. */
   site?: string;
+  /** Dossier Drive des salariés (identifiant du dossier), ou chaîne vide. */
+  documents?: string;
   /** Date affichée en tête du script. */
   date: string;
 }
@@ -59,19 +71,25 @@ export function buildAppsScript(o: ScriptOptions): string {
     adresseSite: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/sync_site`,
     adressePlanning: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/sync_planning`,
     adresseCaisse: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/closings_weekly`,
+    adresseDocuments: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/drive_plan`,
+    adresseDocumentsFaits: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/drive_done`,
+    adresseStockage: `${o.url.replace(/\/$/, '')}/storage/v1/object/staff-docs/`,
+    dossierSalaries: o.documents ?? '',
     clePublique: o.publicKey,
     cleSynchro: o.syncKey,
     mercuriales: { saveurs_nomades: o.saveursNomades, comptoir: o.comptoir, nuba: o.nuba ?? '', tableau: o.tableau ?? '', site: o.site ?? '' },
   };
   return `/**
  * Nuba Gestion : envoie les mercuriales Saveurs Nomades, Comptoir Méditerranéen et Nuba,
- * le tableau de bord financier et le contenu du site (programmation, exposition) vers l'appli.
+ * le tableau de bord financier, le contenu du site (programmation, exposition) et une copie
+ * du dossier Drive des salariés vers l'appli.
  * Généré par l'appli (Administration, Mercuriales) le ${o.date}.
  *
  * Mise en route, une seule fois :
  *   1. Enregistre ce projet (icône disquette).
  *   2. En haut, choisis la fonction « installer », puis clique sur Exécuter.
- *   3. Google demande d'autoriser l'accès à tes feuilles et aux services externes : accepte.
+ *   3. Google demande d'autoriser l'accès à tes feuilles, à ton Drive (lecture du dossier des salariés)
+ *      et aux services externes : accepte.
  * Ensuite, toutes les 10 minutes, ce qui a changé dans les mercuriales part tout seul vers l'appli.
  * Pour forcer un envoi tout de suite : fonction « envoyerMaintenant ».
  *
@@ -92,6 +110,7 @@ function envoyerMaintenant() { nubaEnvoyer_(true); }
 function envoyerSiChangement() { nubaEnvoyer_(false); }
 
 function nubaEnvoyer_(force) {
+  var debut = Date.now();
   var props = PropertiesService.getScriptProperties();
   var erreurs = [];
   // D'abord les chiffres de caisse dans « Saisie hebdo » : le tableau de bord part ensuite avec eux.
@@ -155,6 +174,10 @@ function nubaEnvoyer_(force) {
   if (NUBA.mercuriales.tableau) {
     try { nubaPlanningEnvoyer_(props, force); } catch (e) { erreurs.push('planning : ' + (e && e.message ? e.message : e)); }
   }
+  // La copie du dossier des salariés, en dernier : elle s'arrête d'elle-même avant la limite de temps de Google.
+  if (NUBA.dossierSalaries) {
+    try { nubaDocumentsEnvoyer_(props, force, debut, erreurs); } catch (e) { erreurs.push('documents : ' + (e && e.message ? e.message : e)); }
+  }
   if (erreurs.length) throw new Error('Envoi vers Nuba incomplet. ' + erreurs.join(' | '));
 }
 
@@ -162,8 +185,9 @@ function nubaRaison_(res, code, corps, marque) {
   if (res && res.error === 'key') return "clé refusée. Génère un nouveau script dans l'appli (Administration, Mercuriales).";
   if (res && res.error === 'too_many') return 'trop d\\'envois en peu de temps, nouvel essai dans 10 minutes.';
   if (res && res.error === 'payload') return 'contenu illisible (onglet renommé ou vidé ?).';
+  if (res && res.error === 'empty') return "le dossier des salariés paraît vide : rien n'a été retiré. Vérifie son lien dans l'appli.";
   if (res && res.error === 'db') return 'refusé par la base : ' + res.message;
-  if (code === 404) return "l'appli attend la mise à jour " + ({ nuba: '0017', tableau: '0019', site: '0024', caisse: '0026', planning: '0027' }[marque] || '0011') + ' de sa base.';
+  if (code === 404) return "l'appli attend la mise à jour " + ({ nuba: '0017', tableau: '0019', site: '0024', caisse: '0026', planning: '0027', documents: '0028' }[marque] || '0011') + ' de sa base.';
   return 'réponse ' + code + ' : ' + String(corps).slice(0, 200);
 }
 
@@ -682,6 +706,117 @@ function nubaPlanningEnvoyer_(props, force) {
   props.setProperty('nuba_empreinte_planning', empreinte);
   props.setProperty('nuba_envoi_planning', String(Date.now()));
   console.log('Nuba, planning envoyé : ' + JSON.stringify(res.counts));
+}
+
+// ---------- Dossier des salariés : copie des fichiers du Drive dans l'appli ----------
+// Même arborescence : un dossier par personne, ses sous-dossiers, les dossiers communs.
+// Seuls les fichiers nouveaux ou modifiés partent ; ceux retirés du Drive sont retirés de l'appli.
+var NUBA_MAX_OCTETS = 45 * 1024 * 1024;
+var NUBA_DUREE_MAX = 4 * 60 * 1000;   // Google arrête un script au bout de 6 minutes : la suite part au passage suivant.
+// Documents Google (Docs, Sheets, Slides, dessins) : copiés en PDF.
+var NUBA_EN_PDF = {
+  'application/vnd.google-apps.document': true,
+  'application/vnd.google-apps.spreadsheet': true,
+  'application/vnd.google-apps.presentation': true,
+  'application/vnd.google-apps.drawing': true
+};
+
+function nubaDocumentsListe_(racine) {
+  var tops = [], files = [], problems = [];
+  function parcourir(dossier, chemin, profondeur) {
+    var fi = dossier.getFiles();
+    while (fi.hasNext()) {
+      var f = fi.next();
+      var mime = String(f.getMimeType() || '');
+      var nom = String(f.getName() || '');
+      if (mime.indexOf('application/vnd.google-apps.') === 0) {
+        if (!NUBA_EN_PDF[mime]) continue;   // formulaires, raccourcis… : rien à copier
+        nom = nom + '.pdf';
+        mime = 'application/pdf';
+      } else if (f.getSize() > NUBA_MAX_OCTETS) {
+        problems.push('Trop lourd pour l\\'appli (plus de 45 Mo) : ' + chemin.concat(nom).join(' / '));
+        continue;
+      }
+      files.push({ id: f.getId(), folder: chemin, name: nom, mime: mime, size: f.getSize() || null, modified: f.getLastUpdated().toISOString() });
+    }
+    if (profondeur >= 6) return;
+    var di = dossier.getFolders();
+    while (di.hasNext()) {
+      var d = di.next();
+      if (profondeur === 0) tops.push({ id: d.getId(), name: d.getName() });
+      parcourir(d, chemin.concat(d.getName()), profondeur + 1);
+    }
+  }
+  parcourir(racine, [], 0);
+  files.sort(function (a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
+  return { brand: 'documents', root: racine.getName(), tops: tops, files: files, problems: problems };
+}
+
+function nubaAppel_(adresse, corps, marque) {
+  var rep = UrlFetchApp.fetch(adresse, {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { apikey: NUBA.clePublique }, payload: JSON.stringify(corps)
+  });
+  var texte = rep.getContentText();
+  var res = null;
+  try { res = JSON.parse(texte); } catch (e) { res = null; }
+  if (rep.getResponseCode() !== 200 || !res || res.ok !== true) throw new Error(nubaRaison_(res, rep.getResponseCode(), texte, marque));
+  return res;
+}
+
+/** En-têtes du stockage de fichiers : la clé publique (et, pour une ancienne clé « anon », la même en Authorization). */
+function nubaEnTetesStockage_() {
+  var h = { apikey: NUBA.clePublique };
+  if (NUBA.clePublique.split('.').length === 3) h.Authorization = 'Bearer ' + NUBA.clePublique;
+  return h;
+}
+
+/** Retire de l'appli les copies que la base a désignées (anciennes versions, fichiers retirés du Drive). */
+function nubaRetirer_(noms, erreurs) {
+  (noms || []).forEach(function (nom) {
+    var rep = UrlFetchApp.fetch(NUBA.adresseStockage + nom, { method: 'delete', muteHttpExceptions: true, headers: nubaEnTetesStockage_() });
+    var code = rep.getResponseCode();
+    if (code !== 200 && code !== 404 && !/not.?found/i.test(rep.getContentText())) erreurs.push('documents : retrait refusé (' + code + ') pour ' + nom);
+  });
+}
+
+function nubaDocumentsEnvoyer_(props, force, debut, erreurs) {
+  var racine = DriveApp.getFolderById(NUBA.dossierSalaries);
+  var liste = nubaDocumentsListe_(racine);
+  var texte = JSON.stringify(liste);
+  var empreinte = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, texte, Utilities.Charset.UTF_8));
+  var dernier = Number(props.getProperty('nuba_envoi_documents') || 0);
+  if (!force && props.getProperty('nuba_empreinte_documents') === empreinte && Date.now() - dernier < 6 * 3600 * 1000) return;
+  var plan = nubaAppel_(NUBA.adresseDocuments, { p_key: NUBA.cleSynchro, p_payload: liste }, 'documents');
+  nubaRetirer_(plan.remove, erreurs);
+  var faits = [], restants = 0, rates = 0;
+  (plan.upload || []).forEach(function (u) {
+    if (Date.now() - debut > NUBA_DUREE_MAX) { restants++; return; }
+    try {
+      var f = DriveApp.getFileById(u.id);
+      var blob = NUBA_EN_PDF[f.getMimeType()] ? f.getAs('application/pdf') : f.getBlob();
+      var rep = UrlFetchApp.fetch(NUBA.adresseStockage + u.path, {
+        method: 'post', contentType: u.mime, muteHttpExceptions: true, headers: nubaEnTetesStockage_(), payload: blob.getBytes()
+      });
+      var code = rep.getResponseCode();
+      // Déjà déposé (un passage précédent coupé avant l'accusé de réception) : c'est bon aussi.
+      if (code === 200 || code === 201 || /already exists|duplicate/i.test(rep.getContentText())) faits.push({ id: u.id, path: u.path });
+      else { rates++; erreurs.push('documents : dépôt refusé (' + code + ') : ' + String(rep.getContentText()).slice(0, 150)); }
+    } catch (e) {
+      rates++;
+      erreurs.push('documents : ' + (e && e.message ? e.message : e));
+    }
+  });
+  for (var i = 0; i < faits.length; i += 200) {
+    var fin = nubaAppel_(NUBA.adresseDocumentsFaits, { p_key: NUBA.cleSynchro, p_done: faits.slice(i, i + 200) }, 'documents');
+    nubaRetirer_(fin.remove, erreurs);
+  }
+  console.log('Nuba, dossier des salariés : ' + faits.length + ' fichier(s) copié(s), ' + restants + ' au prochain passage.');
+  // Tout est copié : la liste ne repart que si le Drive change (ou toutes les six heures).
+  if (!restants && !rates) {
+    props.setProperty('nuba_empreinte_documents', empreinte);
+    props.setProperty('nuba_envoi_documents', String(Date.now()));
+  }
 }
 `;
 }
