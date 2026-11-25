@@ -4,6 +4,7 @@ import type { MenuCost, MenuItem, MenuLine, MenuLineCost } from './carte';
 import type { Tabs } from './dashboard';
 import type { DeliverySettings } from './delivery';
 import type { DriveFile } from './driveTree';
+import type { Delivery, MercProduct } from './deliveries';
 import { supabase } from './supabase';
 import type { MercProcess } from './process';
 import type { BookingSettings, AccountantAccess, Checklist, ColdUnit, Contact, Customer, Deadline, EmailLogEntry, EmailSettings, Issue, Kiosk, NubaEvent, Procedure, ProcedureRead, Recipe, LeaveRequest, OilLog, StaffDocument, OpeningHour, Order, Product, Profile, Reservation, Shift, ShiftChange, ShiftSwap, Site, SiteWeekly, Supplier, TempReading, TimeEntry, TodayTasks, TraceItem } from './types';
@@ -458,6 +459,33 @@ export function useTeamDocuments(enabled = true) {
     queryFn: async () => must<TeamDocuments>(await supabase.rpc('team_documents')),
   });
 }
+/** Les produits de la mercuriale Nuba (migration 0029), sans les prix. Vide avant la mise à jour. */
+export function useMercProducts(enabled = true) {
+  return useQuery({
+    queryKey: ['merc', 'products'],
+    enabled,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const r = await supabase.from('merc_products').select('key, name, category, supplier, unit, label').order('position').limit(3000);
+      if (r.error) return [] as MercProduct[];
+      return r.data as MercProduct[];
+    },
+  });
+}
+/** Les livraisons, les plus récentes d'abord (migration 0029). */
+export function useDeliveries() {
+  return useQuery({
+    queryKey: ['deliveries'],
+    queryFn: async () => {
+      const r = await supabase.from('deliveries').select('id, supplier_name, status, bl_number, created_at, received_at, issues, scan_status, ok, order_id')
+        .order('created_at', { ascending: false }).limit(40);
+      if (r.error) return null;
+      return r.data as Pick<Delivery, 'id' | 'supplier_name' | 'status' | 'bl_number' | 'created_at' | 'received_at' | 'issues' | 'scan_status' | 'ok' | 'order_id'>[];
+    },
+    refetchInterval: 60_000,
+  });
+}
+
 /** Le dossier des salariés copié depuis le Drive (migration 0028) : gérant et comptable. Vide avant la mise à jour. */
 export function useDriveFiles(enabled = true) {
   return useQuery({

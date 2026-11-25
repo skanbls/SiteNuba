@@ -140,9 +140,23 @@ const PARTS: Part[] = [
     body: (
       <ol>
         <li><b>Stocks</b> : touche <b>−</b> quand tu prends un produit, <b>+</b> quand tu en ranges. <B>Faire l'inventaire</B> sert à tout recompter.</li>
+        <li>Un produit manque dans la liste ? Touche <B>Produit</B> et choisis-le dans la mercuriale Nuba : son nom, son unité d'achat (kg, L, pièce) et son fournisseur viennent de la mercuriale.</li>
         <li>Un produit sous son seuil apparaît dans <b>Commandes</b>, chez son fournisseur.</li>
         <li>Pour commander : <B>Préparer la commande</B>, ajuste les quantités, puis envoie-la (texte à copier, e-mail ou WhatsApp).</li>
-        <li>À la livraison : ouvre la commande, <B>Réceptionner la livraison</B>, indique ce qui est arrivé et la température des produits frais. Le stock se met à jour tout seul.</li>
+      </ol>
+    ),
+  },
+  {
+    id: 'livraisons',
+    icon: 'inbox',
+    title: 'Réceptionner une livraison',
+    body: (
+      <ol>
+        <li>Quand le livreur passe : ouvre <b>Livraisons</b> et touche <B>Photographier le bon</B>. Prends le bon à plat, bien éclairé ; s'il a plusieurs pages, ajoute-les avec <B>Ajouter une page</B>.</li>
+        <li>L'appli lit le bon : le fournisseur, chaque produit (retrouvé dans la mercuriale), la quantité, le prix, le lot et la date limite. Elle reprend toute seule la commande en attente de ce fournisseur.</li>
+        <li>Vérifie les lignes : les pastilles montrent ce qui ne colle pas (pas livré, quantité différente de la commande, prix en hausse, date limite courte). Corrige une quantité dans sa case ; la roue sert à changer le produit, le prix, le lot ou la date. Transport ou consigne : « Pas suivi en stock ».</li>
+        <li>Indique si la marchandise est conforme et la température des produits frais, puis <B>Valider la réception</B>. Le stock se met à jour tout seul, la commande est close et le gérant est prévenu des écarts.</li>
+        <li>Une commande passée dans l'appli se réceptionne aussi depuis <b>Commandes</b> : <B>Réceptionner la livraison</B> ouvre la même page.</li>
       </ol>
     ),
   },
@@ -281,6 +295,7 @@ const PARTS: Part[] = [
         <li><b>Dossier des salariés</b> : colle le lien de ton dossier Drive dans Administration, Mercuriales, <B>Nouveau script</B>. L'appli en garde une copie, même arborescence (un dossier par personne, ses contrats, DPAE, bulletins…) : la comptable et toi téléchargez les fichiers sans passer par le Drive. Tout ce qui change dans le Drive suit tout seul, toutes les dix minutes.</li>
         <li><b>Pointeuse</b>, vue Équipe : corriger un pointage, <B>Exporter pour le comptable</B>.</li>
         <li><b>Planning</b> : <B>Service</B> pour planifier, <B>Recopier la semaine précédente</B>, et les demandes de congé et d'échange à accepter. Le planning peut aussi venir de l'onglet « Planning équipe » de ton fichier tableau de bord : le script Google l'envoie toutes les dix minutes, et chacun est prévenu des changements.</li>
+        <li><b>Livraisons et stocks</b> : le catalogue vient de l'onglet PRIX INGREDIENTS de la mercuriale Nuba (par le script Google). Dans Administration, « Livraisons et stocks » explique comment activer la lecture des bons ; tu reçois un e-mail à chaque écart de livraison.</li>
         <li><b>Fermeture de caisse</b> : rubrique <B>Historique</B> pour revoir chaque soir, corriger une fermeture et exporter le mois. Le tableau de bord montre le CA, les couverts, le ticket moyen et les écarts ; les totaux de chaque semaine vont aussi dans « Saisie hebdo » du fichier. L'accès « Caisse » se confie à un responsable.</li>
       </ul>
     ),

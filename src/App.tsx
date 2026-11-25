@@ -24,6 +24,7 @@ import Production from './pages/Production';
 import Process from './pages/Process';
 import Carte from './pages/Carte';
 import DeliveryNote from './pages/DeliveryNote';
+import Deliveries from './pages/Deliveries';
 import Dashboard from './pages/Dashboard';
 import Reservations from './pages/Reservations';
 import Settings from './pages/Settings';
@@ -70,6 +71,7 @@ export default function App({ linkError }: { linkError: string }) {
       <Route path="/hygiene" element={<Hygiene />} />
       <Route path="/stocks" element={<Stocks />} />
       <Route path="/commandes" element={<Orders />} />
+      <Route path="/livraisons" element={<Deliveries />} />
       <Route path="/fiches" element={<Carte />} />
       <Route path="/production" element={<Production />} />
       <Route path="/process" element={<Process />} />

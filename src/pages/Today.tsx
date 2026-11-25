@@ -214,7 +214,7 @@ export default function Today() {
               </Link>
             )}
             {t.low_stock !== undefined && (t.low_stock > 0 || (t.deliveries ?? 0) > 0) && (
-              <Link className="row wrap" to={t.low_stock > 0 ? '/stocks' : '/commandes'}>
+              <Link className="row wrap" to={(t.deliveries ?? 0) > 0 ? '/livraisons' : t.low_stock > 0 ? '/stocks' : '/commandes'}>
                 <div className="grow">
                   <span className="t">Stocks et commandes</span>
                   <span className="sub">

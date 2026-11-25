@@ -440,6 +440,29 @@ describe('script Google des mercuriales', () => {
     expect(sent).toHaveLength(0);
   });
 
+  it('envoie les produits de PRIX INGREDIENTS, colonnes retrouvées par leur titre', () => {
+    const PRIX: Record<string, Cell[][]> = {
+      'PRIX INGREDIENTS': [
+        ['Catégorie', 'Ingrédient', 'Fournisseur retenu (le moins cher, automatique)', "Prix d'achat HT retenu (€, automatique)", "Unité d'achat", "Poids d'une pièce (g)",
+          'Prix unitaire recette (€)', 'Unité en recette', 'Date de la facture retenue', 'Source du prix retenu', 'Allergènes', "Nom sur l'étiquette", 'Allergènes à vérifier',
+          "Poids moyen d'une pièce (g) – pour l'étiquette"],
+        ['LEGUMES', 'Carotte test', 'Primeur test', { d: '1,50 €', v: 1.5 }, 'kg', '', { d: '0,0015 €', v: 0.0015 }, 'g', '20/11/2026', 'Facture test', '', '', '', '120'],
+        ['', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+        ['CREMERIE', 'Crème test', 'Grossiste test', { d: '3,60 €', v: 3.6 }, 'L', { d: '50', v: 50 }, '', 'ml', '', '', 'Lait', 'Crème', '', ''],
+      ],
+    };
+    const { g, sent, props } = fakeGoogle({ ID_NB: { name: 'MERCURIALE NUBA TEST', tabs: PRIX } });
+    run(buildAppsScript({ ...opts, saveursNomades: '', comptoir: '', nuba: 'ID_NB' }), g).envoyerMaintenant();
+    const out = sent.find((x) => x.url.endsWith('/sync_merc_products'))!;
+    expect(out.body.p_payload).toEqual({
+      brand: 'produits', file: 'MERCURIALE NUBA TEST', products: [
+        { name: 'Carotte test', category: 'LEGUMES', supplier: 'Primeur test', unit: 'kg', invoice_date: '20/11/2026', source: 'Facture test', allergens: '', label: '', price: 1.5, piece_g: '' },
+        { name: 'Crème test', category: 'CREMERIE', supplier: 'Grossiste test', unit: 'L', invoice_date: '', source: '', allergens: 'Lait', label: 'Crème', price: 3.6, piece_g: 50 },
+      ],
+    });
+    expect(props.get('nuba_empreinte_produits')).toBeTruthy();
+  });
+
   it("retrouve l'identifiant d'un dossier Drive dans son lien", () => {
     expect(folderId('https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz_012345?usp=sharing')).toBe('1AbCdEfGhIjKlMnOpQrStUvWxYz_012345');
     expect(folderId('https://drive.google.com/drive/u/0/folders/1AbCdEfGhIjKlMnOp')).toBe('1AbCdEfGhIjKlMnOp');

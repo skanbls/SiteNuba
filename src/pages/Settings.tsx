@@ -343,6 +343,8 @@ export default function Settings() {
             )}
           </Section>
 
+          <DeliveryReading />
+
           <Section title="Bons de livraison" right={<button type="button" className="link" onClick={() => setBlSheet(true)}>Modifier l'en-tête</button>}>
             {delivery.isLoading ? <Loading /> : delivery.error ? <div className="list"><p className="empty err">{frError(delivery.error)}</p></div> : (
               <div className="list">
@@ -508,6 +510,52 @@ function AccountantSheet({ access, onClose }: { access: AccountantAccess | 'new'
  * Ce qui bloque l'arrivée d'une feuille : le dernier envoi refusé, expliqué ; ou, après une nouvelle clé,
  * l'attente du nouveau script. Un refus plus ancien que la clé actuelle ne compte plus.
  */
+/** Produits de la mercuriale Nuba et lecture automatique des bons de livraison (migration 0029). */
+function DeliveryReading() {
+  const st = useQuery({
+    queryKey: ['deliveries', 'reading'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('delivery_scan_status');
+      if (error) return null;
+      return data as { key: boolean; pg_net: boolean; scans_today: number; products: number; products_synced_at: string | null };
+    },
+  });
+  if (!st.data) return null;
+  const s = st.data;
+  return (
+    <Section title="Livraisons et stocks">
+      <div className="list">
+        <div className="row wrap" data-testid="merc-products">
+          <div className="grow">
+            <span className="t">Produits de la mercuriale Nuba</span>
+            <span className="sub">{s.products ? `${plural(s.products, 'produit')} (onglet PRIX INGREDIENTS)${s.products_synced_at ? `, reçus ${fmtDay(s.products_synced_at)} à ${fmtTime(s.products_synced_at)}` : ''} : c'est le catalogue des stocks et des livraisons.` : "Pas encore reçus : installe le nouveau script Google (Mercuriales, « Nouveau script »)."}</span>
+          </div>
+          <div className="end"><Link className="btn sm" to="/stocks">Stocks</Link></div>
+        </div>
+        <div className="row wrap" data-testid="bl-reading">
+          <div className="grow">
+            <span className="t">Lecture des bons de livraison</span>
+            <span className="sub">{s.key ? `Activée${s.scans_today ? ` · ${plural(s.scans_today, 'bon')} lu${s.scans_today > 1 ? 's' : ''} ces dernières 24 heures` : ''} · 40 lectures par jour au plus.` : "Pas activée : sans elle, l'équipe saisit les lignes du bon à la main."}</span>
+          </div>
+          <div className="end">{s.key ? <span className="pill ok">Activée</span> : <span className="pill warn">À activer</span>}</div>
+        </div>
+      </div>
+      {!s.key && (
+        <details className="guide">
+          <summary>Activer la lecture des bons (10 minutes)</summary>
+          <ol>
+            <li>Crée un compte sur console.anthropic.com (Anthropic, qui fait Claude), ajoute un moyen de paiement : la lecture d'un bon coûte quelques centimes.</li>
+            <li>Dans la console, crée une clé API (menu API Keys). Copie-la.</li>
+            <li>Dans Supabase, ouvre Vault (Integrations ou Project Settings). Ajoute un secret nommé exactement <b>anthropic_api_key</b> et colle la clé comme valeur. Ne la colle nulle part ailleurs : ni ici, ni dans une conversation.</li>
+            <li>Reviens ici : la ligne passe à « Activée ». Les photos des bons partent alors chez Anthropic pour être lues ; rien d'autre n'est envoyé.</li>
+          </ol>
+          {!s.pg_net && <p>Il faut aussi l'extension pg_net (Database, Extensions), déjà utilisée pour les e-mails.</p>}
+        </details>
+      )}
+    </Section>
+  );
+}
+
 function SyncProblem({ brand, linked, syncedAt, log, keyAt }: {
   brand: string; linked: boolean; syncedAt: string | null; log: { at: string; brand: string; ok: boolean; message: string }[]; keyAt: string | null;
 }) {
@@ -745,7 +793,7 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
   const [busy, setBusy] = useState(false);
   const text = (k: 'sender_name' | 'sender_email' | 'notify_email' | 'app_url' | 'signature') =>
     (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF((s) => ({ ...s, [k]: e.target.value }));
-  const flag = (k: 'enabled' | 'confirm_booking' | 'notify_booking' | 'notify_event' | 'notify_documents' | 'notify_payslips' | 'remind_booking' | 'remind_tasks' | 'notify_closing' | 'notify_planning') =>
+  const flag = (k: 'enabled' | 'confirm_booking' | 'notify_booking' | 'notify_event' | 'notify_documents' | 'notify_payslips' | 'remind_booking' | 'remind_tasks' | 'notify_closing' | 'notify_planning' | 'notify_delivery') =>
     (e: ChangeEvent<HTMLInputElement>) => setF((s) => ({ ...s, [k]: e.target.checked }));
   // Les rappels de la veille partent d'une tâche planifiée de Supabase (pg_cron), créée par la mise à jour 0022.
   const reminders = useQuery({
@@ -787,6 +835,7 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
       ...(f.remind_tasks === undefined ? {} : { remind_tasks: f.remind_tasks }),
       ...(f.notify_closing === undefined ? {} : { notify_closing: f.notify_closing }),
       ...(f.notify_planning === undefined ? {} : { notify_planning: f.notify_planning }),
+      ...(f.notify_delivery === undefined ? {} : { notify_delivery: f.notify_delivery }),
     }).eq('id', true);
     setBusy(false);
     if (error) return setErr(frError(error));
@@ -879,6 +928,12 @@ function MailSheet({ settings, onClose }: { settings: EmailSettings; onClose: ()
           <label className="row" style={{ padding: 0, gap: 10 }}>
             <input id="mail-payslips" type="checkbox" checked={f.notify_payslips} onChange={flag('notify_payslips')} style={box} />
             <span className="grow"><span className="t">Prévenir chaque salarié de son bulletin de paie</span><span className="sub">Dès qu'il est déposé, à l'adresse e-mail de sa fiche. Sans pièce jointe.</span></span>
+          </label>
+        )}
+        {f.notify_delivery !== undefined && (
+          <label className="row" style={{ padding: 0, gap: 10 }}>
+            <input id="mail-delivery" type="checkbox" checked={f.notify_delivery} onChange={flag('notify_delivery')} style={box} />
+            <span className="grow"><span className="t">M'alerter des écarts de livraison</span><span className="sub">Produit manquant, quantité différente de la commande, prix en hausse de plus de 5 %, date limite courte, problème signalé à la réception.</span></span>
           </label>
         )}
         {f.notify_closing !== undefined && (

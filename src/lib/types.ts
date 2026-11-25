@@ -269,6 +269,8 @@ export interface Product {
   unit_price: number;
   supplier_id: string | null;
   active: boolean;
+  /** Migration 0029 : le produit de la mercuriale Nuba auquel il est relié (nom, catégorie, unité, prix suivent). */
+  merc_key?: string | null;
 }
 
 export interface OrderLine {
@@ -590,6 +592,8 @@ export interface EmailSettings {
   /** Migrations 0026 et 0027 : récapitulatif de la caisse au gérant, e-mail à chacun quand son planning change. */
   notify_closing?: boolean;
   notify_planning?: boolean;
+  /** Migration 0029 : écarts et problèmes à la réception d'une livraison. */
+  notify_delivery?: boolean;
 }
 
 export interface EmailLogEntry {

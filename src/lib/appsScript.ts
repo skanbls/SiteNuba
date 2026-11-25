@@ -7,7 +7,7 @@
  * GRAMMAGES SUR MESURE (s'il existe) et, dans Saveurs Nomades, PRIX INGREDIENTS.
  * Les colonnes sont retrouvées par leur titre : l'ordre des colonnes peut changer.
  *
- * Dans la mercuriale Nuba (la carte du restaurant) : FICHES PLATS, FICHES BOISSONS et
+ * Dans la mercuriale Nuba (la carte du restaurant) : PRIX INGREDIENTS (le catalogue des stocks), FICHES PLATS, FICHES BOISSONS et
  * PREPARATIONS MAISON, faites de blocs (une fiche par bloc : « Plat », « Boisson » ou
  * « Préparation » en colonne A, puis ses réglages, puis ses ingrédients sous « Ingrédient »),
  * et la colonne « Allergènes à vérifier » de CALCUL. Chaque réglage est retrouvé par son titre.
@@ -71,6 +71,7 @@ export function buildAppsScript(o: ScriptOptions): string {
     adresseSite: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/sync_site`,
     adressePlanning: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/sync_planning`,
     adresseCaisse: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/closings_weekly`,
+    adresseProduits: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/sync_merc_products`,
     adresseDocuments: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/drive_plan`,
     adresseDocumentsFaits: `${o.url.replace(/\/$/, '')}/rest/v1/rpc/drive_done`,
     adresseStockage: `${o.url.replace(/\/$/, '')}/storage/v1/object/staff-docs/`,
@@ -170,6 +171,10 @@ function nubaEnvoyer_(force) {
       erreurs.push(marque + ' : ' + (e && e.message ? e.message : e));
     }
   });
+  // Les produits de la mercuriale Nuba (onglet PRIX INGREDIENTS) : le catalogue des stocks.
+  if (NUBA.mercuriales.nuba) {
+    try { nubaProduitsEnvoyer_(props, force); } catch (e) { erreurs.push('produits : ' + (e && e.message ? e.message : e)); }
+  }
   // Le planning de l'onglet « Planning équipe » du tableau de bord.
   if (NUBA.mercuriales.tableau) {
     try { nubaPlanningEnvoyer_(props, force); } catch (e) { erreurs.push('planning : ' + (e && e.message ? e.message : e)); }
@@ -187,7 +192,7 @@ function nubaRaison_(res, code, corps, marque) {
   if (res && res.error === 'payload') return 'contenu illisible (onglet renommé ou vidé ?).';
   if (res && res.error === 'empty') return "le dossier des salariés paraît vide : rien n'a été retiré. Vérifie son lien dans l'appli.";
   if (res && res.error === 'db') return 'refusé par la base : ' + res.message;
-  if (code === 404) return "l'appli attend la mise à jour " + ({ nuba: '0017', tableau: '0019', site: '0024', caisse: '0026', planning: '0027', documents: '0028' }[marque] || '0011') + ' de sa base.';
+  if (code === 404) return "l'appli attend la mise à jour " + ({ nuba: '0017', tableau: '0019', site: '0024', caisse: '0026', planning: '0027', documents: '0028', produits: '0029' }[marque] || '0011') + ' de sa base.';
   return 'réponse ' + code + ' : ' + String(corps).slice(0, 200);
 }
 
@@ -706,6 +711,62 @@ function nubaPlanningEnvoyer_(props, force) {
   props.setProperty('nuba_empreinte_planning', empreinte);
   props.setProperty('nuba_envoi_planning', String(Date.now()));
   console.log('Nuba, planning envoyé : ' + JSON.stringify(res.counts));
+}
+
+// ---------- Produits de la mercuriale Nuba : l'onglet PRIX INGREDIENTS, référence des stocks ----------
+function nubaProduits_(ss) {
+  var sh = ss.getSheetByName('PRIX INGREDIENTS');
+  if (!sh) return null;
+  var r = sh.getDataRange();
+  var v = r.getValues(), d = r.getDisplayValues();
+  var h = -1, col = {};
+  for (var i = 0; i < Math.min(d.length, 6) && h === -1; i++) {
+    d[i].forEach(function (c, j) { if (nubaSansAccent_(c) === 'ingredient') h = i; });
+  }
+  if (h === -1) return null;
+  d[h].forEach(function (c, j) {
+    var t = nubaSansAccent_(c).replace(/[’']/g, ' ');
+    if (t === 'categorie' && col.category === undefined) col.category = j;
+    else if (t === 'ingredient') col.name = j;
+    else if (t.indexOf('fournisseur') === 0 && col.supplier === undefined) col.supplier = j;
+    else if (t.indexOf('prix d achat') === 0) col.price = j;
+    else if (t.indexOf('unite d achat') === 0) col.unit = j;
+    else if (t.indexOf('poids d une piece') === 0) col.piece_g = j;
+    else if (t.indexOf('date de la facture') === 0) col.invoice_date = j;
+    else if (t.indexOf('source du prix') === 0) col.source = j;
+    else if (t === 'allergenes') col.allergens = j;
+    else if (t.indexOf('nom sur l etiquette') === 0) col.label = j;
+  });
+  var products = [];
+  for (var k = h + 1; k < d.length; k++) {
+    var nom = String(d[k][col.name] || '').trim();
+    if (!nom) continue;
+    var p = { name: nom };
+    ['category', 'supplier', 'unit', 'invoice_date', 'source', 'allergens', 'label'].forEach(function (x) {
+      if (col[x] !== undefined) p[x] = String(d[k][col[x]] || '').trim();
+    });
+    ['price', 'piece_g'].forEach(function (x) {
+      if (col[x] === undefined) return;
+      var n = v[k][col[x]];
+      p[x] = typeof n === 'number' ? n : String(d[k][col[x]] || '').trim();
+    });
+    products.push(p);
+  }
+  return { brand: 'produits', file: ss.getName(), products: products };
+}
+
+function nubaProduitsEnvoyer_(props, force) {
+  var ss = SpreadsheetApp.openById(NUBA.mercuriales.nuba);
+  var liste = nubaProduits_(ss);
+  if (!liste) return;
+  var texte = JSON.stringify(liste);
+  var empreinte = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, texte, Utilities.Charset.UTF_8));
+  var dernier = Number(props.getProperty('nuba_envoi_produits') || 0);
+  if (!force && props.getProperty('nuba_empreinte_produits') === empreinte && Date.now() - dernier < 6 * 3600 * 1000) return;
+  var res = nubaAppel_(NUBA.adresseProduits, { p_key: NUBA.cleSynchro, p_payload: liste }, 'produits');
+  props.setProperty('nuba_empreinte_produits', empreinte);
+  props.setProperty('nuba_envoi_produits', String(Date.now()));
+  console.log('Nuba, produits de la mercuriale envoyés : ' + JSON.stringify(res.counts));
 }
 
 // ---------- Dossier des salariés : copie des fichiers du Drive dans l'appli ----------

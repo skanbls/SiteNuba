@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Field, Layout, Loading, Section, Sheet, Spinner, useToast } from '../components/ui';
 import { useOrders, useProducts, useRefresh, useSuppliers, useTeam } from '../lib/data';
@@ -9,7 +10,6 @@ import { qty } from './Stocks';
 import { useCan } from '../lib/rights';
 
 const euro = (v: number) => v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
-const num = (s: string) => Number(s.replace(',', '.'));
 const when = (iso: string | null) => (iso ? `${fmtDateShort(new Date(iso))} à ${fmtTime(iso)}` : '');
 
 /** Texte de la commande, à envoyer au fournisseur. */
@@ -172,15 +172,11 @@ export default function Orders() {
 function OrderSheet({ order, products, editor, who, onClose }: { order: Order; products: Product[]; editor: boolean; who: Map<string, string>; onClose: () => void }) {
   const toast = useToast();
   const refresh = useRefresh();
+  const navigate = useNavigate();
   const supplier = order.suppliers?.name ?? 'Fournisseur';
   const [lines, setLines] = useState(() => order.order_lines.map((l) => ({ product_id: l.product_id, name: l.products?.name ?? 'Produit', unit: l.products?.unit ?? '', quantity: l.quantity, price: l.unit_price })));
   const [note, setNote] = useState(order.note);
   const [add, setAdd] = useState('');
-  const [receiving, setReceiving] = useState(false);
-  const [got, setGot] = useState<Record<string, string>>({});
-  const [ok, setOk] = useState('oui');
-  const [temp, setTemp] = useState('');
-  const [recNote, setRecNote] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
@@ -227,15 +223,6 @@ function OrderSheet({ order, products, editor, who, onClose }: { order: Order; p
     } catch {
       toast('Copie impossible sur cet appareil', 'bad');
     }
-  }
-
-  function receive(e: FormEvent) {
-    e.preventDefault();
-    const t = temp.trim() === '' ? null : num(temp);
-    if (t !== null && Number.isNaN(t)) return setErr('Vérifie la température.');
-    const p_lines = order.order_lines.filter((l) => (got[l.id] ?? '').trim() !== '').map((l) => ({ line_id: l.id, received: num(got[l.id]) }));
-    if (p_lines.some((l) => Number.isNaN(l.received) || l.received < 0)) return setErr('Vérifie les quantités reçues.');
-    void call(() => supabase.rpc('receive_order', { p_id: order.id, p_lines, p_ok: ok === 'oui', p_temp: t, p_note: recNote }), 'Livraison réceptionnée, stock mis à jour');
   }
 
   const share = (
@@ -302,9 +289,7 @@ function OrderSheet({ order, products, editor, who, onClose }: { order: Order; p
                   <span className="t">{l.products?.name ?? 'Produit'}</span>
                   <span className="sub">{l.products?.unit ? `${l.products.unit} · ` : ''}commandé : {qty(l.quantity)}{l.received_quantity !== null ? ` · reçu : ${qty(l.received_quantity)}` : ''}</span>
                 </div>
-                {receiving ? (
-                  <input className="in qty num" inputMode="decimal" aria-label={`Quantité reçue de ${l.products?.name ?? 'ce produit'}`} placeholder={qty(l.quantity)} value={got[l.id] ?? ''} onChange={(e) => setGot((s) => ({ ...s, [l.id]: e.target.value }))} />
-                ) : l.received_quantity !== null && l.received_quantity < l.quantity ? <span className="pill warn">Incomplet</span> : null}
+                {l.received_quantity !== null && l.received_quantity < l.quantity ? <span className="pill warn">Incomplet</span> : null}
               </div>
             ))}
           </div>
@@ -324,10 +309,11 @@ function OrderSheet({ order, products, editor, who, onClose }: { order: Order; p
               </div>
             </div>
           )}
-          {order.status === 'sent' && !receiving && (
+          {order.status === 'sent' && (
             <>
               {share}
-              <button type="button" className="btn pri block" onClick={() => setReceiving(true)}><Icon name="truck" />Réceptionner la livraison</button>
+              {/* La réception se fait dans Livraisons : photo du bon, lecture, écarts avec cette commande. */}
+              <button type="button" className="btn pri block" onClick={() => { onClose(); navigate(`/livraisons?commande=${order.id}`); }}><Icon name="truck" />Réceptionner la livraison</button>
               {editor && (confirm ? (
                 <div className="acts">
                   <button type="button" className="btn" onClick={() => setConfirm(false)}>Garder</button>
@@ -336,31 +322,7 @@ function OrderSheet({ order, products, editor, who, onClose }: { order: Order; p
               ) : <button type="button" className="btn no block" onClick={() => setConfirm(true)}>Cette commande ne sera pas livrée</button>)}
             </>
           )}
-          {order.status === 'sent' && receiving && (
-            <form className="form" onSubmit={receive}>
-              <p className="note">Indique seulement les quantités qui diffèrent de la commande. Une ligne laissée vide est reçue en entier ; tape 0 pour un produit manquant.</p>
-              <div className="two">
-                <Field label="Livraison conforme ?">
-                  <select className="in" id="rec-ok" value={ok} onChange={(e) => setOk(e.target.value)}>
-                    <option value="oui">Oui, tout est conforme</option>
-                    <option value="non">Non, il y a un problème</option>
-                  </select>
-                </Field>
-                <Field label="Température des produits frais (°C)" hint="Facultatif.">
-                  <input className="in" id="rec-temp" inputMode="decimal" value={temp} onChange={(e) => setTemp(e.target.value)} />
-                </Field>
-              </div>
-              <Field label="Remarque" hint={ok === 'non' ? 'Obligatoire : décris le problème (manquant, abîmé, trop chaud…).' : 'Facultatif.'}>
-                <input className="in" id="rec-note" value={recNote} onChange={(e) => setRecNote(e.target.value)} maxLength={200} />
-              </Field>
-              {err && <p className="err" role="alert">{err}</p>}
-              <div className="acts">
-                <button type="button" className="btn" onClick={() => setReceiving(false)}>Retour</button>
-                <button className="btn pri" disabled={busy}>{busy ? <Spinner /> : 'Valider la réception'}</button>
-              </div>
-            </form>
-          )}
-          {!receiving && err && <p className="err" role="alert">{err}</p>}
+          {err && <p className="err" role="alert">{err}</p>}
         </>
       )}
     </Sheet>

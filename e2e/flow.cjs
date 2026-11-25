@@ -1123,6 +1123,13 @@ async function main() {
     } },
     // La mercuriale Nuba : la carte du restaurant, en blocs (données inventées).
     NB_feuille_test_789: { name: 'MERCURIALE NUBA', tabs: {
+      // Le catalogue des stocks : trois produits inventés.
+      'PRIX INGREDIENTS': [
+        ['Catégorie', 'Ingrédient', 'Fournisseur retenu (le moins cher, automatique)', "Prix d'achat HT retenu (€, automatique)", "Unité d'achat", "Poids d'une pièce (g)", 'Prix unitaire recette (€)', 'Unité en recette', 'Date de la facture retenue', 'Source du prix retenu', 'Allergènes', "Nom sur l'étiquette"],
+        ['FRUITS / LEGUMES', 'Carottes test', 'Primeur Test', { d: '1,50 €', v: 1.5 }, 'kg', '', { d: '0,0015 €', v: 0.0015 }, 'g', '20/11/2026', 'Facture test', '', ''],
+        ['CREMERIE', 'Crème liquide test', 'Primeur Test', { d: '3,80 €', v: 3.8 }, 'L', '', { d: '0,0038 €', v: 0.0038 }, 'ml', '', '', 'Lait', ''],
+        ['FRUITS / LEGUMES', 'Citron jaune test', 'Primeur Test', { d: '3,10 €', v: 3.1 }, 'kg', '', { d: '0,0031 €', v: 0.0031 }, 'g', '', '', '', 'Citron'],
+      ],
       'FICHES PLATS': [
         ['Fiches techniques cuisine'], [],
         ['Plat', 'Velouté test', '', '', 'État de la fiche', '', 'OK'],
@@ -1490,6 +1497,71 @@ async function main() {
     assert.equal(await page.getByRole('link', { name: 'Tableau de bord' }).count(), 0, `${who} n'a pas le tableau de bord dans le menu`);
   }
   step('tableau de bord financier : alertes, trésorerie et échéances, pour les gérants seulement');
+
+  // 13 decies ter. Stocks reliés à la mercuriale Nuba : inventaire, puis une livraison lue sur la photo du bon.
+  const psqlLiv = (sql) => execFileSync('psql', [process.env.DB_URL, '-Atc', sql]).toString().trim();
+  await boss.goto(APP + '#/reglages');
+  await boss.getByTestId('merc-products').getByText(/3 produits \(onglet PRIX INGREDIENTS\)/).waitFor();
+  await boss.getByTestId('bl-reading').getByText('À activer').waitFor();
+  await theo.goto(APP + '#/stocks');
+  await theo.getByRole('button', { name: "Faire l'inventaire" }).click();
+  await theo.getByRole('button', { name: 'Produit', exact: true }).click();
+  await theo.fill('#pick-search', 'carott');
+  await theo.getByTestId('pick-merc').locator('[data-pick="Carottes test"]').click();
+  await see(theo, 'Carottes test est suivi en stock : saisis sa quantité');
+  await theo.getByLabel('Quantité comptée de Carottes test').fill('3');
+  await theo.getByRole('button', { name: /Enregistrer l'inventaire/ }).click();
+  await see(theo, 'Inventaire enregistré');
+  await theo.locator('[data-product="Carottes test"]').getByText('kg').first().waitFor();
+  assert.equal(psqlLiv("select quantity || ' ' || unit || ' ' || unit_price from public.products where merc_key = 'carottes test'"), '3.00 kg 1.50', 'suivi depuis la mercuriale');
+  // La lecture du bon est activée (clé dans le coffre) ; Théo photographie le bon sur son téléphone.
+  psqlLiv("insert into vault.decrypted_secrets (name, decrypted_secret) values ('anthropic_api_key', 'cle-de-test') on conflict (name) do update set decrypted_secret = excluded.decrypted_secret");
+  await theo.goto(APP + '#/livraisons');
+  await theo.getByTestId('delivery-start').waitFor();
+  await noOverflow(theo, 'livraisons');
+  await shot(theo, '13zl-livraisons');
+  await theo.setInputFiles('#bl-photo', { name: 'bl.png', mimeType: 'image/png', buffer: Buffer.from(pixel.split(',')[1], 'base64') });
+  await theo.locator('[data-scan="pending"]').waitFor();
+  const asked = JSON.parse(psqlLiv("select body from net.sent where url = 'https://api.anthropic.com/v1/messages' order by id desc limit 1"));
+  assert.equal(asked.model, 'claude-opus-5-5');
+  assert.match(asked.messages[0].content[1].text, /Carottes test \| kg \| Primeur Test/, 'la mercuriale accompagne la photo');
+  // Ce que Claude répond (imité) : trois lignes, dont le transport.
+  const tomorrow = psqlLiv('select (public.service_day() + 1)::text');
+  const answer = JSON.stringify({ stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({
+    readable: true, supplier: 'Primeur Test', bl_number: 'BL-2026-118', bl_date: '2026-11-25', total_ht: 48.8, remarks: '',
+    lines: [
+      { label: 'CAROTTES CAT.1 SAC 10KG', product: 'Carottes test', quantity: 10, unit: 'kg', unit_price: 1.7, lot: '', use_by: '' },
+      { label: 'CREME LIQ 35% 1L', product: 'Crème liquide test', quantity: 6, unit: 'L', unit_price: 3.8, lot: 'L4521', use_by: tomorrow },
+      { label: 'Frais de livraison', product: '', quantity: 1, unit: '', unit_price: 9, lot: '', use_by: '' },
+    ] }) }] });
+  psqlLiv(`insert into net._http_response (id, status_code, content) select max(id), 200, '${answer.replace(/'/g, "''")}' from net.sent where url = 'https://api.anthropic.com/v1/messages'`);
+  await theo.locator('[data-scan="done"]').waitFor({ timeout: 15_000 });
+  const lines = theo.getByTestId('delivery-lines');
+  await lines.locator('[data-line="Carottes test"]').getByText('Prix +13 %').waitFor();
+  await lines.locator('[data-line="Crème liquide test"]').getByText(/^DLC /).waitFor();
+  await lines.locator('[data-line="Frais de livraison"] .pill', { hasText: 'Produit à choisir' }).waitFor();
+  assert.equal(await theo.inputValue('#bl-number'), 'BL-2026-118');
+  await shot(theo, '13zl-livraison-lue');
+  await theo.getByRole('button', { name: 'Valider la réception' }).click();
+  await see(theo, 'Chaque ligne livrée doit être reliée');
+  await theo.getByRole('button', { name: 'Modifier la ligne Frais de livraison' }).click();
+  await theo.locator('#line-skip').check();
+  await theo.getByRole('button', { name: 'OK', exact: true }).click();
+  await theo.fill('#rec-temp', '4');
+  await theo.getByRole('button', { name: 'Valider la réception' }).click();
+  await see(theo, 'Livraison réceptionnée, stock mis à jour');
+  const issues = theo.getByTestId('delivery-issues');
+  await issues.locator('[data-issue="price"]').getByText('Prix en hausse de 13 % par rapport à la mercuriale').waitFor();
+  await issues.locator('[data-issue="use_by"]').waitFor();
+  await noOverflow(theo, 'livraison validée');
+  assert.equal(psqlLiv("select string_agg(name || '=' || quantity, ', ' order by name) from public.products where merc_key in ('carottes test', 'creme liquide test')"),
+    'Carottes test=13.00, Crème liquide test=6.00', 'le stock suit la livraison');
+  assert.equal(psqlLiv("select count(*) from public.email_outbox where kind = 'livraison' and subject = 'Livraison Primeur Test : 2 écart(s)'"), '1', 'le gérant est prévenu');
+  psqlLiv("delete from vault.decrypted_secrets where name = 'anthropic_api_key'");
+  // Le gérant retrouve la livraison et ses écarts.
+  await boss.goto(APP + '#/livraisons');
+  await boss.locator('[data-delivery="Primeur Test"]').getByText('2 écarts').waitFor();
+  step("stocks reliés à la mercuriale Nuba : inventaire depuis la mercuriale ; le bon de livraison photographié est lu, vérifié, validé, et le stock suit");
 
   // 13 undecies. Numéros utiles : la responsable en ajoute un, l'équipier l'appelle d'un geste.
   await ines.goto(APP + '#/numeros');

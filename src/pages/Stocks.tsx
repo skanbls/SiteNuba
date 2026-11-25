@@ -2,9 +2,11 @@ import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Chips, Field, Layout, Loading, Sheet, Spinner, useToast } from '../components/ui';
-import { useOrders, useProducts, useRefresh, useSuppliers } from '../lib/data';
+import { ProductPicker, type Picked } from '../components/ProductPicker';
+import { useMercProducts, useOrders, useProducts, useRefresh, useSuppliers } from '../lib/data';
 import { frError, supabase } from '../lib/supabase';
 import type { Product, Supplier } from '../lib/types';
+import type { MercProduct } from '../lib/deliveries';
 import { useCan } from '../lib/rights';
 
 const CATEGORIES = ['Bar', 'Cave', 'Cuisine', 'Consommables'];
@@ -28,6 +30,21 @@ export default function Stocks() {
   const [busy, setBusy] = useState('');
   const [edit, setEdit] = useState<Product | 'new' | null>(null);
   const closeEdit = useCallback(() => setEdit(null), []);
+  // Ajouter un produit : on le choisit dans la mercuriale Nuba (toute l'équipe, à l'inventaire par exemple).
+  const merc = useMercProducts();
+  const [adding, setAdding] = useState(false);
+  const mercReady = (merc.data ?? []).length > 0;
+
+  async function addFromMerc(p: Picked) {
+    setAdding(false);
+    if (!p.merc_key) return;
+    const { error } = await supabase.rpc('stock_add_from_merc', { p_keys: [p.merc_key] });
+    if (error) return toast(frError(error), 'bad');
+    await refresh('products', 'tasks');
+    setSearch(p.name);
+    setCat('Tous');
+    toast(`${p.name} est suivi en stock${counting ? ' : saisis sa quantité' : ''}`);
+  }
 
   const all = products.data ?? [];
   const active = all.filter((p) => p.active);
@@ -69,7 +86,7 @@ export default function Stocks() {
   }
 
   return (
-    <Layout title="Stocks" right={editor && <button type="button" className="btn sm pri" onClick={() => setEdit('new')}><Icon name="plus" size={16} />Produit</button>}>
+    <Layout title="Stocks" right={(editor || mercReady) && <button type="button" className="btn sm pri" onClick={() => (mercReady ? setAdding(true) : setEdit('new'))}><Icon name="plus" size={16} />Produit</button>}>
       {products.isLoading ? <Loading /> : products.error ? <div className="list"><p className="empty err">{frError(products.error)}</p></div> : (
         <>
           <div className="stats">
@@ -90,7 +107,7 @@ export default function Stocks() {
               {!counting && active.length > 0 && <button type="button" className="btn" onClick={() => { setCounts({}); setCounting(true); }}>Faire l'inventaire</button>}
             </div>
             {cats.length > 2 && <Chips value={cat} options={cats.map((c) => [c, c] as [string, string])} onChange={setCat} label="Catégorie" />}
-            {counting && <p className="note">Saisis la quantité comptée pour chaque produit, puis enregistre. Les lignes laissées vides ne changent pas.</p>}
+            {counting && <p className="note">Saisis la quantité comptée pour chaque produit, puis enregistre. Les lignes laissées vides ne changent pas.{mercReady ? ' Un produit manque ? Touche « Produit » et choisis-le dans la mercuriale.' : ''}</p>}
 
             <div className="list">
               {shown.length === 0 && <p className="empty">{all.length === 0 ? (editor ? 'Aucun produit pour l\'instant. Ajoute le premier avec le bouton « Produit ».' : 'Aucun produit pour l\'instant : le gérant doit créer le catalogue.') : 'Aucun produit ne correspond.'}</p>}
@@ -102,7 +119,8 @@ export default function Stocks() {
                       <span className="t">
                         {p.name}{' '}
                         {state && <span className={`pill ${state[0]}`}>{state[1]}</span>}{' '}
-                        {p.active && onOrder.has(p.id) && <span className="pill info">Commandé</span>}
+                        {p.active && onOrder.has(p.id) && <span className="pill info">Commandé</span>}{' '}
+                        {editor && mercReady && p.active && !p.merc_key && <span className="pill warn" data-hors-mercuriale>Hors mercuriale</span>}
                       </span>
                       <span className="sub">{[p.unit, p.threshold > 0 ? `seuil ${qty(p.threshold)}` : 'sans seuil', p.supplier_id ? supplierName.get(p.supplier_id) : 'sans fournisseur'].filter(Boolean).join(' · ')}</span>
                     </div>
@@ -136,13 +154,17 @@ export default function Stocks() {
           </section>
         </>
       )}
-      {edit && <ProductSheet product={edit} suppliers={(suppliers.data ?? []).filter((s) => s.active)} categories={Array.from(new Set([...CATEGORIES, ...all.map((p) => p.category)]))} onClose={closeEdit} />}
+      {edit && <ProductSheet product={edit} suppliers={(suppliers.data ?? []).filter((s) => s.active)} categories={Array.from(new Set([...CATEGORIES, ...all.map((p) => p.category)]))} merc={merc.data ?? []} products={all} onClose={closeEdit} />}
+      {adding && (
+        <ProductPicker title="Ajouter un produit de la mercuriale" products={all} merc={merc.data ?? []} mercOnly onPick={(p) => void addFromMerc(p)} onClose={() => setAdding(false)}
+          extra={editor ? <button type="button" className="btn block" onClick={() => { setAdding(false); setEdit('new'); }}>Produit hors mercuriale (consommables…)</button> : undefined} />
+      )}
     </Layout>
   );
 }
 
 /* ---------- Créer ou modifier un produit (gérant) ---------- */
-function ProductSheet({ product, suppliers, categories, onClose }: { product: Product | 'new'; suppliers: Supplier[]; categories: string[]; onClose: () => void }) {
+function ProductSheet({ product, suppliers, categories, merc, products, onClose }: { product: Product | 'new'; suppliers: Supplier[]; categories: string[]; merc: MercProduct[]; products: Product[]; onClose: () => void }) {
   const toast = useToast();
   const refresh = useRefresh();
   const old = product === 'new' ? null : product;
@@ -155,6 +177,10 @@ function ProductSheet({ product, suppliers, categories, onClose }: { product: Pr
   const [supplier, setSupplier] = useState(old?.supplier_id ?? '');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const linked = old?.merc_key ? merc.find((m) => m.key === old.merc_key) : undefined;
+  // Relié à la mercuriale : ces champs la suivent ; seuls le seuil et la quantité voulue se règlent ici.
+  const fromMerc = !!old?.merc_key;
 
   async function run(op: () => PromiseLike<{ error: { message: string } | null }>, done: string) {
     setBusy(true);
@@ -181,16 +207,28 @@ function ProductSheet({ product, suppliers, categories, onClose }: { product: Pr
   return (
     <Sheet title={old ? old.name : 'Ajouter un produit'} onClose={onClose}>
       <form className="form" onSubmit={save}>
+        {old && merc.length > 0 && (old.merc_key ? (
+          <p className="note" data-testid="prod-merc">
+            <span className="pill ok">Mercuriale Nuba</span> Relié à « {linked?.name ?? old.merc_key} » : nom, catégorie, unité, prix et fournisseur suivent la mercuriale.{' '}
+            <button type="button" className="link" disabled={busy} onClick={() => void run(() => supabase.rpc('link_product_merc', { p_product: old.id, p_key: '' }), 'Produit délié de la mercuriale')}>Délier</button>
+          </p>
+        ) : (
+          <button type="button" className="btn block" id="prod-link" onClick={() => setLinking(true)}><Icon name="list" />Relier à un produit de la mercuriale</button>
+        ))}
+        {linking && old && (
+          <ProductPicker title={`Relier « ${old.name} »`} products={products} merc={merc} mercOnly onClose={() => setLinking(false)}
+            onPick={(p) => { setLinking(false); if (p.merc_key) void run(() => supabase.rpc('link_product_merc', { p_product: old.id, p_key: p.merc_key }), 'Produit relié à la mercuriale'); }} />
+        )}
         <Field label="Nom">
-          <input className="in" id="prod-name" value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} />
+          <input className="in" id="prod-name" readOnly={fromMerc} value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} />
         </Field>
         <div className="two">
           <Field label="Catégorie">
-            <input className="in" id="prod-category" list="prod-categories" value={category} onChange={(e) => setCategory(e.target.value)} maxLength={40} />
+            <input className="in" id="prod-category" readOnly={fromMerc} list="prod-categories" value={category} onChange={(e) => setCategory(e.target.value)} maxLength={40} />
             <datalist id="prod-categories">{categories.map((c) => (<option key={c} value={c} />))}</datalist>
           </Field>
           <Field label="Unité" hint="Ce qu'on compte : bouteille 70 cl, kg, fût 30 L…">
-            <input className="in" id="prod-unit" value={unit} onChange={(e) => setUnit(e.target.value)} maxLength={40} />
+            <input className="in" id="prod-unit" readOnly={fromMerc} value={unit} onChange={(e) => setUnit(e.target.value)} maxLength={40} />
           </Field>
         </div>
         <div className="two">
@@ -203,10 +241,10 @@ function ProductSheet({ product, suppliers, categories, onClose }: { product: Pr
         </div>
         <div className="two">
           <Field label="Prix d'achat par unité (€ HT)">
-            <input className="in" id="prod-price" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />
+            <input className="in" id="prod-price" readOnly={fromMerc} inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />
           </Field>
           <Field label="Fournisseur">
-            <select className="in" id="prod-supplier" value={supplier} onChange={(e) => setSupplier(e.target.value)}>
+            <select className="in" id="prod-supplier" disabled={fromMerc} value={supplier} onChange={(e) => setSupplier(e.target.value)}>
               <option value="">Aucun</option>
               {suppliers.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
             </select>
